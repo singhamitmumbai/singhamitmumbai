@@ -1,6 +1,6 @@
-# Symbolic Cognitive AI
+# Symbolic Cognitive AI + Cognitive OS
 
-A runnable **non-LLM** “brain”: structured knowledge, beliefs, rule-based inference, means-ends planning, a self-model, an autonomous think loop, and simple symbolic learning.
+A runnable **non-LLM** “brain” and a self-contained **Cognitive OS** around it: structured knowledge, beliefs, rule-based inference, means-ends planning, a self-model, an autonomous think loop, symbolic learning, and an interactive OS shell.
 
 No OpenAI/Anthropic APIs, no local chat models, no transformers generation — cognition is **symbolic / algorithmic**.
 
@@ -17,37 +17,52 @@ Each think cycle is discrete and inspectable:
 
 This is classical cognitive-architecture style reasoning, not next-token prediction.
 
-## Quick start
+## Launch the Cognitive OS
+
+One-shot boot into an interactive OS shell (brain + filesystem store + console + optional background cognition):
 
 ```bash
-# optional: install package editable + pytest
 pip install -e ".[dev]"
 
-# offline demo (zero network)
-python -m cognitive_ai --demo
+# Interactive OS
+python -m cognitive_ai os
 # or
-python scripts/demo_brain.py
+python scripts/boot_os.py
 
-# interactive REPL
-python -m cognitive_ai --domain animals
+# Scripted OS demo (non-interactive proof)
+python -m cognitive_ai os --os-demo
+python -m cognitive_ai.os --demo
+python scripts/boot_os.py --demo
+```
 
-# non-interactive think
+OS store defaults to `~/.cognitive_os/` (`knowledge.json`, `console.log`, `os_state.json`). Override with `--root /path`.
+
+### OS shell commands
+
+| Command | Purpose |
+|---------|---------|
+| `boot [domain]` | Start brain + services |
+| `status` | System / brain / scheduler status |
+| `think [N]` | Run N think cycles |
+| `ask …` | Talk to the brain |
+| `assert s p o` | Assert a fact |
+| `goal desc \| s p o` | Set a goal |
+| `ps` | Active goals (process table) |
+| `mem` | Knowledge + beliefs |
+| `why s p o` | Explain a conclusion |
+| `sched start\|stop\|tick` | Background cognition |
+| `dmesg` | Console log |
+| `save` / `shutdown` | Persist and halt |
+
+Prompt looks like: `cos>`
+
+## Brain-only quick start
+
+```bash
+python -m cognitive_ai --demo
+python -m cognitive_ai --domain animals          # brain REPL (brain>)
 python -m cognitive_ai --domain kitchen --goal "Make omelette|omelette status ready" --think 6
-```
-
-### REPL examples
-
-```
-brain> domain animals
-brain> reason
-brain> prove tweety can fly
-brain> why tweety can fly
-brain> goal Feed tweety | tweety fed true
-brain> think 4
-brain> ask What do you know?
-brain> ask What are you trying to do?
-brain> dump
-brain> save /tmp/mind.json
+pytest -q
 ```
 
 ## Architecture
@@ -58,22 +73,21 @@ brain> save /tmp/mind.json
 | `cognitive_ai/beliefs.py` | Working memory, open questions, confidence |
 | `cognitive_ai/inference.py` | Forward & backward chaining + `why` |
 | `cognitive_ai/planner.py` | Goals, actions, means-ends planner |
-| `cognitive_ai/self_model.py` | Introspection (“what do you know?”, limits, thoughts) |
+| `cognitive_ai/self_model.py` | Introspection |
 | `cognitive_ai/think_loop.py` | Autonomous perceive→…→reflect cycle |
 | `cognitive_ai/learning.py` | Fact/rule acquisition & failed-plan lessons |
 | `cognitive_ai/brain.py` | Wires modules together |
 | `cognitive_ai/domains.py` | Demo domains: `animals`, `blocks`, `kitchen` |
-| `cognitive_ai/cli.py` | CLI + REPL |
+| `cognitive_ai/cli.py` | CLI + brain REPL + `os` entry |
+| `cognitive_ai/os/` | **Cognitive OS** — boot, services, shell |
 
-## Tests
+### OS services
 
-```bash
-pytest -q
-```
-
-Covers inference, planning, self-model, think loop, and persistence.
+- **Store** — filesystem-backed knowledge + mind dumps  
+- **Scheduler** — think loop as background “process”  
+- **Console** — message/log ring buffer (`dmesg`)  
 
 ## Dependencies
 
-Runtime default: **Python 3.10+ stdlib only** (`sqlite3`, `json`, …).  
+Runtime default: **Python 3.10+ stdlib only**.  
 Dev optional: `pytest`. No ML/LLM packages required.

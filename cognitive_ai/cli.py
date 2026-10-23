@@ -51,9 +51,16 @@ def _parse_triples(blob: str) -> list[Triple]:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="cognitive_ai",
-        description="Symbolic cognitive AI (no LLM) — REPL and demo runner.",
+        description="Symbolic cognitive AI (no LLM) — REPL, demo, and Cognitive OS.",
     )
     p.add_argument("--version", action="version", version=f"cognitive_ai {__version__}")
+    p.add_argument(
+        "command",
+        nargs="?",
+        default=None,
+        choices=["os", "demo", "repl"],
+        help="Optional subcommand: os (Cognitive OS), demo, repl",
+    )
     p.add_argument(
         "--storage",
         type=str,
@@ -70,6 +77,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--demo",
         action="store_true",
         help="Run the offline demo then exit",
+    )
+    p.add_argument(
+        "--os-demo",
+        action="store_true",
+        help="When launching OS: run a scripted OS demo session",
+    )
+    p.add_argument(
+        "--root",
+        type=str,
+        default=None,
+        help="Cognitive OS store directory (default ~/.cognitive_os)",
+    )
+    p.add_argument(
+        "--sched",
+        action="store_true",
+        help="Start background cognition scheduler on OS boot",
     )
     p.add_argument(
         "--think",
@@ -316,11 +339,39 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    # Cognitive OS launcher
+    if args.command == "os":
+        from .os.shell import launch_os
+
+        script = None
+        if args.os_demo or args.demo:
+            script = [
+                "status",
+                "reason",
+                "prove tweety can fly",
+                "why tweety can fly",
+                "goal Feed tweety | tweety fed true",
+                "ps",
+                "think 4",
+                "ask What are you trying to do?",
+                "ask Who are you?",
+                "mem 10",
+                "dmesg 15",
+                "status",
+                "shutdown",
+            ]
+        return launch_os(
+            root=args.root,
+            domain=args.domain or "animals",
+            auto_sched=args.sched,
+            script=script,
+        )
+
     brain = Brain(storage=args.storage)
     if args.domain:
         brain.load_domain(args.domain)
 
-    if args.demo:
+    if args.demo or args.command == "demo":
         return run_demo(brain)
 
     if args.goal:
@@ -344,7 +395,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     # Default: REPL (or demo if stdin is not a TTY and no flags)
-    if args.repl or sys.stdin.isatty():
+    if args.repl or args.command == "repl" or sys.stdin.isatty():
         return repl(brain)
 
     # Non-interactive stdin: treat lines as commands
