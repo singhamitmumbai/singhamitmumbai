@@ -17,6 +17,19 @@ Each think cycle is discrete and inspectable:
 
 This is classical cognitive-architecture style reasoning, not next-token prediction.
 
+## Launch the chat UI
+
+Browser chat against the symbolic brain (stdlib HTTP server, no LLM):
+
+```bash
+python -m cognitive_ai chat
+# or
+python -m cognitive_ai.ui
+python scripts/chat_ui.py
+
+# then open http://127.0.0.1:8765/
+```
+
 ## Launch the Cognitive OS
 
 One-shot boot into an interactive OS shell (brain + filesystem store + console + optional background cognition):

@@ -58,9 +58,11 @@ def build_parser() -> argparse.ArgumentParser:
         "command",
         nargs="?",
         default=None,
-        choices=["os", "demo", "repl"],
-        help="Optional subcommand: os (Cognitive OS), demo, repl",
+        choices=["os", "demo", "repl", "chat", "ui"],
+        help="Optional subcommand: os, chat/ui, demo, repl",
     )
+    p.add_argument("--host", default="0.0.0.0", help="Chat UI bind host")
+    p.add_argument("--port", type=int, default=8765, help="Chat UI port")
     p.add_argument(
         "--storage",
         type=str,
@@ -338,6 +340,17 @@ def main(argv: Optional[list[str]] = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    # Chat UI launcher
+    if args.command in ("chat", "ui"):
+        from .ui.server import serve_chat
+
+        serve_chat(
+            host=args.host,
+            port=args.port,
+            domain=args.domain or "animals",
+        )
+        return 0
 
     # Cognitive OS launcher
     if args.command == "os":
