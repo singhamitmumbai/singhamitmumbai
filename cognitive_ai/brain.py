@@ -119,8 +119,10 @@ class Brain:
         return report
 
     def ask(self, question: str) -> str:
-        """Answer introspective or simple factual questions."""
-        answer = self.self_model.answer(question)
+        """Answer introspective, factual, or lightly natural questions."""
+        from .dialogue import respond
+
+        answer = respond(self, question)
         self.self_model.record("speak", answer, {"question": question})
         self._utterances.append(answer)
         return answer

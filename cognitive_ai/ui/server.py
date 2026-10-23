@@ -12,6 +12,7 @@ from typing import Any, Optional
 from urllib.parse import urlparse
 
 from ..brain import Brain
+from ..dialogue import respond as dialogue_respond
 from ..knowledge import Rule, Triple
 from ..version import __version__
 
@@ -37,9 +38,12 @@ class ChatSession:
             st = self.brain.status()
             return (
                 f"Cognitive OS chat ready (v{__version__}).\n"
-                f"Domain: {st['domain']} · {st['facts']} facts · {st['rules']} rules.\n"
-                "Ask me anything introspective, or use commands like "
-                "`assert`, `goal`, `think`, `why`, `prove`, `query`, `domain`.\n"
+                f"Domain: {st['domain']} · {st['facts']} facts · {st['rules']} rules.\n\n"
+                "Try natural questions:\n"
+                "  • can tweety fly?\n"
+                "  • tell me about opus\n"
+                "  • feed tweety\n"
+                "  • help\n\n"
                 "I am symbolic — no language model behind this chat."
             )
 
@@ -49,10 +53,10 @@ class ChatSession:
 
     def _dispatch(self, msg: str) -> str:
         if not msg:
-            return "Say something, or try: Who are you?"
+            return "Say something — try “help” or “can tweety fly?”."
 
-        lower = msg.lower()
-        # Slash-free OS-ish commands
+        lower = msg.lower().strip()
+        # Explicit OS commands first
         if lower in ("think", "think 3"):
             return self._think(3)
         m = re.match(r"^think\s+(\d+)\s*$", lower)
@@ -87,12 +91,6 @@ class ChatSession:
                 return "Need subject predicate object after |"
             g = self.brain.set_goal(desc.strip(), t[0], t[1], t[2])
             return f"Goal {g.goal_id}: {g.description} → {g.target}"
-
-        if lower.startswith("why "):
-            parts = msg.split()
-            if len(parts) < 4:
-                return "usage: why <s> <p> <o>"
-            return self.brain.why(parts[1], parts[2], parts[3])
 
         if lower.startswith("prove "):
             parts = msg.split()
@@ -148,8 +146,8 @@ class ChatSession:
                 f"rules={st['rules']} open_goals={st['open_goals']}\nGoals:\n{goals}"
             )
 
-        # Default: introspective / world ask
-        return self.brain.ask(msg)
+        # Natural language → symbolic dialogue (also covers why / ask)
+        return dialogue_respond(self.brain, msg)
 
     def _think(self, n: int) -> str:
         report = self.brain.think(steps=n)
