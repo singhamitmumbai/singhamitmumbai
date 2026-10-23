@@ -1,0 +1,3 @@
+# Default path: pure Python stdlib only (no LLM / transformers / OpenAI).
+# Optional test runner:
+pytest>=7.0
