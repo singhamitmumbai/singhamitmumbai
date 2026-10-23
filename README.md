@@ -27,7 +27,14 @@ python -m cognitive_ai chat
 python -m cognitive_ai.ui
 python scripts/chat_ui.py
 
-# then open http://127.0.0.1:8765/
+# then open http://127.0.0.1:8765/  (same machine only)
+```
+
+**Cloud Agent / remote VM:** laptop `127.0.0.1` and Try Live may not reach the chat port. Use a public tunnel instead:
+
+```bash
+python scripts/chat_ui_public.py
+# open the printed https://….trycloudflare.com URL on your laptop
 ```
 
 ## Launch the Cognitive OS
