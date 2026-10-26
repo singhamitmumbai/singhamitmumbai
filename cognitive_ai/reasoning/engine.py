@@ -1,0 +1,261 @@
+"""Choose a reasoning mechanism according to the problem."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import date, datetime
+from typing import Any, Optional
+
+from ..core.ids import new_id
+from ..core.records import Claim, EvidenceStatus
+from ..core.working_state import WorkingState
+from ..memory.store import MemorySystem
+
+
+@dataclass
+class Explanation:
+    label: str
+    likelihood: float
+    evidence: list[str] = field(default_factory=list)
+    status: str = "open"  # open|supported|ruled_out
+
+
+@dataclass
+class ReasoningResult:
+    method: str
+    conclusions: list[dict[str, Any]] = field(default_factory=list)
+    explanations: list[Explanation] = field(default_factory=list)
+    rule_version: str = "finderbay_rules_v1"
+    success: bool = True
+    message: str = ""
+    result_id: str = field(default_factory=lambda: new_id("reason"))
+
+    def to_dict(self) -> dict:
+        return {
+            "result_id": self.result_id,
+            "method": self.method,
+            "conclusions": self.conclusions,
+            "explanations": [e.__dict__ for e in self.explanations],
+            "rule_version": self.rule_version,
+            "success": self.success,
+            "message": self.message,
+        }
+
+
+class ReasoningEngine:
+    """Production rules, typed arithmetic, and belief-style alternatives."""
+
+    def __init__(self, memory: MemorySystem) -> None:
+        self.memory = memory
+
+    def reason(self, state: WorkingState, frame: Optional[dict] = None) -> ReasoningResult:
+        frame = frame or state.semantic_frame or {}
+        op = frame.get("operation")
+        if op == "query_invoices":
+            return self._reason_invoices(state, frame)
+        if op in ("query_deliveries", "prepare_followup"):
+            return self._reason_deliveries(state, frame)
+        if op == "query_materials":
+            return self._reason_materials(state, frame)
+        return ReasoningResult(
+            method="passthrough",
+            success=True,
+            message="No specialised reasoning required for this operation.",
+        )
+
+    # --- invoice rules --------------------------------------------------------
+
+    def _reason_invoices(self, state: WorkingState, frame: dict) -> ReasoningResult:
+        project_id = frame.get("project_id")
+        invoices = self.memory.get_records("invoice")
+        if project_id:
+            invoices = [i for i in invoices if i.get("project_id") == project_id]
+
+        conditions = frame.get("conditions") or []
+        matched = []
+        unresolved = []
+        today = date.today().isoformat()
+
+        for inv in invoices:
+            ok = True
+            for cond in conditions:
+                field = cond["field"]
+                op = cond["operator"]
+                val = cond["value"]
+                if field == "overdue":
+                    due = inv.get("due_date")
+                    status = inv.get("payment_status")
+                    freshness = inv.get("status_as_of") or inv.get("updated_at")
+                    if not due or status != "unpaid":
+                        ok = False
+                        break
+                    if due >= today:
+                        ok = False
+                        break
+                    # Retain freshness qualification
+                    inv = {
+                        **inv,
+                        "_overdue_rule": {
+                            "due_date": due,
+                            "reference_date": today,
+                            "payment_status": status,
+                            "freshness": freshness,
+                            "rule_version": "overdue_v1",
+                        },
+                    }
+                    continue
+                actual = inv.get(field)
+                if actual is None and field in ("dispute_status", "payment_status"):
+                    unresolved.append(inv)
+                    policy = (frame.get("unknown_policies") or {}).get(field, "exclude")
+                    if policy == "report_separately":
+                        ok = False
+                    continue
+                if not self._compare(actual, op, val):
+                    ok = False
+                    break
+            if ok:
+                matched.append(inv)
+
+        total = sum(float(i.get("amount_inr") or 0) for i in matched)
+        conclusions = [
+            {
+                "type": "invoice_set",
+                "count": len(matched),
+                "total_inr": total,
+                "invoices": matched,
+                "unresolved": unresolved,
+            }
+        ]
+        # Write claims
+        for inv in matched:
+            state.add_claim(
+                Claim(
+                    subject=inv["id"],
+                    relationship="selected_for_query",
+                    value=True,
+                    source="reasoning",
+                    evidence_status=EvidenceStatus.INFERRED,
+                    project_id=inv.get("project_id"),
+                    confidence=0.9,
+                )
+            )
+
+        return ReasoningResult(
+            method="production_rules+arithmetic",
+            conclusions=conclusions,
+            message=f"Matched {len(matched)} invoices totaling INR {total:.2f}.",
+        )
+
+    # --- deliveries -----------------------------------------------------------
+
+    def _reason_deliveries(self, state: WorkingState, frame: dict) -> ReasoningResult:
+        project_id = frame.get("project_id")
+        rows = self.memory.get_records("delivery")
+        if project_id:
+            rows = [r for r in rows if r.get("project_id") == project_id]
+
+        # Time window filter
+        window = None
+        for c in frame.get("conditions") or []:
+            if c.get("field") == "time_window":
+                window = c.get("value")
+            if c.get("field") == "delivery_status":
+                pass
+        if window:
+            rows = [r for r in rows if r.get("time_window") == window or r.get("week") == window]
+
+        pending = []
+        uncertain = []
+        for r in rows:
+            expected = float(r.get("expected_qty") or 0)
+            received = r.get("received_qty")
+            receipt_status = r.get("receipt_status", "known")
+            if receipt_status == "missing":
+                # Competing explanations — do NOT treat as confirmed pending alone
+                uncertain.append(r)
+                continue
+            if received is None:
+                uncertain.append(r)
+                continue
+            received_f = float(received)
+            if received_f < expected:
+                pending.append({**r, "pending_qty": expected - received_f})
+
+        explanations = [
+            Explanation(
+                "not_delivered",
+                0.4,
+                ["no confirmed receipt for expected quantity"],
+            ),
+            Explanation(
+                "delivered_unrecorded",
+                0.3,
+                ["receipt may use different reference"],
+            ),
+            Explanation(
+                "data_incomplete",
+                0.3,
+                ["available records incomplete"],
+            ),
+        ]
+        for u in uncertain:
+            state.add_claim(
+                Claim(
+                    subject=u["id"],
+                    relationship="receipt_status",
+                    value="unknown",
+                    source="reasoning",
+                    evidence_status=EvidenceStatus.UNKNOWN,
+                    project_id=u.get("project_id"),
+                    notes="Kept separate from confirmed pending items",
+                )
+            )
+
+        conclusions = [
+            {
+                "type": "pending_deliveries",
+                "pending": pending,
+                "uncertain_receipts": uncertain,
+                "count_pending": len(pending),
+                "count_uncertain": len(uncertain),
+            }
+        ]
+        return ReasoningResult(
+            method="comparison+competing_explanations",
+            conclusions=conclusions,
+            explanations=explanations if uncertain else [],
+            message=(
+                f"{len(pending)} confirmed pending item(s); "
+                f"{len(uncertain)} with unresolved receipt status."
+            ),
+        )
+
+    def _reason_materials(self, state: WorkingState, frame: dict) -> ReasoningResult:
+        rows = self.memory.get_records("material")
+        return ReasoningResult(
+            method="lookup",
+            conclusions=[{"type": "materials", "items": rows}],
+            message=f"{len(rows)} material record(s).",
+        )
+
+    @staticmethod
+    def _compare(actual: Any, op: str, expected: Any) -> bool:
+        if op == "eq":
+            return actual == expected
+        if op == "ne":
+            return actual != expected
+        try:
+            a = float(actual)
+            e = float(expected)
+        except (TypeError, ValueError):
+            return False
+        if op == "gt":
+            return a > e
+        if op == "gte":
+            return a >= e
+        if op == "lt":
+            return a < e
+        if op == "lte":
+            return a <= e
+        return False

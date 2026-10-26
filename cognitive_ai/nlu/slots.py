@@ -1,0 +1,117 @@
+"""Entity / slot extraction and compositional operators (negation, comparison)."""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from typing import Any, Optional
+
+from .normalize import extract_dates_relative, extract_money
+
+
+@dataclass
+class Condition:
+    field: str
+    operator: str  # eq|ne|gt|gte|lt|lte|in|not_in
+    value: Any
+    negated: bool = False
+
+    def to_dict(self) -> dict:
+        return {
+            "field": self.field,
+            "operator": "ne" if self.negated and self.operator == "eq" else self.operator,
+            "value": self.value,
+        }
+
+
+@dataclass
+class SlotBundle:
+    conditions: list[Condition] = field(default_factory=list)
+    project_id: Optional[str] = None
+    amounts: list[dict] = field(default_factory=list)
+    times: list[dict] = field(default_factory=list)
+    exclusions: list[str] = field(default_factory=list)
+    prohibitions: list[str] = field(default_factory=list)
+    output_hint: Optional[str] = None
+    unknown_policies: dict[str, str] = field(default_factory=dict)
+
+
+COMPARISON_PATTERNS = [
+    (r"(?:above|over|greater than|more than|>\s*)\s*(.+)", "gt"),
+    (r"(?:below|under|less than|<\s*)\s*(.+)", "lt"),
+    (r"(?:at least|>=\s*)\s*(.+)", "gte"),
+    (r"(?:at most|<=\s*)\s*(.+)", "lte"),
+]
+
+
+def _parse_amount_token(token: str) -> Optional[float]:
+    money = extract_money(token)
+    if money:
+        return money[0]["amount_inr"]
+    cleaned = token.replace(",", "").strip()
+    m = re.match(r"^([\d.]+)", cleaned)
+    if m:
+        try:
+            return float(m.group(1))
+        except ValueError:
+            return None
+    return None
+
+
+def extract_slots(text: str, project_id: Optional[str] = None) -> SlotBundle:
+    lower = text.lower()
+    bundle = SlotBundle(project_id=project_id)
+    bundle.amounts = extract_money(text)
+    bundle.times = extract_dates_relative(text)
+
+    # Payment / dispute status
+    if re.search(r"\bunpaid\b|\bnot\s+paid\b|\bbaaki\b", lower):
+        bundle.conditions.append(Condition("payment_status", "eq", "unpaid"))
+    if re.search(r"\bpaid\b", lower) and "unpaid" not in lower and "not paid" not in lower:
+        bundle.conditions.append(Condition("payment_status", "eq", "paid"))
+    if re.search(r"\boverdue\b", lower):
+        bundle.conditions.append(Condition("overdue", "eq", True))
+    if re.search(r"\bpending\b", lower):
+        bundle.conditions.append(Condition("delivery_status", "eq", "pending"))
+
+    # Exclusions: "excluding disputed" / "except disputed" / "all except"
+    excl = re.search(
+        r"(?:excluding|except|without|excluding all)\s+([a-zA-Z0-9_ -]+?)(?:\s+ones|\s+invoices|$|,|\.)",
+        lower,
+    )
+    if excl:
+        phrase = excl.group(1).strip()
+        bundle.exclusions.append(phrase)
+        if "disputed" in phrase:
+            bundle.conditions.append(Condition("dispute_status", "eq", "not_disputed"))
+            bundle.unknown_policies["dispute_status"] = "report_separately"
+
+    # Amount comparisons tied to money mentions
+    for pat, op in COMPARISON_PATTERNS:
+        for m in re.finditer(pat, lower):
+            amt = _parse_amount_token(m.group(1))
+            if amt is not None:
+                bundle.conditions.append(Condition("amount_inr", op, amt))
+
+    # Prohibitions
+    if re.search(r"do not send|don't send|mat bhejo|do not email", lower):
+        bundle.prohibitions.append("send")
+    if re.search(r"do not (?:delete|remove)", lower):
+        bundle.prohibitions.append("delete")
+
+    # Output hints
+    if re.search(r"\btable\b|list|dikhao", lower):
+        bundle.output_hint = "table_with_sources"
+    if re.search(r"follow-?up|draft", lower):
+        bundle.output_hint = bundle.output_hint or "draft_with_table"
+
+    # Time scope
+    for t in bundle.times:
+        if t.get("ambiguous"):
+            bundle.unknown_policies["time"] = "clarify_kal"
+        else:
+            bundle.conditions.append(
+                Condition("time_window", "eq", t["relative"])
+            )
+
+    return bundle
