@@ -67,6 +67,9 @@ class Verifier:
             elif check == "fields_present":
                 if not effects.get("fields_ready") and not effects.get("parsed"):
                     return False
+            elif check == "alias_stored":
+                if not effects.get("alias_stored"):
+                    return False
             else:
                 # Unknown check name — do not pretend success
                 continue

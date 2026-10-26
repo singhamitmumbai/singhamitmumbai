@@ -50,6 +50,17 @@ Excluded at runtime: pretrained general-purpose LLMs.
 Perception modules ship **auditable stubs**; production acoustic/OCR checkpoints
 must declare provenance separately.
 
+## v0.5 completion
+
+- Versioned **dataset registry** with source-group split locks (no leakage)
+- **Calibration** helpers (Brier + reliability bins) and uncertainty policies
+- **Recovery manager** for durable checkpoints / OUTCOME_UNKNOWN reconcile
+- CSV/JSON **data adapters** for Finderbay registers
+- HTN method library for workflow decompositions
+- Hindi/Hinglish invoice & pending realization
+- Alias learning (`Warehouse B is now called Central Store`)
+- Config object (`SystemConfig`) wired through the orchestrator
+
 ## v0.4 upgrades
 
 - BM25 retrieval with synonym expansion; claim dependency invalidation

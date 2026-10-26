@@ -363,7 +363,10 @@ def run_finderbay_demo() -> int:
         "Show material stock and inventory",
         "Reserve 15 bags of cement",
         "Create task for Project A: Order safety helmets",
+        "List tasks for Project A",
         "What is the amount due on the invoice scan document?",
+        "Warehouse B is now called Central Store.",
+        "Show overdue invoices for Project A",
         "What are your capabilities?",
     ]
     for q in queries:

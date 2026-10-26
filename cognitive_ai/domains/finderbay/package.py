@@ -107,6 +107,27 @@ class FinderbayPackage:
                 expected={"value": 118000.0, "contains": "amount_due"},
                 tags=["ocr", "documents"],
             ),
+            EvalCase(
+                case_id="list_tasks",
+                task="manage_task",
+                input_text="List tasks for Project A",
+                expected={"listed": True, "contains": "Site inspection"},
+                tags=["tasks"],
+            ),
+            EvalCase(
+                case_id="learn_warehouse_alias",
+                task="learn_alias",
+                input_text="Warehouse B is now called Central Store.",
+                expected={"learned": True, "contains": "Central Store"},
+                tags=["memory", "alias"],
+            ),
+            EvalCase(
+                case_id="overdue_invoices",
+                task="query_invoices",
+                input_text="Show overdue invoices for Project A",
+                expected={"contains": "invoice"},
+                tags=["invoices", "rules"],
+            ),
         ]
 
     def manifest(self) -> dict[str, Any]:

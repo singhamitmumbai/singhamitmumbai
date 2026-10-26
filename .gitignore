@@ -9,3 +9,6 @@ build/
 venv/
 *.sqlite
 .DS_Store
+data/finderbay/checkpoints.json
+data/finderbay/examples/manifest.json
+data/finderbay/examples/ex_*.json

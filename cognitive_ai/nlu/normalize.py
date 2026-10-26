@@ -48,26 +48,35 @@ def detect_language(text: str) -> str:
     """Return en | hi | hinglish | mixed based on script and tokens."""
     has_devanagari = bool(re.search(r"[\u0900-\u097F]", text))
     lower = text.lower()
+    # Hindi/Hinglish function words only — do not treat English business terms as Hinglish.
     hinglish_markers = (
         "kal",
         "aaj",
         "kitna",
         "dikhao",
         "batao",
-        "pending",
-        "invoice",
-        "project",
-        "unpaid",
         "bhejo",
         "mat",
+        "hai",
+        "kya",
+        "nahi",
+        "karo",
+        "do",
+        "wala",
+        "baaki",
+        "abhi",
+        "naya",
+        "kaam",
     )
     has_latin = bool(re.search(r"[A-Za-z]", text))
-    hits = sum(1 for m in hinglish_markers if m in lower)
+    hits = sum(1 for m in hinglish_markers if re.search(rf"\b{re.escape(m)}\b", lower))
     if has_devanagari and has_latin:
         return "mixed"
     if has_devanagari:
         return "hi"
     if hits >= 2 and has_latin:
+        return "hinglish"
+    if hits >= 1 and any(m in lower for m in ("dikhao", "batao", "kal", "baaki", "kaam")):
         return "hinglish"
     return "en"
 

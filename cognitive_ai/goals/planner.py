@@ -8,6 +8,7 @@ from typing import Any, Callable, Optional
 from ..core.records import GoalRecord, PlanRecord, PlanStepRecord
 from ..core.working_state import WorkingState
 from ..reasoning.engine import ReasoningResult
+from .htn import HTNLibrary
 
 
 @dataclass
@@ -27,6 +28,7 @@ class OperatorPlanner:
 
     def __init__(self) -> None:
         self.operators: dict[str, Operator] = {}
+        self.htn = HTNLibrary()
         self._register_defaults()
 
     def _register_defaults(self) -> None:
@@ -97,21 +99,29 @@ class OperatorPlanner:
                 explanation="Operation not in supported capability set.",
             )
 
-        if op_name in ("cancel", "correct", "status"):
+        if op_name in ("cancel", "correct", "status", "learn_alias"):
             steps = [
                 PlanStepRecord(
-                    operator="respond",
+                    operator="respond" if op_name != "learn_alias" else "learn_alias",
                     args={},
                     expected_effects=[{"answer_ready": True}],
-                    verification=["claims_match_structure"],
+                    verification=["claims_match_structure"] if op_name != "learn_alias" else ["alias_stored"],
                 )
             ]
+            if op_name == "learn_alias":
+                steps.append(
+                    PlanStepRecord(
+                        operator="respond",
+                        args={},
+                        verification=["claims_match_structure"],
+                    )
+                )
             plan = PlanRecord(
                 goal_id=goal.goal_id,
                 steps=steps,
                 outcome="feasible",
                 explanation=f"Direct response plan for {op_name}.",
-                cost=1.0,
+                cost=float(len(steps)),
             )
             state.set_plan(plan)
             return plan

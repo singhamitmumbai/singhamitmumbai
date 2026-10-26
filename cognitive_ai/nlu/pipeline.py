@@ -63,6 +63,7 @@ class LanguageUnderstanding:
         "manage_task",
         "document_qa",
         "prepare_followup",
+        "learn_alias",
         "status",
         "cancel",
         "correct",

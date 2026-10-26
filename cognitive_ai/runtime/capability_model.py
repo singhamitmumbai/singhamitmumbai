@@ -79,6 +79,11 @@ class CapabilityModel:
                 ["speech_recognize"],
                 ["acoustic model not loaded by default — accept transcript dicts"],
             ),
+            (
+                "learn_alias",
+                ["learn_alias"],
+                ["requires reviewed user assertion; scoped aliases"],
+            ),
         ]:
             self.entries[name] = CapabilityEntry(name=name, tools=tools, limitations=limits)
 

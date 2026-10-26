@@ -11,6 +11,7 @@ from ..core.working_state import WorkingState
 from ..memory.store import MemorySystem
 from ..reasoning.engine import ReasoningEngine, ReasoningResult
 from ..world.model import WorldModel
+from .recovery import RecoveryManager
 from .tools import ToolRegistry
 from .verifier import Verifier
 
@@ -25,6 +26,7 @@ class Executor:
         world: Optional[WorldModel] = None,
         verifier: Optional[Verifier] = None,
         tools: Optional[ToolRegistry] = None,
+        recovery: Optional[RecoveryManager] = None,
         *,
         allow_send: bool = False,
         allow_inventory_write: bool = True,
@@ -34,6 +36,7 @@ class Executor:
         self.world = world or WorldModel()
         self.verifier = verifier or Verifier(memory)
         self.tools = tools or ToolRegistry()
+        self.recovery = recovery or RecoveryManager()
         self.allow_send = allow_send
         self.allow_inventory_write = allow_inventory_write
         self._attempts: dict[str, ActionResult] = {}
@@ -44,6 +47,7 @@ class Executor:
         self.last_document: Optional[dict[str, Any]] = None
         self.last_task: Optional[dict[str, Any]] = None
         self.last_reservation: Optional[dict[str, Any]] = None
+        self.last_alias: Optional[dict[str, Any]] = None
 
     def run_plan(self, plan: PlanRecord, state: WorkingState) -> list[ActionResult]:
         results: list[ActionResult] = []
@@ -61,6 +65,7 @@ class Executor:
             self._checkpoints.append(
                 {"plan_id": plan.plan_id, "step_id": step.step_id, "result": result.to_dict()}
             )
+            self.recovery.checkpoint(plan.plan_id, step.step_id, result)
             if result.status in (ActionStatus.FAILED, ActionStatus.OUTCOME_UNKNOWN):
                 break
             step.status = "done" if result.status == ActionStatus.CONFIRMED else result.status.value
@@ -244,6 +249,27 @@ class Executor:
 
         if op == "reserve_stock":
             return self._reserve(step, state, result)
+
+        if op == "learn_alias":
+            frame = state.semantic_frame or {}
+            old_name = None
+            new_name = None
+            for c in frame.get("conditions") or []:
+                if c.get("field") == "alias_of":
+                    old_name = c.get("value")
+                if c.get("field") == "alias":
+                    new_name = c.get("value")
+            if not old_name or not new_name:
+                raise ValueError("alias fields missing")
+            # Map old warehouse name → canonical entity if known, else store both ways
+            canon = self.memory.ontology.resolve(str(old_name)) or str(old_name).lower().replace(" ", "_")
+            self.memory.learn_alias(str(new_name), canon, source="user")
+            # Also allow looking up by old name
+            self.memory.learn_alias(str(old_name), canon, source="user")
+            payload = {"alias": new_name, "canonical": canon, "former": old_name}
+            self.last_alias = payload
+            result.external_receipt = f"alias:{canon}:{new_name}"
+            return [{"alias_stored": True, **payload}]
 
         raise ValueError(f"Unknown operator: {op}")
 

@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-A runnable **complete non-LLM AI** (v0.4) built from the engineering blueprint:
+A runnable **complete non-LLM AI** (v0.5) built from the engineering blueprint:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no

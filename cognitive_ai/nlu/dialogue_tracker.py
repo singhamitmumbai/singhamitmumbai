@@ -51,6 +51,29 @@ class DialogueTracker:
             state.set_semantic_frame(frame.to_dict())
             return frame
 
+        # Fact / alias acquisition: "X is now called Y"
+        alias = re.search(
+            r"^(.+?)\s+is now called\s+(.+?)\.?$",
+            text.strip(),
+            flags=re.I,
+        )
+        if alias:
+            old_name = alias.group(1).strip()
+            new_name = alias.group(2).strip()
+            frame = SemanticFrame(
+                operation="learn_alias",
+                original_text=text,
+                normalized_text=text,
+                confidence=0.95,
+                supported=True,
+                conditions=[
+                    {"field": "alias_of", "operator": "eq", "value": old_name},
+                    {"field": "alias", "operator": "eq", "value": new_name},
+                ],
+            )
+            state.set_semantic_frame(frame.to_dict())
+            return frame
+
         frame = self.nlu.parse(text, dialogue_params=state.dialogue.confirmed_parameters)
         if frame.project_id:
             state.dialogue.confirmed_parameters["project_id"] = frame.project_id

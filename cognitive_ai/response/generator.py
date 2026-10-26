@@ -7,6 +7,7 @@ from typing import Any, Optional
 from ..core.working_state import WorkingState
 from ..execution.executor import Executor
 from ..reasoning.engine import ReasoningResult
+from .hindi import prefer_hindi, realize_invoice_hi, realize_pending_hi
 
 
 def _format_inr(amount: float) -> str:
@@ -76,7 +77,8 @@ class ResponseGenerator:
                 "text": (
                     "I am a complete non-LLM assistant for Finderbay. "
                     "Supported: invoice queries, delivery pending lists, material lookup/reserve, "
-                    "local tasks, document field extraction and follow-up drafts (without sending). "
+                    "local tasks, document field extraction, alias learning and follow-up drafts "
+                    "(without sending). "
                     "I keep unknown ≠ false, predicted ≠ observed, attempted ≠ confirmed."
                 ),
                 "structured": state.summary(),
@@ -96,10 +98,15 @@ class ResponseGenerator:
             if draft:
                 break
 
+        lang = frame.get("language") or "en"
         if op == "query_invoices":
             text, structured = self._realize_invoices(reasoning, table)
+            if prefer_hindi(lang):
+                text = realize_invoice_hi(structured)
         elif op in ("query_deliveries", "prepare_followup"):
             text, structured = self._realize_deliveries(reasoning, table, draft, op)
+            if prefer_hindi(lang) and op != "prepare_followup":
+                text = realize_pending_hi(structured, draft)
         elif op == "query_materials":
             text, structured = self._realize_materials(table)
         elif op == "reserve_stock":
@@ -108,13 +115,26 @@ class ResponseGenerator:
             text, structured = self._realize_task(executor, table)
         elif op == "document_qa":
             text, structured = self._realize_document(executor.last_document)
+        elif op == "learn_alias":
+            alias = executor.last_alias or {}
+            text = (
+                f"Learned alias: '{alias.get('former')}' is now also known as "
+                f"'{alias.get('alias')}' → canonical '{alias.get('canonical')}'."
+            )
+            structured = {**alias, "learned": True}
         else:
             text = reasoning.message if reasoning else "Done."
             structured = {"reasoning": reasoning.to_dict() if reasoning else None}
 
         # Validation: claims in text must match structure
         faithful = self._validate(text, structured)
-        answer = {"text": text, "structured": structured, "faithful": faithful, "table": table}
+        answer = {
+            "text": text,
+            "structured": structured,
+            "faithful": faithful,
+            "table": table,
+            "language": lang,
+        }
         state.last_answer = answer
         return answer
 
