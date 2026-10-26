@@ -122,6 +122,24 @@ class ResponseGenerator:
                 f"'{alias.get('alias')}' → canonical '{alias.get('canonical')}'."
             )
             structured = {**alias, "learned": True}
+        elif op == "login":
+            text = "Login successful." if executor.auth_token else "Login failed."
+            structured = {"logged_in": bool(executor.auth_token)}
+        elif op == "record_payment":
+            pay = executor.last_payment or {}
+            p = pay.get("payment") or {}
+            text = (
+                f"Recorded payment {p.get('id')} of ₹{p.get('amount_inr')} "
+                f"for {p.get('invoice_id')}. Invoice paid total ₹{pay.get('invoice_paid_total')}."
+            )
+            structured = {"payment_posted": True, **pay}
+        elif op in ("query_payments", "query_contracts"):
+            n = table.get("row_count", 0) if table else 0
+            kind = "payment" if op == "query_payments" else "contract"
+            text = f"{n} {kind}(s) found."
+            if table and table.get("meta", {}).get("active_value_inr") is not None:
+                text += f" Active contract value ₹{table['meta']['active_value_inr']:,.0f}."
+            structured = {"count": n, "listed": True}
         else:
             text = reasoning.message if reasoning else "Done."
             structured = {"reasoning": reasoning.to_dict() if reasoning else None}

@@ -124,6 +124,26 @@ def extract_slots(text: str, project_id: Optional[str] = None) -> SlotBundle:
         if field_name.replace("_", " ") in lower or field_name in lower:
             bundle.conditions.append(Condition("document_field", "eq", field_name))
 
+    # Payment / contract slots
+    m_inv = re.search(r"\binvoice\s+(\d+)\b", lower)
+    if m_inv:
+        bundle.conditions.append(Condition("invoice_id", "eq", f"inv_{m_inv.group(1)}"))
+    m_pay = re.search(
+        r"(?:record|post|receive)\s+payment(?:\s+of)?\s*(?:₹|rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)",
+        lower,
+    )
+    if m_pay:
+        try:
+            bundle.conditions.append(
+                Condition("payment_amount_inr", "eq", float(m_pay.group(1).replace(",", "")))
+            )
+        except ValueError:
+            pass
+    m_user = re.search(r"login\s+(\w+)\s+(?:with\s+)?(?:password\s+)?(\S+)", lower)
+    if m_user:
+        bundle.conditions.append(Condition("username", "eq", m_user.group(1)))
+        bundle.conditions.append(Condition("password", "eq", m_user.group(2)))
+
     # Prohibitions
     if re.search(r"do not send|don't send|mat bhejo|do not email", lower):
         bundle.prohibitions.append("send")

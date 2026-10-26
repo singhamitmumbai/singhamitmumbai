@@ -71,6 +71,32 @@ class ReasoningEngine:
                 success=True,
                 message="Reservation handled by world-model transition.",
             )
+        if op == "query_payments":
+            rows = self.memory.get_records("payment")
+            pid = frame.get("project_id")
+            if pid:
+                rows = [r for r in rows if r.get("project_id") == pid]
+            return ReasoningResult(
+                method="lookup",
+                conclusions=[{"type": "payments", "items": rows, "count": len(rows)}],
+                message=f"{len(rows)} payment(s).",
+            )
+        if op == "query_contracts":
+            rows = self.memory.get_records("contract")
+            pid = frame.get("project_id")
+            if pid:
+                rows = [r for r in rows if r.get("project_id") == pid]
+            total = sum(float(r.get("value_inr") or 0) for r in rows if r.get("status") == "active")
+            return ReasoningResult(
+                method="lookup",
+                conclusions=[{
+                    "type": "contracts",
+                    "items": rows,
+                    "count": len(rows),
+                    "active_value_inr": total,
+                }],
+                message=f"{len(rows)} contract(s); active value INR {total:.0f}.",
+            )
         return ReasoningResult(
             method="passthrough",
             success=True,

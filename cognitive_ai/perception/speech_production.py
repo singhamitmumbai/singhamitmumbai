@@ -14,10 +14,23 @@ DEFAULT_MODEL = ROOT / "models" / "vosk-model-small-en-us-0.15"
 class ProductionSpeech:
     """Offline ASR with grammar-aware post-processing for Finderbay commands."""
 
-    version = "vosk_small_en_v0.15"
+    version = "vosk_multilang_v1"
 
-    def __init__(self, model_path: Optional[Path | str] = None) -> None:
-        self.model_path = Path(model_path) if model_path else DEFAULT_MODEL
+    def __init__(
+        self,
+        model_path: Optional[Path | str] = None,
+        *,
+        model_name: Optional[str] = None,
+    ) -> None:
+        if model_path:
+            self.model_path = Path(model_path)
+        elif model_name:
+            from .model_registry import model_path as mp
+
+            self.model_path = mp(model_name)
+        else:
+            self.model_path = DEFAULT_MODEL
+        self.model_name = model_name or "en-small"
         self._model = None
         self._available = None
 

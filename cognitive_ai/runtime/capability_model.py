@@ -84,6 +84,26 @@ class CapabilityModel:
                 ["learn_alias"],
                 ["requires reviewed user assertion; scoped aliases"],
             ),
+            (
+                "query_payments",
+                ["retrieve_records", "respond"],
+                ["requires read access"],
+            ),
+            (
+                "record_payment",
+                ["record_payment"],
+                ["requires accountant/manager auth token"],
+            ),
+            (
+                "query_contracts",
+                ["retrieve_records", "respond"],
+                ["requires read access"],
+            ),
+            (
+                "login",
+                ["login"],
+                ["multi-user local auth; passwords are demo-only"],
+            ),
         ]:
             self.entries[name] = CapabilityEntry(name=name, tools=tools, limitations=limits)
 

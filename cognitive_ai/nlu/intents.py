@@ -137,6 +137,46 @@ INTENT_CUES: list[tuple[str, list[tuple[str, float]]]] = [
             ("help", 1.0),
         ],
     ),
+    (
+        "query_payments",
+        [
+            ("payment", 2.0),
+            ("payments", 2.2),
+            ("paid amount", 1.5),
+            ("settlement", 1.8),
+            ("neft", 1.2),
+        ],
+    ),
+    (
+        "record_payment",
+        [
+            ("record payment", 4.5),
+            ("post payment", 4.5),
+            ("mark paid", 3.5),
+            ("receive payment", 3.5),
+            ("log payment", 4.0),
+            ("enter payment", 4.0),
+            ("payment of", 2.0),
+        ],
+    ),
+    (
+        "query_contracts",
+        [
+            ("contract", 2.0),
+            ("contracts", 2.2),
+            ("agreement", 1.8),
+            ("supplier agreement", 2.0),
+        ],
+    ),
+    (
+        "login",
+        [
+            ("login", 2.5),
+            ("log in", 2.5),
+            ("sign in", 2.0),
+            ("authenticate", 2.0),
+        ],
+    ),
 ]
 
 
@@ -152,6 +192,15 @@ def rank_intents(text: str, top_k: int = 3) -> list[IntentHit]:
                 evidence.append(cue)
         if score > 0:
             hits.append(IntentHit(intent=intent, score=score, evidence=evidence))
+    # Prefer write actions over read queries when explicit record/post verbs appear
+    if re.search(r"\b(record|post|log|enter)\s+payment\b|\bmark\s+paid\b", lower):
+        for h in hits:
+            if h.intent == "record_payment":
+                h.score += 3.0
+                h.evidence.append("write_payment_boost")
+            elif h.intent in {"query_invoices", "query_payments"}:
+                h.score -= 1.5
+                h.evidence.append("write_payment_penalty")
     hits.sort(key=lambda h: -h.score)
     return hits[:top_k]
 

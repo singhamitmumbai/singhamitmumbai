@@ -58,8 +58,19 @@ def build_parser() -> argparse.ArgumentParser:
         "command",
         nargs="?",
         default=None,
-        choices=["os", "demo", "repl", "chat", "ui", "finderbay", "complete", "general", "eval"],
-        help="Optional subcommand: os, chat/ui, demo, repl, finderbay/complete, general, eval",
+        choices=[
+            "os",
+            "demo",
+            "repl",
+            "chat",
+            "ui",
+            "finderbay",
+            "complete",
+            "general",
+            "eval",
+            "bench",
+        ],
+        help="Optional subcommand: os, chat/ui, demo, repl, finderbay/complete, general, eval, bench",
     )
     p.add_argument(
         "--ask",
@@ -477,6 +488,26 @@ def main(argv: Optional[list[str]] = None) -> int:
         report = CompleteNonLLMAI(seed_demo=True).evaluate()
         print(json.dumps(report.to_dict(), indent=2, default=str))
         return 0 if report.failed == 0 else 1
+
+    if args.command == "bench":
+        from .benchmarks import run_scan_benchmark, run_transfer_benchmark
+        from .commonsense.eval_suite import run_commonsense_eval
+        from .nlu.pipeline import LanguageUnderstanding
+        from .perception.model_registry import list_models
+
+        payload = {
+            "commonsense": run_commonsense_eval(),
+            "scan": run_scan_benchmark(LanguageUnderstanding().parse),
+            "transfer": run_transfer_benchmark(),
+            "speech_models": list_models(),
+        }
+        print(json.dumps(payload, indent=2, default=str))
+        ok = (
+            payload["commonsense"]["failed"] == 0
+            and payload["transfer"]["passed"]
+            and payload["scan"]["by_split"]["train_like"]["passed"] >= 1
+        )
+        return 0 if ok else 1
 
     # Chat UI launcher
     if args.command in ("chat", "ui"):

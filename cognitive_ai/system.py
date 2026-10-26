@@ -11,7 +11,10 @@ from .config import SystemConfig
 from .core.records import Observation
 from .core.working_state import WorkingState
 from .datasets.registry import DatasetRegistry
+from .domains.finderbay.auth import AuthService
+from .domains.finderbay.contracts import ContractService
 from .domains.finderbay.package import FinderbayPackage
+from .domains.finderbay.payments import PaymentService
 from .domains.finderbay.seed import seed_memory
 from .evaluation.harness import EvaluationHarness, EvalCase, EvalReport
 from .execution.executor import Executor
@@ -89,6 +92,12 @@ class CompleteNonLLMAI:
             allow_send=self.config.allow_send,
             allow_inventory_write=self.config.allow_inventory_write,
         )
+        self.auth = AuthService()
+        self.payments = PaymentService(self.memory, self.auth)
+        self.contracts = ContractService(self.memory, self.auth)
+        self.executor.auth = self.auth
+        self.executor.payments = self.payments
+        self.executor.contracts = self.contracts
         self.responder = ResponseGenerator()
         self.learner = LearningSystem(self.memory, dataset_dir=self.config.dataset_dir)
         self.datasets = DatasetRegistry(self.config.dataset_dir)
@@ -165,6 +174,10 @@ class CompleteNonLLMAI:
             "status",
             "clarify",
             "learn_alias",
+            "login",
+            "query_payments",
+            "query_contracts",
+            "record_payment",
         ) and not self.capability_model.can(frame.operation):
             answer = {
                 "text": self.capability_model.describe(frame.operation),

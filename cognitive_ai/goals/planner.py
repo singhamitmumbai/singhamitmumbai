@@ -210,11 +210,12 @@ class OperatorPlanner:
             for c in frame.get("conditions") or []:
                 if c.get("field") == "document_field":
                     field = c.get("value")
+            entities = frame.get("entities") or []
+            doc_id = entities[0].get("entity_id") if entities else None
             steps = [
                 PlanStepRecord(
                     operator="ocr_extract",
-                    args={"field": field, "document_id": (frame.get("entities") or [{}])[0].get("entity_id")
-                    if False else None},
+                    args={"field": field, "document_id": doc_id},
                     verification=["fields_present"],
                 ),
                 PlanStepRecord(operator="respond", args={}, verification=["claims_match_structure"]),
@@ -225,6 +226,81 @@ class OperatorPlanner:
                 outcome="feasible",
                 explanation="Document field extraction plan.",
                 cost=2.0,
+            )
+            state.set_plan(plan)
+            return plan
+
+        if op_name == "login":
+            user = pwd = None
+            for c in frame.get("conditions") or []:
+                if c.get("field") == "username":
+                    user = c.get("value")
+                if c.get("field") == "password":
+                    pwd = c.get("value")
+            steps = [
+                PlanStepRecord(
+                    operator="login",
+                    args={"username": user, "password": pwd},
+                    verification=["login_ok"],
+                ),
+                PlanStepRecord(operator="respond", args={}, verification=["claims_match_structure"]),
+            ]
+            plan = PlanRecord(
+                goal_id=goal.goal_id,
+                steps=steps,
+                outcome="feasible",
+                explanation="Authentication plan.",
+                cost=2.0,
+            )
+            state.set_plan(plan)
+            return plan
+
+        if op_name == "record_payment":
+            invoice_id = amount = None
+            for c in frame.get("conditions") or []:
+                if c.get("field") == "invoice_id":
+                    invoice_id = c.get("value")
+                if c.get("field") == "payment_amount_inr":
+                    amount = c.get("value")
+            steps = [
+                PlanStepRecord(
+                    operator="record_payment",
+                    args={"invoice_id": invoice_id, "amount_inr": amount},
+                    verification=["payment_posted"],
+                ),
+                PlanStepRecord(operator="respond", args={}, verification=["claims_match_structure"]),
+            ]
+            plan = PlanRecord(
+                goal_id=goal.goal_id,
+                steps=steps,
+                outcome="feasible",
+                explanation="Record payment plan.",
+                cost=2.0,
+            )
+            state.set_plan(plan)
+            return plan
+
+        if op_name in ("query_payments", "query_contracts"):
+            steps = [
+                PlanStepRecord(
+                    operator="retrieve_records",
+                    args={"project_id": frame.get("project_id"), "operation": op_name},
+                    verification=["record_count_available"],
+                ),
+                PlanStepRecord(
+                    operator="reason_over_records",
+                    args={},
+                    verification=["conclusion_present"],
+                ),
+                PlanStepRecord(operator="build_table", args={}, verification=["table_row_count"]),
+                PlanStepRecord(operator="respond", args={}, verification=["claims_match_structure"]),
+            ]
+            plan = PlanRecord(
+                goal_id=goal.goal_id,
+                steps=steps,
+                outcome="feasible",
+                explanation=f"Query plan for {op_name}.",
+                cost=float(len(steps)),
             )
             state.set_plan(plan)
             return plan

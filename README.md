@@ -1,20 +1,20 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-A runnable **complete non-LLM AI** (v0.6) built from the engineering blueprint:
+A runnable **complete non-LLM AI** (v0.7) built from the engineering blueprint:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
 pretrained general-purpose LLM at runtime**.
 
-### What v0.6 adds toward “general” capability
+### What v0.7 adds
 
-| Area | Upgrade |
+| Track | Upgrade |
 |------|---------|
-| Open-domain chat | Curated common-sense KB + FAQ + analogies (not ChatGPT-scale) |
-| Speech | **Vosk** offline ASR (`models/vosk-model-small-en-us-0.15`) |
-| OCR | **Tesseract 5** production OCR (`eng+hin`) |
-| Generality | `GeneralNonLLMAI` router: Finderbay tasks ↔ open-domain chat |
-| Transfer | Skill-transfer helper across projects |
+| 1. Common-sense | **2000+** curated facts + rules + `python -m cognitive_ai bench` |
+| 2. Speech | EN / **Hindi** / EN-IN Vosk models + streaming mic API |
+| 3. OCR | Multi-page + table/layout heuristics (`LayoutOCR`) |
+| 4. Finderbay | **Payments**, **contracts**, **multi-user auth** |
+| 5. Benchmarks | SCAN-style composition holdouts + skill-transfer tests |
 
 **Honest limits (still):** not human-level AGI; open-domain coverage is finite/explicit; not unrestricted LLM chat.
 
@@ -36,8 +36,13 @@ python -m cognitive_ai chat --domain general
 # open http://127.0.0.1:8765/
 
 python -m cognitive_ai eval
+python -m cognitive_ai bench
 pytest -q
 ```
+
+Speech models (optional, for live ASR): place Vosk packs under `models/`
+(`vosk-model-small-en-us-0.15`, `vosk-model-small-hi-0.22`, `vosk-model-small-en-in-0.4`).
+They are gitignored; the model registry reports install status.
 
 ## What “complete” means here
 
@@ -111,7 +116,7 @@ Runtime: **Python 3.10+ stdlib only**. Dev: `pytest`. No ML/LLM packages require
 
 ## Provenance note
 
-Speech and OCR modules expose full pipeline stages and metrics hooks. Bundled
-implementations are stubs/oracles for offline testing. Production checkpoints
-must be inventoried for LLM contamination if your policy requires “no LLM
-anywhere in the lifecycle.”
+Speech uses **Vosk** (offline ASR; EN pack vendored, HI/EN-IN via registry download).
+OCR uses **Tesseract** (+ layout/table heuristics). No pretrained general-purpose
+LLM is loaded at runtime. Acoustic/OCR checkpoints should still be inventoried
+for LLM contamination if your policy requires “no LLM anywhere in the lifecycle.”

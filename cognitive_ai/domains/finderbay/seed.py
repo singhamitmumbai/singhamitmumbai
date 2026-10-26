@@ -145,6 +145,54 @@ def seed_memory(memory: MemorySystem | None = None) -> MemorySystem:
         {"project_id": "project_a", "title": "Site inspection", "status": "open"},
     )
 
+    # Contracts
+    memory.upsert_record(
+        "contract",
+        "ctr_1",
+        {
+            "project_id": "project_a",
+            "title": "Cement supply agreement",
+            "supplier": "BuildCo",
+            "value_inr": 5000000,
+            "start_date": "2025-01-01",
+            "end_date": "2026-12-31",
+            "status": "active",
+        },
+    )
+    memory.upsert_record(
+        "contract",
+        "ctr_2",
+        {
+            "project_id": "project_b",
+            "title": "Paint supply agreement",
+            "supplier": "ColorWorks",
+            "value_inr": 800000,
+            "start_date": "2025-06-01",
+            "end_date": "2026-06-01",
+            "status": "active",
+        },
+    )
+
+    # Link some invoices to contracts
+    inv42 = memory.get_records("invoice", id="inv_42")
+    if inv42:
+        memory.upsert_record("invoice", "inv_42", {**inv42[0], "contract_id": "ctr_1"})
+
+    # Existing payment example
+    memory.upsert_record(
+        "payment",
+        "pay_1",
+        {
+            "invoice_id": "inv_51",
+            "project_id": "project_a",
+            "amount_inr": 90000,
+            "method": "bank_transfer",
+            "reference": "NEFT901",
+            "status": "posted",
+            "paid_at": "2025-02-01T00:00:00+00:00",
+        },
+    )
+
     # Sample invoice scan / document for OCR QA
     memory.upsert_record(
         "document",

@@ -48,6 +48,11 @@ class Executor:
         self.last_task: Optional[dict[str, Any]] = None
         self.last_reservation: Optional[dict[str, Any]] = None
         self.last_alias: Optional[dict[str, Any]] = None
+        self.last_payment: Optional[dict[str, Any]] = None
+        self.auth = None
+        self.payments = None
+        self.contracts = None
+        self.auth_token: Optional[str] = None
 
     def run_plan(self, plan: PlanRecord, state: WorkingState) -> list[ActionResult]:
         results: list[ActionResult] = []
@@ -152,6 +157,8 @@ class Executor:
                 "query_materials": "material",
                 "manage_task": "task",
                 "document_qa": "document",
+                "query_payments": "payment",
+                "query_contracts": "contract",
             }
             kind = kind_map.get(operation, "invoice")
             rows = self.memory.get_records(kind)
@@ -270,6 +277,33 @@ class Executor:
             self.last_alias = payload
             result.external_receipt = f"alias:{canon}:{new_name}"
             return [{"alias_stored": True, **payload}]
+
+        if op == "login":
+            auth = getattr(self, "auth", None)
+            if auth is None:
+                raise RuntimeError("auth_service_not_configured")
+            user = step.args.get("username")
+            pwd = step.args.get("password")
+            token = auth.login(str(user), str(pwd))
+            if not token:
+                raise PermissionError("login_failed")
+            self.auth_token = token
+            result.external_receipt = f"session:{token[:8]}"
+            return [{"login_ok": True, "user_id": user, "token": token}]
+
+        if op == "record_payment":
+            payments = getattr(self, "payments", None)
+            if payments is None:
+                raise RuntimeError("payment_service_not_configured")
+            token = getattr(self, "auth_token", None)
+            out = payments.record_payment(
+                token=token,
+                invoice_id=str(step.args.get("invoice_id")),
+                amount_inr=float(step.args.get("amount_inr") or 0),
+            )
+            self.last_payment = out
+            result.external_receipt = out["payment"]["id"]
+            return [{"payment_posted": True, **out}]
 
         raise ValueError(f"Unknown operator: {op}")
 
@@ -391,6 +425,18 @@ class Executor:
                 "rows": rows,
                 "row_count": len(rows),
                 "meta": {"kind": "task"},
+            }
+        if ctype in ("payments", "contracts"):
+            rows = conc.get("items") or []
+            return {
+                "columns": list(rows[0].keys()) if rows else [],
+                "rows": rows,
+                "row_count": len(rows),
+                "meta": {
+                    "kind": ctype,
+                    "active_value_inr": conc.get("active_value_inr"),
+                    "count": conc.get("count"),
+                },
             }
         return {"columns": [], "rows": [], "row_count": 0, "meta": {"raw": conc}}
 

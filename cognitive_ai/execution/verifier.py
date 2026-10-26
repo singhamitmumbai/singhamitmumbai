@@ -70,6 +70,12 @@ class Verifier:
             elif check == "alias_stored":
                 if not effects.get("alias_stored"):
                     return False
+            elif check == "login_ok":
+                if not effects.get("login_ok"):
+                    return False
+            elif check == "payment_posted":
+                if not effects.get("payment_posted"):
+                    return False
             else:
                 # Unknown check name — do not pretend success
                 continue

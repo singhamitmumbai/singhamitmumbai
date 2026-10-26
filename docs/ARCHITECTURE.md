@@ -30,7 +30,10 @@ Input → Perception → Language understanding → Working state
 | `cognitive_ai/learning_sys` | Fact/alias/skill learning with review gates |
 | `cognitive_ai/evaluation` | Task-level harness + oracle failure location |
 | `cognitive_ai/capabilities` | Observable capability specifications |
-| `cognitive_ai/domains/finderbay` | Invoices, deliveries, materials, tasks |
+| `cognitive_ai/domains/finderbay` | Invoices, deliveries, materials, tasks, payments, contracts, auth |
+| `cognitive_ai/commonsense` | Curated multi-thousand fact KB + reasoner + eval suite |
+| `cognitive_ai/benchmarks` | SCAN-style composition + skill-transfer holdouts |
+| `cognitive_ai/general` | `GeneralNonLLMAI` router (Finderbay ↔ open-domain) |
 | `cognitive_ai/system.py` | `CompleteNonLLMAI` orchestration |
 | `cognitive_ai/brain.py` | Earlier symbolic cognitive brain (still available) |
 
@@ -49,6 +52,14 @@ Excluded at runtime: pretrained general-purpose LLMs.
 
 Perception modules ship **auditable stubs**; production acoustic/OCR checkpoints
 must declare provenance separately.
+
+## v0.7 capability expansion
+
+1. Large common-sense KB generator (`commonsense/generate_kb.py`) + eval suite  
+2. Speech model registry (en/hi/en-in) + `StreamingASR` / optional mic loop  
+3. `LayoutOCR` multi-page invoices + table heuristics  
+4. Finderbay `auth`, `payments`, `contracts` services  
+5. `benchmarks/scan_like.py` + `transfer_bench.py` (`cognitive_ai bench`)
 
 ## v0.6 generality upgrades
 
