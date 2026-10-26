@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cognitive-ai"
-version = "0.2.0"
-description = "Symbolic cognitive AI brain — no LLM dependencies"
+version = "0.3.0"
+description = "Complete non-LLM AI — Finderbay assistant + symbolic cognitive OS"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .knowledge import Rule, Triple
-from .planner import Action
+from cognitive_ai.knowledge import Rule, Triple
+from cognitive_ai.planner import Action
 
 if TYPE_CHECKING:
-    from .brain import Brain
+    from cognitive_ai.brain import Brain
 
 
 def load_domain(brain: "Brain", name: str) -> None:

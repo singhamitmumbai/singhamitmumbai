@@ -58,8 +58,14 @@ def build_parser() -> argparse.ArgumentParser:
         "command",
         nargs="?",
         default=None,
-        choices=["os", "demo", "repl", "chat", "ui"],
-        help="Optional subcommand: os, chat/ui, demo, repl",
+        choices=["os", "demo", "repl", "chat", "ui", "finderbay", "complete", "eval"],
+        help="Optional subcommand: os, chat/ui, demo, repl, finderbay/complete, eval",
+    )
+    p.add_argument(
+        "--ask",
+        type=str,
+        default=None,
+        help="One-shot question for the Finderbay complete system",
     )
     p.add_argument("--host", default="0.0.0.0", help="Chat UI bind host")
     p.add_argument("--port", type=int, default=8765, help="Chat UI port")
@@ -336,10 +342,95 @@ def repl(brain: Brain) -> int:
     return 0
 
 
+def run_finderbay_demo() -> int:
+    """End-to-end Finderbay complete non-LLM AI demo (blueprint §20)."""
+    from .system import CompleteNonLLMAI
+
+    ai = CompleteNonLLMAI(seed_demo=True)
+    print("=" * 60)
+    print(f"Complete Non-LLM AI — Finderbay demo (v{ai.version})")
+    print("No pretrained general-purpose LLM at runtime.")
+    print("=" * 60)
+    print(json.dumps(ai.status(), indent=2, default=str))
+
+    queries = [
+        "Show unpaid invoices above ₹1 lakh for Project A, excluding disputed ones.",
+        (
+            "From this week's delivery records, find the items still pending for "
+            "Project A and prepare a follow-up. Do not send it."
+        ),
+        "Dikhao pending deliveries for Project A kal",
+        "What are your capabilities?",
+    ]
+    for q in queries:
+        print("\n" + "-" * 60)
+        print(f"USER: {q}")
+        result = ai.handle(q)
+        print(f"FRAME: {result['frame']['operation']} conf={result['frame']['confidence']:.2f}")
+        print(f"PLAN:  {result['plan']['outcome']} — {result['plan']['explanation']}")
+        print(f"AI:    {result['text']}")
+        if result.get("structured"):
+            print(f"DATA:  {json.dumps(result['structured'], default=str)}")
+
+    print("\n--- Independent evaluation suite ---")
+    report = ai.evaluate()
+    print(json.dumps(report.to_dict(), indent=2, default=str))
+    print(f"\nAccuracy: {report.accuracy:.0%} ({report.passed}/{report.passed + report.failed})")
+    print("Demo complete. No LLM was used.")
+    return 0 if report.failed == 0 else 1
+
+
+def finderbay_repl() -> int:
+    from .system import CompleteNonLLMAI
+
+    ai = CompleteNonLLMAI(seed_demo=True)
+    print(f"Finderbay CompleteNonLLMAI {ai.version} — type 'quit' to exit, 'eval' to run suite")
+    while True:
+        try:
+            line = input("finderbay> ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        line = line.strip()
+        if not line:
+            continue
+        if line.lower() in ("quit", "exit", "q"):
+            break
+        if line.lower() == "eval":
+            print(json.dumps(ai.evaluate().to_dict(), indent=2, default=str))
+            continue
+        if line.lower() == "status":
+            print(json.dumps(ai.status(), indent=2, default=str))
+            continue
+        result = ai.handle(line)
+        print(result["text"])
+    return 0
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    # Complete Finderbay system
+    if args.command in ("finderbay", "complete"):
+        if args.ask:
+            from .system import CompleteNonLLMAI
+
+            ai = CompleteNonLLMAI(seed_demo=True)
+            result = ai.handle(args.ask)
+            print(result["text"])
+            return 0
+        if args.demo or not sys.stdin.isatty():
+            return run_finderbay_demo()
+        return finderbay_repl()
+
+    if args.command == "eval":
+        from .system import CompleteNonLLMAI
+
+        report = CompleteNonLLMAI(seed_demo=True).evaluate()
+        print(json.dumps(report.to_dict(), indent=2, default=str))
+        return 0 if report.failed == 0 else 1
 
     # Chat UI launcher
     if args.command in ("chat", "ui"):
