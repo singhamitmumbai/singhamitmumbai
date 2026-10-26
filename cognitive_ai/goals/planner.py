@@ -31,61 +31,35 @@ class OperatorPlanner:
 
     def _register_defaults(self) -> None:
         for op in [
-            Operator(
-                "retrieve_records",
-                "Retrieve domain records matching filters",
-                preconditions=["filters_known"],
-                expected_effects=["records_loaded"],
-                verification=["record_count_available"],
-            ),
-            Operator(
-                "reason_over_records",
-                "Apply rules / comparisons to loaded records",
-                preconditions=["records_loaded"],
-                expected_effects=["conclusions_ready"],
-                verification=["conclusion_present"],
-            ),
-            Operator(
-                "build_table",
-                "Build source-linked result table",
-                preconditions=["conclusions_ready"],
-                expected_effects=["table_ready"],
-                verification=["table_row_count"],
-            ),
-            Operator(
-                "draft_followup",
-                "Prepare follow-up text without sending",
-                preconditions=["table_ready"],
-                expected_effects=["draft_ready"],
-                verification=["draft_exists", "send_not_performed"],
-                side_effects=[],
-            ),
-            Operator(
-                "reserve_stock",
-                "Reserve inventory quantity",
-                preconditions=[
-                    "item_identified",
-                    "sufficient_available_stock",
-                    "destination_accepts",
-                    "authorized",
-                ],
-                expected_effects=["available_decreased", "reserved_increased"],
-                verification=["inventory_reservation_receipt"],
-            ),
-            Operator(
-                "respond",
-                "Generate validated natural-language response",
-                preconditions=["conclusions_ready"],
-                expected_effects=["answer_ready"],
-                verification=["claims_match_structure"],
-            ),
-            Operator(
-                "clarify",
-                "Ask user to resolve ambiguity",
-                preconditions=["ambiguity_present"],
-                expected_effects=["clarification_requested"],
-                verification=["question_emitted"],
-            ),
+            Operator("retrieve_records", "Retrieve domain records matching filters",
+                     preconditions=["filters_known"], expected_effects=["records_loaded"],
+                     verification=["record_count_available"]),
+            Operator("reason_over_records", "Apply rules / comparisons to loaded records",
+                     preconditions=["records_loaded"], expected_effects=["conclusions_ready"],
+                     verification=["conclusion_present"]),
+            Operator("build_table", "Build source-linked result table",
+                     preconditions=["conclusions_ready"], expected_effects=["table_ready"],
+                     verification=["table_row_count"]),
+            Operator("draft_followup", "Prepare follow-up text without sending",
+                     preconditions=["table_ready"], expected_effects=["draft_ready"],
+                     verification=["draft_exists", "send_not_performed"]),
+            Operator("reserve_stock", "Reserve inventory quantity",
+                     preconditions=["item_identified", "sufficient_available_stock", "authorized"],
+                     expected_effects=["available_decreased", "reserved_increased"],
+                     verification=["inventory_reservation_receipt"]),
+            Operator("create_task", "Persist a local task",
+                     preconditions=["title_known"], expected_effects=["task_created"],
+                     verification=["task_persisted"]),
+            Operator("list_tasks", "List tasks for a project",
+                     expected_effects=["tasks_listed"], verification=["record_count_available"]),
+            Operator("ocr_extract", "Extract and validate document fields",
+                     expected_effects=["fields_ready"], verification=["fields_present"]),
+            Operator("respond", "Generate validated natural-language response",
+                     preconditions=["conclusions_ready"], expected_effects=["answer_ready"],
+                     verification=["claims_match_structure"]),
+            Operator("clarify", "Ask user to resolve ambiguity",
+                     preconditions=["ambiguity_present"], expected_effects=["clarification_requested"],
+                     verification=["question_emitted"]),
         ]:
             self.register(op)
 
@@ -101,7 +75,6 @@ class OperatorPlanner:
         frame = state.semantic_frame or {}
         op_name = frame.get("operation", "")
 
-        # Clarification needed?
         if state.dialogue.unresolved_questions and frame.get("needs_clarification"):
             step = PlanStepRecord(
                 operator="clarify",
@@ -124,6 +97,129 @@ class OperatorPlanner:
                 explanation="Operation not in supported capability set.",
             )
 
+        if op_name in ("cancel", "correct", "status"):
+            steps = [
+                PlanStepRecord(
+                    operator="respond",
+                    args={},
+                    expected_effects=[{"answer_ready": True}],
+                    verification=["claims_match_structure"],
+                )
+            ]
+            plan = PlanRecord(
+                goal_id=goal.goal_id,
+                steps=steps,
+                outcome="feasible",
+                explanation=f"Direct response plan for {op_name}.",
+                cost=1.0,
+            )
+            state.set_plan(plan)
+            return plan
+
+        if op_name == "reserve_stock":
+            qty = None
+            name = None
+            for c in frame.get("conditions") or []:
+                if c.get("field") == "reserve_qty":
+                    qty = c.get("value")
+                if c.get("field") == "material_name":
+                    name = c.get("value")
+            steps = [
+                PlanStepRecord(
+                    operator="reserve_stock",
+                    args={"quantity": qty, "material_name": name, "item": None},
+                    verification=["inventory_reservation_receipt"],
+                ),
+                PlanStepRecord(
+                    operator="respond",
+                    args={},
+                    depends_on=[],
+                    verification=["claims_match_structure"],
+                ),
+            ]
+            plan = PlanRecord(
+                goal_id=goal.goal_id,
+                steps=steps,
+                outcome="feasible",
+                explanation="Reserve stock then report.",
+                cost=2.0,
+            )
+            state.set_plan(plan)
+            return plan
+
+        if op_name == "manage_task":
+            title = None
+            for c in frame.get("conditions") or []:
+                if c.get("field") == "task_title":
+                    title = c.get("value")
+            lower = (frame.get("normalized_text") or "").lower()
+            if "list task" in lower:
+                steps = [
+                    PlanStepRecord(
+                        operator="list_tasks",
+                        args={"project_id": frame.get("project_id")},
+                        verification=["record_count_available"],
+                    ),
+                    PlanStepRecord(operator="respond", args={}, verification=["claims_match_structure"]),
+                ]
+            else:
+                if not title:
+                    return PlanRecord(
+                        goal_id=goal.goal_id,
+                        steps=[
+                            PlanStepRecord(
+                                operator="clarify",
+                                args={"questions": ["What is the task title?"]},
+                                verification=["question_emitted"],
+                            )
+                        ],
+                        outcome="missing_info",
+                        explanation="Task title missing.",
+                        cost=1.0,
+                    )
+                steps = [
+                    PlanStepRecord(
+                        operator="create_task",
+                        args={"title": title, "project_id": frame.get("project_id")},
+                        verification=["task_persisted"],
+                    ),
+                    PlanStepRecord(operator="respond", args={}, verification=["claims_match_structure"]),
+                ]
+            plan = PlanRecord(
+                goal_id=goal.goal_id,
+                steps=steps,
+                outcome="feasible",
+                explanation=f"Task management plan ({len(steps)} steps).",
+                cost=float(len(steps)),
+            )
+            state.set_plan(plan)
+            return plan
+
+        if op_name == "document_qa":
+            field = None
+            for c in frame.get("conditions") or []:
+                if c.get("field") == "document_field":
+                    field = c.get("value")
+            steps = [
+                PlanStepRecord(
+                    operator="ocr_extract",
+                    args={"field": field, "document_id": (frame.get("entities") or [{}])[0].get("entity_id")
+                    if False else None},
+                    verification=["fields_present"],
+                ),
+                PlanStepRecord(operator="respond", args={}, verification=["claims_match_structure"]),
+            ]
+            plan = PlanRecord(
+                goal_id=goal.goal_id,
+                steps=steps,
+                outcome="feasible",
+                explanation="Document field extraction plan.",
+                cost=2.0,
+            )
+            state.set_plan(plan)
+            return plan
+
+        # Default query workflow
         steps: list[PlanStepRecord] = []
         steps.append(
             PlanStepRecord(
@@ -153,7 +249,6 @@ class OperatorPlanner:
             )
         )
         if op_name == "prepare_followup":
-            # Honour prohibition on send
             steps.append(
                 PlanStepRecord(
                     operator="draft_followup",
@@ -173,14 +268,13 @@ class OperatorPlanner:
             )
         )
 
-        # If reasoning already shows empty feasible path
         if reasoning and not reasoning.success:
             return PlanRecord(
                 goal_id=goal.goal_id,
                 steps=steps,
                 outcome="no_solution",
                 explanation=reasoning.message,
-                cost=sum(self.operators.get(s.operator, Operator(s.operator, "")).cost for s in steps),
+                cost=float(len(steps)),
             )
 
         plan = PlanRecord(

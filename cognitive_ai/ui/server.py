@@ -20,21 +20,46 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 class ChatSession:
-    """One brain instance shared by the UI server."""
+    """One brain / complete-AI instance shared by the UI server."""
 
     def __init__(self, domain: str = "animals") -> None:
         self.lock = threading.RLock()
-        self.brain = Brain(name="ChatBrain")
-        self.brain.load_domain(domain)
-        self.brain.mark_booted()
-        self.brain.reason()
+        self.domain = domain
+        self.mode = "finderbay" if domain in ("finderbay", "complete") else "symbolic"
+        self.complete = None
+        self.brain = None
+        if self.mode == "finderbay":
+            from ..system import CompleteNonLLMAI
+
+            self.complete = CompleteNonLLMAI(seed_demo=True)
+        else:
+            self.brain = Brain(name="ChatBrain")
+            self.brain.load_domain(domain)
+            self.brain.mark_booted()
+            self.brain.reason()
 
     def status(self) -> dict[str, Any]:
         with self.lock:
+            if self.complete is not None:
+                return self.complete.status()
+            assert self.brain is not None
             return self.brain.status()
 
     def greeting(self) -> str:
         with self.lock:
+            if self.complete is not None:
+                return (
+                    f"Finderbay Complete Non-LLM AI ready (v{__version__}).\n"
+                    "Try:\n"
+                    "  • Show unpaid invoices above ₹1 lakh for Project A, excluding disputed ones.\n"
+                    "  • From this week's delivery records, find pending items for Project A "
+                    "and prepare a follow-up. Do not send it.\n"
+                    "  • Reserve 10 bags of cement\n"
+                    "  • Create task for Project A: Site audit\n"
+                    "  • What is the amount due on the invoice scan document?\n\n"
+                    "No language model — typed knowledge, rules, planning and verification."
+                )
+            assert self.brain is not None
             st = self.brain.status()
             return (
                 f"Cognitive OS chat ready (v{__version__}).\n"
@@ -49,6 +74,9 @@ class ChatSession:
 
     def handle_message(self, message: str) -> str:
         with self.lock:
+            if self.complete is not None:
+                result = self.complete.handle(message.strip())
+                return str(result.get("text") or "")
             return self._dispatch(message.strip())
 
     def _dispatch(self, msg: str) -> str:
@@ -247,8 +275,9 @@ def serve_chat(
     session = ChatSession(domain=domain)
     handler = make_handler(session)
     httpd = ThreadingHTTPServer((host, port), handler)
-    print(f"Cognitive OS chat UI → http://127.0.0.1:{port}/  (domain={domain})")
-    print("Symbolic brain only — no LLM. Ctrl+C to stop.")
+    mode = session.mode
+    print(f"Non-LLM chat UI → http://127.0.0.1:{port}/  (domain={domain}, mode={mode})")
+    print("No LLM. Ctrl+C to stop.")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -262,10 +291,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     import sys
 
     argv = argv if argv is not None else sys.argv[1:]
-    p = argparse.ArgumentParser(description="Launch Cognitive OS chat UI")
+    p = argparse.ArgumentParser(description="Launch non-LLM chat UI")
     p.add_argument("--host", default="0.0.0.0")
     p.add_argument("--port", type=int, default=8765)
-    p.add_argument("--domain", default="animals")
+    p.add_argument(
+        "--domain",
+        default="finderbay",
+        help="animals|blocks|kitchen|finderbay|complete",
+    )
     args = p.parse_args(argv)
     serve_chat(host=args.host, port=args.port, domain=args.domain)
     return 0

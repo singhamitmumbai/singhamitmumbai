@@ -12,6 +12,7 @@ from typing import Any, Optional
 from ..core.ids import new_id
 from ..core.records import Claim, EvidenceStatus, utc_now
 from .ontology import Ontology, finderbay_ontology
+from .retrieval import BM25Index
 
 
 @dataclass
@@ -44,15 +45,39 @@ class MemorySystem:
         self.procedures: dict[str, Procedure] = {}
         self.preferences: dict[str, Any] = {}
         self.records: dict[str, dict[str, Any]] = {}  # transactional tables by type
+        # claim_id → list of claim_ids / record refs that depend on it
+        self.dependencies: dict[str, list[str]] = {}
+        self._bm25 = BM25Index()
         self._path = Path(path) if path else None
         if self._path and self._path.exists():
             self.load()
+        else:
+            self.rebuild_index()
 
     # --- semantic / claims ----------------------------------------------------
 
-    def remember_claim(self, claim: Claim) -> Claim:
+    def remember_claim(self, claim: Claim, *, depends_on: Optional[list[str]] = None) -> Claim:
         self.claims[claim.claim_id] = claim
+        if depends_on:
+            for src in depends_on:
+                self.dependencies.setdefault(src, []).append(claim.claim_id)
         return claim
+
+    def invalidate_dependents(self, claim_id: str) -> list[str]:
+        """When a source changes, mark derived conclusions for recomputation."""
+        invalidated: list[str] = []
+        stack = list(self.dependencies.get(claim_id, []))
+        while stack:
+            cid = stack.pop()
+            if cid in invalidated:
+                continue
+            invalidated.append(cid)
+            claim = self.claims.get(cid)
+            if claim:
+                claim.evidence_status = EvidenceStatus.UNKNOWN
+                claim.notes = (claim.notes + " | stale_dependency").strip(" |")
+            stack.extend(self.dependencies.get(cid, []))
+        return invalidated
 
     def learn_alias(self, alias: str, canonical: str, source: str = "user") -> None:
         self.ontology.add_alias(alias, canonical, source=source)
@@ -95,6 +120,7 @@ class MemorySystem:
         existing = table.get(record_id, {})
         merged = {**existing, **data, "id": record_id, "updated_at": utc_now()}
         table[record_id] = merged
+        self.rebuild_index()
 
     def get_records(self, kind: str, **filters: Any) -> list[dict[str, Any]]:
         rows = list(self.records.get(kind, {}).values())
@@ -102,23 +128,32 @@ class MemorySystem:
             rows = [r for r in rows if r.get(key) == val]
         return rows
 
+    def rebuild_index(self) -> None:
+        docs: list[dict[str, Any]] = []
+        for kind, table in self.records.items():
+            for row in table.values():
+                docs.append({"kind": kind, **row})
+        syn = {
+            "bill": ["invoice"],
+            "shipment": ["delivery"],
+            "warehouse": ["central_store", "store"],
+            **{alias: [canon] for alias, canon in self.ontology.aliases.items()},
+        }
+        self._bm25.set_synonyms(syn)
+        self._bm25.build(
+            docs,
+            text_fn=lambda d: json.dumps(d, default=str),
+        )
+
     def search(self, query: str, kinds: Optional[list[str]] = None) -> list[dict[str, Any]]:
-        """Lexical / BM25-lite retrieval over records and claim text."""
-        tokens = [t for t in re.findall(r"[a-zA-Z0-9_]+", query.lower()) if len(t) > 1]
-        scored: list[tuple[float, dict]] = []
-        kinds = kinds or list(self.records.keys())
-        for kind in kinds:
-            for row in self.records.get(kind, {}).values():
-                blob = json.dumps(row, default=str).lower()
-                score = sum(blob.count(tok) for tok in tokens)
-                # synonym boost via ontology aliases
-                for alias, canon in self.ontology.aliases.items():
-                    if alias in query.lower() and canon in blob:
-                        score += 1.5
-                if score > 0:
-                    scored.append((score, {"kind": kind, **row, "_score": score}))
-        scored.sort(key=lambda x: -x[0])
-        return [r for _, r in scored[:50]]
+        """BM25 lexical retrieval with synonym expansion."""
+        if not self._bm25.docs:
+            self.rebuild_index()
+        hits = self._bm25.search(query, top_k=50)
+        out = [doc for _, doc in hits]
+        if kinds:
+            out = [d for d in out if d.get("kind") in kinds]
+        return out
 
     # --- episodic / procedural / preference -----------------------------------
 

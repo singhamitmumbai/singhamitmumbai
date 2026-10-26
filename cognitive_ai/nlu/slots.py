@@ -65,7 +65,7 @@ def extract_slots(text: str, project_id: Optional[str] = None) -> SlotBundle:
     bundle.times = extract_dates_relative(text)
 
     # Payment / dispute status
-    if re.search(r"\bunpaid\b|\bnot\s+paid\b|\bbaaki\b", lower):
+    if re.search(r"\bunpaid\b|\bnot\s+paid\b|\bbaaki\b|\babhi\s+pending\s+payment\b", lower):
         bundle.conditions.append(Condition("payment_status", "eq", "unpaid"))
     if re.search(r"\bpaid\b", lower) and "unpaid" not in lower and "not paid" not in lower:
         bundle.conditions.append(Condition("payment_status", "eq", "paid"))
@@ -73,6 +73,10 @@ def extract_slots(text: str, project_id: Optional[str] = None) -> SlotBundle:
         bundle.conditions.append(Condition("overdue", "eq", True))
     if re.search(r"\bpending\b", lower):
         bundle.conditions.append(Condition("delivery_status", "eq", "pending"))
+
+    # Conjunction / alternatives markers retained as notes on conditions
+    if re.search(r"\band\b|\bor\b", lower):
+        bundle.unknown_policies["boolean_connective"] = "parsed_left_to_right"
 
     # Exclusions: "excluding disputed" / "except disputed" / "all except"
     excl = re.search(
@@ -93,6 +97,33 @@ def extract_slots(text: str, project_id: Optional[str] = None) -> SlotBundle:
             if amt is not None:
                 bundle.conditions.append(Condition("amount_inr", op, amt))
 
+    # Reserve quantity: "reserve 15 bags of cement" / "reserve 10 cement"
+    m_qty = re.search(
+        r"\breserve\s+(\d+(?:\.\d+)?)\s*(?:bags?\s+of\s+)?([a-zA-Z][a-zA-Z0-9_ -]*)",
+        lower,
+    )
+    if m_qty:
+        bundle.conditions.append(Condition("reserve_qty", "eq", float(m_qty.group(1))))
+        bundle.conditions.append(Condition("material_name", "eq", m_qty.group(2).strip()))
+
+    # Task title: create/add task "..."
+    m_task = re.search(
+        r"(?:create|add|naya)\s+task(?:\s+for\s+project\s+\w+)?\s*[:\-]?\s*(.+)$",
+        text,
+        flags=re.I,
+    )
+    if m_task:
+        title = m_task.group(1).strip().rstrip(".")
+        # strip trailing project clause if duplicated
+        title = re.sub(r"\s+for\s+project\s+\w+$", "", title, flags=re.I).strip()
+        if title:
+            bundle.conditions.append(Condition("task_title", "eq", title))
+
+    # Document field focus
+    for field_name in ("amount_due", "subtotal", "tax", "invoice_number", "vendor"):
+        if field_name.replace("_", " ") in lower or field_name in lower:
+            bundle.conditions.append(Condition("document_field", "eq", field_name))
+
     # Prohibitions
     if re.search(r"do not send|don't send|mat bhejo|do not email", lower):
         bundle.prohibitions.append("send")
@@ -100,7 +131,7 @@ def extract_slots(text: str, project_id: Optional[str] = None) -> SlotBundle:
         bundle.prohibitions.append("delete")
 
     # Output hints
-    if re.search(r"\btable\b|list|dikhao", lower):
+    if re.search(r"\btable\b|list|dikhao|batao", lower):
         bundle.output_hint = "table_with_sources"
     if re.search(r"follow-?up|draft", lower):
         bundle.output_hint = bundle.output_hint or "draft_with_table"

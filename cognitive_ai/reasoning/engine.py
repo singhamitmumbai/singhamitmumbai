@@ -57,6 +57,20 @@ class ReasoningEngine:
             return self._reason_deliveries(state, frame)
         if op == "query_materials":
             return self._reason_materials(state, frame)
+        if op == "manage_task":
+            return self._reason_tasks(state, frame)
+        if op == "document_qa":
+            return ReasoningResult(
+                method="document_passthrough",
+                success=True,
+                message="Document fields handled by OCR extract operator.",
+            )
+        if op == "reserve_stock":
+            return ReasoningResult(
+                method="world_model",
+                success=True,
+                message="Reservation handled by world-model transition.",
+            )
         return ReasoningResult(
             method="passthrough",
             success=True,
@@ -237,6 +251,17 @@ class ReasoningEngine:
             method="lookup",
             conclusions=[{"type": "materials", "items": rows}],
             message=f"{len(rows)} material record(s).",
+        )
+
+    def _reason_tasks(self, state: WorkingState, frame: dict) -> ReasoningResult:
+        rows = self.memory.get_records("task")
+        pid = frame.get("project_id")
+        if pid:
+            rows = [r for r in rows if r.get("project_id") == pid]
+        return ReasoningResult(
+            method="lookup",
+            conclusions=[{"type": "tasks", "items": rows, "count": len(rows)}],
+            message=f"{len(rows)} task(s).",
         )
 
     @staticmethod
