@@ -5,11 +5,13 @@ from __future__ import annotations
 from typing import Any, Optional
 from uuid import uuid4
 
+from ..core.ids import new_id
 from ..core.records import ActionResult, ActionStatus, PlanRecord, PlanStepRecord, utc_now
 from ..core.working_state import WorkingState
 from ..memory.store import MemorySystem
 from ..reasoning.engine import ReasoningEngine, ReasoningResult
 from ..world.model import WorldModel
+from .tools import ToolRegistry
 from .verifier import Verifier
 
 
@@ -22,19 +24,29 @@ class Executor:
         reasoner: ReasoningEngine,
         world: Optional[WorldModel] = None,
         verifier: Optional[Verifier] = None,
+        tools: Optional[ToolRegistry] = None,
+        *,
+        allow_send: bool = False,
+        allow_inventory_write: bool = True,
     ) -> None:
         self.memory = memory
         self.reasoner = reasoner
         self.world = world or WorldModel()
         self.verifier = verifier or Verifier(memory)
+        self.tools = tools or ToolRegistry()
+        self.allow_send = allow_send
+        self.allow_inventory_write = allow_inventory_write
         self._attempts: dict[str, ActionResult] = {}
         self._drafts: dict[str, dict[str, Any]] = {}
+        self._checkpoints: list[dict[str, Any]] = []
         self.last_reasoning: Optional[ReasoningResult] = None
         self.last_table: Optional[dict[str, Any]] = None
+        self.last_document: Optional[dict[str, Any]] = None
+        self.last_task: Optional[dict[str, Any]] = None
+        self.last_reservation: Optional[dict[str, Any]] = None
 
     def run_plan(self, plan: PlanRecord, state: WorkingState) -> list[ActionResult]:
         results: list[ActionResult] = []
-        # Recheck conditions before executing
         frame = state.semantic_frame or {}
         prohibitions = set(frame.get("prohibitions") or [])
 
@@ -46,6 +58,9 @@ class Executor:
             result = self.execute_step(step, state, client_attempt_id=step.step_id)
             results.append(result)
             state.record_action(result)
+            self._checkpoints.append(
+                {"plan_id": plan.plan_id, "step_id": step.step_id, "result": result.to_dict()}
+            )
             if result.status in (ActionStatus.FAILED, ActionStatus.OUTCOME_UNKNOWN):
                 break
             step.status = "done" if result.status == ActionStatus.CONFIRMED else result.status.value
@@ -58,9 +73,35 @@ class Executor:
         client_attempt_id: Optional[str] = None,
     ) -> ActionResult:
         attempt_id = client_attempt_id or uuid4().hex
-        # Duplicate-action suppression
         if attempt_id in self._attempts:
             return self._attempts[attempt_id]
+
+        # Tool permission / schema gate when registered
+        tool = self.tools.get(step.operator)
+        if tool:
+            if tool.requires_auth:
+                if step.operator == "send_message" and not self.allow_send:
+                    result = ActionResult(
+                        attempt_id=attempt_id,
+                        operator=step.operator,
+                        status=ActionStatus.FAILED,
+                        args=dict(step.args),
+                        error="permission_denied:send",
+                        finished_at=utc_now(),
+                    )
+                    self._attempts[attempt_id] = result
+                    return result
+                if step.operator == "reserve_stock" and not self.allow_inventory_write:
+                    result = ActionResult(
+                        attempt_id=attempt_id,
+                        operator=step.operator,
+                        status=ActionStatus.FAILED,
+                        args=dict(step.args),
+                        error="permission_denied:inventory_write",
+                        finished_at=utc_now(),
+                    )
+                    self._attempts[attempt_id] = result
+                    return result
 
         result = ActionResult(
             attempt_id=attempt_id,
@@ -73,7 +114,6 @@ class Executor:
         try:
             effects = self._dispatch(step, state, result)
             result.observed_effects = effects
-            # Verify independently
             verified = self.verifier.verify(step, result, state)
             if verified is True:
                 result.status = ActionStatus.CONFIRMED
@@ -81,8 +121,8 @@ class Executor:
                 result.status = ActionStatus.OUTCOME_UNKNOWN
             else:
                 result.status = ActionStatus.FAILED
-                result.error = "verification_failed"
-        except Exception as exc:  # noqa: BLE001 — surface as failed action
+                result.error = result.error or "verification_failed"
+        except Exception as exc:  # noqa: BLE001
             result.status = ActionStatus.FAILED
             result.error = str(exc)
 
@@ -111,7 +151,7 @@ class Executor:
             kind = kind_map.get(operation, "invoice")
             rows = self.memory.get_records(kind)
             pid = step.args.get("project_id") or frame.get("project_id")
-            if pid:
+            if pid and kind != "material":
                 rows = [r for r in rows if r.get("project_id") == pid]
             result.external_receipt = f"retrieved:{kind}:{len(rows)}"
             return [{"records_loaded": True, "kind": kind, "count": len(rows), "rows": rows}]
@@ -136,12 +176,7 @@ class Executor:
             send = bool(step.args.get("send"))
             if send:
                 raise PermissionError("Sending is prohibited by the active goal.")
-            draft = {
-                "draft_id": draft_id,
-                "body": body,
-                "sent": False,
-                "table": table,
-            }
+            draft = {"draft_id": draft_id, "body": body, "sent": False, "table": table}
             self._drafts[draft_id] = draft
             result.external_receipt = draft_id
             return [{"draft_ready": True, "draft": draft, "sent": False}]
@@ -153,30 +188,115 @@ class Executor:
         if op == "respond":
             return [{"answer_ready": True}]
 
+        if op == "create_task":
+            title = step.args.get("title") or ""
+            pid = step.args.get("project_id")
+            tid = new_id("task")
+            row = {
+                "id": tid,
+                "title": title,
+                "project_id": pid,
+                "status": "open",
+                "source": "user",
+            }
+            self.memory.upsert_record("task", tid, row)
+            self.last_task = row
+            result.external_receipt = tid
+            return [{"task_created": True, "task": row}]
+
+        if op == "list_tasks":
+            pid = step.args.get("project_id")
+            rows = self.memory.get_records("task")
+            if pid:
+                rows = [r for r in rows if r.get("project_id") == pid]
+            self.last_table = {
+                "columns": list(rows[0].keys()) if rows else ["id", "title", "status"],
+                "rows": rows,
+                "row_count": len(rows),
+                "meta": {"kind": "task"},
+            }
+            result.external_receipt = f"tasks:{len(rows)}"
+            return [{"tasks_listed": True, "count": len(rows), "rows": rows}]
+
+        if op == "ocr_extract":
+            docs = self.memory.get_records("document")
+            doc = docs[0] if docs else None
+            # Prefer document attached via observation/context
+            for obs in reversed(state.observations):
+                if obs.modality in ("document", "image") and isinstance(obs.extracted_value, dict):
+                    doc = {"id": "obs_doc", **obs.extracted_value}
+                    break
+            if not doc:
+                raise ValueError("no_document_available")
+            from ..perception.ocr import DocumentPipeline
+
+            parsed = DocumentPipeline().recognize(doc)
+            field = step.args.get("field")
+            value = None
+            if field:
+                value = (parsed.get("fields") or {}).get(field)
+            self.last_document = {"document": doc, "parsed": parsed, "field": field, "value": value}
+            result.external_receipt = f"ocr:{doc.get('id')}"
+            effects = {"fields_ready": True, "parsed": parsed, "field": field, "value": value}
+            if parsed.get("issues"):
+                effects["issues"] = parsed["issues"]
+            return [effects]
+
         if op == "reserve_stock":
-            item_id = step.args.get("item")
-            qty = float(step.args.get("quantity") or 0)
-            mats = self.memory.get_records("material", id=item_id) if item_id else []
-            if not mats:
-                # try by name
-                mats = [m for m in self.memory.get_records("material") if m.get("id") == item_id]
-            if not mats:
-                raise ValueError("item not found")
-            mat = mats[0]
-            predicted = self.world.predict(mat, "reserve_stock", {"quantity": qty})
-            if predicted.get("error"):
-                raise ValueError(predicted["error"])
-            # Simulate external call — may leave OUTCOME_UNKNOWN if flagged
-            if step.args.get("simulate_timeout"):
-                result.status = ActionStatus.OUTCOME_UNKNOWN
-                result.external_receipt = None
-                return [{"attempted": True, "confirmed": False}]
-            new_state = predicted["state"]
-            self.memory.upsert_record("material", mat["id"], new_state)
-            result.external_receipt = f"reservation:{mat['id']}:{qty}"
-            return [{"reserved": qty, "item": mat["id"], **new_state}]
+            return self._reserve(step, state, result)
 
         raise ValueError(f"Unknown operator: {op}")
+
+    def _reserve(
+        self,
+        step: PlanStepRecord,
+        state: WorkingState,
+        result: ActionResult,
+    ) -> list[dict[str, Any]]:
+        item_id = step.args.get("item")
+        qty = step.args.get("quantity")
+        material_name = step.args.get("material_name")
+        frame = state.semantic_frame or {}
+        if qty is None or material_name is None:
+            for c in frame.get("conditions") or []:
+                if c.get("field") == "reserve_qty" and qty is None:
+                    qty = c.get("value")
+                if c.get("field") == "material_name" and material_name is None:
+                    material_name = c.get("value")
+        qty = float(qty or 0)
+        mats = []
+        if item_id:
+            mats = [m for m in self.memory.get_records("material") if m.get("id") == item_id]
+        if not mats and material_name:
+            key = str(material_name).lower().strip()
+            for m in self.memory.get_records("material"):
+                name = str(m.get("name") or "").lower()
+                if key in name or name in key:
+                    mats.append(m)
+        if not mats:
+            raise ValueError("item not found")
+        mat = mats[0]
+        predicted = self.world.predict(mat, "reserve_stock", {"quantity": qty})
+        if predicted.get("error"):
+            raise ValueError(predicted["error"])
+        if step.args.get("simulate_timeout"):
+            result.status = ActionStatus.OUTCOME_UNKNOWN
+            result.external_receipt = None
+            return [{"attempted": True, "confirmed": False}]
+        new_state = predicted["state"]
+        new_state["last_attempt"] = result.attempt_id
+        self.memory.upsert_record("material", mat["id"], new_state)
+        payload = {
+            **new_state,
+            "item": mat["id"],
+            "name": mat.get("name"),
+            "qty_reserved": qty,
+            "available": new_state.get("available"),
+            "reserved_balance": new_state.get("reserved"),
+        }
+        self.last_reservation = payload
+        result.external_receipt = f"reservation:{mat['id']}:{qty}"
+        return [payload]
 
     def _table_from_reasoning(self, reasoning: ReasoningResult) -> dict[str, Any]:
         if not reasoning.conclusions:
@@ -238,14 +358,19 @@ class Executor:
                 "row_count": len(rows),
                 "meta": {},
             }
+        if ctype == "tasks":
+            rows = conc.get("items") or []
+            return {
+                "columns": list(rows[0].keys()) if rows else [],
+                "rows": rows,
+                "row_count": len(rows),
+                "meta": {"kind": "task"},
+            }
         return {"columns": [], "rows": [], "row_count": 0, "meta": {"raw": conc}}
 
     def _compose_followup(self, table: dict[str, Any], state: WorkingState) -> str:
         pid = (state.semantic_frame or {}).get("project_id") or "the project"
-        lines = [
-            f"Follow-up regarding pending deliveries for {pid}:",
-            "",
-        ]
+        lines = [f"Follow-up regarding pending deliveries for {pid}:", ""]
         if not table.get("rows"):
             lines.append("No confirmed pending items were identified.")
         else:

@@ -47,8 +47,18 @@ INTENT_CUES: list[tuple[str, list[tuple[str, float]]]] = [
             ("material", 2.0),
             ("stock", 1.8),
             ("inventory", 1.8),
-            ("reserve", 1.5),
             ("warehouse", 1.2),
+            ("available", 0.8),
+            ("kitna stock", 2.0),
+        ],
+    ),
+    (
+        "reserve_stock",
+        [
+            ("reserve", 2.5),
+            ("book stock", 2.0),
+            ("hold", 1.0),
+            ("allocate", 1.5),
         ],
     ),
     (
@@ -59,6 +69,10 @@ INTENT_CUES: list[tuple[str, list[tuple[str, float]]]] = [
             ("reminder", 1.5),
             ("deadline", 1.2),
             ("assign", 1.0),
+            ("create task", 2.5),
+            ("add task", 2.5),
+            ("list tasks", 2.2),
+            ("naya kaam", 2.0),
         ],
     ),
     (
@@ -69,7 +83,10 @@ INTENT_CUES: list[tuple[str, list[tuple[str, float]]]] = [
             ("scan", 1.2),
             ("ocr", 1.5),
             ("from this", 1.0),
-            ("table", 0.8),
+            ("amount due", 2.0),
+            ("invoice scan", 2.0),
+            ("what is the", 0.8),
+            ("field", 1.0),
         ],
     ),
     (

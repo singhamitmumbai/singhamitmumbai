@@ -360,6 +360,10 @@ def run_finderbay_demo() -> int:
             "Project A and prepare a follow-up. Do not send it."
         ),
         "Dikhao pending deliveries for Project A kal",
+        "Show material stock and inventory",
+        "Reserve 15 bags of cement",
+        "Create task for Project A: Order safety helmets",
+        "What is the amount due on the invoice scan document?",
         "What are your capabilities?",
     ]
     for q in queries:
@@ -439,7 +443,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         serve_chat(
             host=args.host,
             port=args.port,
-            domain=args.domain or "animals",
+            domain=args.domain or "finderbay",
         )
         return 0
 

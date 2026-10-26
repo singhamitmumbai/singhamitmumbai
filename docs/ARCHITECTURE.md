@@ -50,11 +50,22 @@ Excluded at runtime: pretrained general-purpose LLMs.
 Perception modules ship **auditable stubs**; production acoustic/OCR checkpoints
 must declare provenance separately.
 
+## v0.4 upgrades
+
+- BM25 retrieval with synonym expansion; claim dependency invalidation
+- Entity linker (projects, materials, aliases, invoices)
+- Tool registry (typed args, permissions, side-effects)
+- Operators: `reserve_stock`, `create_task`, `list_tasks`, `ocr_extract`
+- Runtime capability model + latency/coverage monitor
+- Finderbay chat UI mode (`--domain finderbay`)
+- Expanded eval suite (invoices, deliveries, materials, reserve, tasks, OCR)
+
 ## Quick start
 
 ```bash
 pip install -e ".[dev]"
 python -m cognitive_ai finderbay --demo
+python -m cognitive_ai chat --domain finderbay
 python -m cognitive_ai eval
 pytest -q
 ```

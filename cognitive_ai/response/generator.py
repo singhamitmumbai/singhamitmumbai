@@ -75,8 +75,8 @@ class ResponseGenerator:
             answer = {
                 "text": (
                     "I am a complete non-LLM assistant for Finderbay. "
-                    "Supported: invoice queries, delivery pending lists, material lookup, "
-                    "task notes and follow-up drafts (without sending). "
+                    "Supported: invoice queries, delivery pending lists, material lookup/reserve, "
+                    "local tasks, document field extraction and follow-up drafts (without sending). "
                     "I keep unknown ≠ false, predicted ≠ observed, attempted ≠ confirmed."
                 ),
                 "structured": state.summary(),
@@ -102,6 +102,12 @@ class ResponseGenerator:
             text, structured = self._realize_deliveries(reasoning, table, draft, op)
         elif op == "query_materials":
             text, structured = self._realize_materials(table)
+        elif op == "reserve_stock":
+            text, structured = self._realize_reserve(executor.last_reservation)
+        elif op == "manage_task":
+            text, structured = self._realize_task(executor, table)
+        elif op == "document_qa":
+            text, structured = self._realize_document(executor.last_document)
         else:
             text = reasoning.message if reasoning else "Done."
             structured = {"reasoning": reasoning.to_dict() if reasoning else None}
@@ -190,8 +196,71 @@ class ResponseGenerator:
 
     def _realize_materials(self, table: Optional[dict]) -> tuple[str, dict]:
         n = table.get("row_count", 0) if table else 0
-        text = f"{n} material record(s) available."
-        return text, {"count": n}
+        lines = [f"{n} material record(s) available."]
+        if table and table.get("rows"):
+            for row in table["rows"]:
+                lines.append(
+                    f"- {row.get('name') or row.get('id')}: available={row.get('available')}, "
+                    f"reserved={row.get('reserved')} {row.get('unit') or ''}".strip()
+                )
+        return "\n".join(lines), {"count": n, "items": (table or {}).get("rows") or []}
+
+    def _realize_reserve(self, reservation: Optional[dict]) -> tuple[str, dict]:
+        if not reservation:
+            return "Reservation failed.", {"reserved": False}
+        qty = reservation.get("qty_reserved")
+        text = (
+            f"Reserved {qty} of {reservation.get('name') or reservation.get('item')}. "
+            f"Available now {reservation.get('available')}, "
+            f"reserved balance {reservation.get('reserved_balance')}."
+        )
+        return text, {
+            "item": reservation.get("item"),
+            "qty_reserved": qty,
+            "available": reservation.get("available"),
+            "reserved_balance": reservation.get("reserved_balance"),
+            "reserved": True,
+        }
+
+    def _realize_task(self, executor: Executor, table: Optional[dict]) -> tuple[str, dict]:
+        if executor.last_task:
+            t = executor.last_task
+            text = f"Created task '{t.get('title')}' ({t.get('id')}) for {t.get('project_id') or 'no project'}."
+            return text, {"task_id": t.get("id"), "title": t.get("title"), "created": True}
+        n = table.get("row_count", 0) if table else 0
+        text = f"{n} task(s) listed."
+        if table and table.get("rows"):
+            for row in table["rows"]:
+                text += f"\n- [{row.get('status')}] {row.get('title')} ({row.get('id')})"
+        return text, {"count": n, "listed": True}
+
+    def _realize_document(self, doc_result: Optional[dict]) -> tuple[str, dict]:
+        if not doc_result:
+            return "No document available to read.", {"ok": False}
+        field = doc_result.get("field")
+        value = doc_result.get("value")
+        parsed = doc_result.get("parsed") or {}
+        issues = parsed.get("issues") or []
+        if field:
+            if value is None and issues:
+                text = (
+                    f"I can read the document, but the field '{field}' is ambiguous or invalid "
+                    f"({'; '.join(issues)})."
+                )
+            else:
+                text = f"Document field '{field}' = {value!r}."
+        else:
+            fields = parsed.get("fields") or {}
+            text = "Extracted fields: " + ", ".join(f"{k}={v}" for k, v in fields.items())
+        if issues and field is None:
+            text += f" Issues: {'; '.join(issues)}."
+        return text, {
+            "field": field,
+            "value": value,
+            "fields": parsed.get("fields"),
+            "issues": issues,
+            "ok": True,
+        }
 
     @staticmethod
     def _num_word(n: int) -> str:

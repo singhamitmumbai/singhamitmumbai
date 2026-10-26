@@ -144,6 +144,41 @@ def seed_memory(memory: MemorySystem | None = None) -> MemorySystem:
         "task_1",
         {"project_id": "project_a", "title": "Site inspection", "status": "open"},
     )
+
+    # Sample invoice scan / document for OCR QA
+    memory.upsert_record(
+        "document",
+        "doc_inv_scan_1",
+        {
+            "project_id": "project_a",
+            "page_id": "page_1",
+            "text": "INVOICE 99\nVendor: BuildCo\nSubtotal 100000\nTax 18000\nAmount Due 118000",
+            "fields": {
+                "invoice_number": "99",
+                "vendor": "BuildCo",
+                "subtotal": "100000",
+                "tax": "18000",
+                "amount_due": "118000",
+            },
+            "tables": [],
+            "regions": [{"id": "r1", "text": "Amount Due 118000"}],
+            "source": "scan_register",
+        },
+    )
+    # Ambiguous handwritten-style amount for capability messaging tests
+    memory.upsert_record(
+        "document",
+        "doc_inv_scan_2",
+        {
+            "project_id": "project_a",
+            "page_id": "page_2",
+            "text": "Amount Due twenty-five?",
+            "fields": {"amount_due": "twenty-five?"},
+            "tables": [],
+            "regions": [],
+            "source": "handwritten_note",
+        },
+    )
     return memory
 
 

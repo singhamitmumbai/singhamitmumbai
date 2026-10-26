@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-A runnable **complete non-LLM AI** built from the engineering blueprint:
+A runnable **complete non-LLM AI** (v0.4) built from the engineering blueprint:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
@@ -8,20 +8,24 @@ pretrained general-purpose LLM at runtime**.
 
 Non-LLM does **not** mean non-neural: specialist speech/OCR models may be plugged
 in. This repo ships measurable stubs plus full symbolic / algorithmic cognition
-and the **Finderbay** domain (invoices, deliveries, materials, tasks).
+and the **Finderbay** domain (invoices, deliveries, materials, tasks, documents).
 
 ## Quick start
 
 ```bash
 pip install -e ".[dev]"
 
-# Full Finderbay assistant demo (blueprint example)
+# Full Finderbay assistant demo (blueprint example + upgrades)
 python -m cognitive_ai finderbay --demo
 # or
 python scripts/demo_finderbay.py
 
 # One-shot
 python -m cognitive_ai finderbay --ask "Show unpaid invoices above ₹1 lakh for Project A, excluding disputed ones."
+
+# Chat UI (Finderbay complete system by default)
+python -m cognitive_ai chat --domain finderbay
+# open http://127.0.0.1:8765/
 
 # Independent evaluation suite
 python -m cognitive_ai eval

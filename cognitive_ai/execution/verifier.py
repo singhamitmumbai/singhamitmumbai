@@ -61,6 +61,12 @@ class Verifier:
             elif check == "inventory_reservation_receipt":
                 if not result.external_receipt:
                     return None  # unknown — reconcile before retry
+            elif check == "task_persisted":
+                if not effects.get("task_created") and not effects.get("task"):
+                    return False
+            elif check == "fields_present":
+                if not effects.get("fields_ready") and not effects.get("parsed"):
+                    return False
             else:
                 # Unknown check name — do not pretend success
                 continue

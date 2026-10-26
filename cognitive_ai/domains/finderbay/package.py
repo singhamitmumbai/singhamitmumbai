@@ -22,7 +22,7 @@ RESPONSE_TEMPLATES = {
 @dataclass
 class FinderbayPackage:
     name: str = "finderbay"
-    version: str = "1.0.0"
+    version: str = "1.1.0"
 
     def ontology(self):
         return finderbay_ontology()
@@ -78,6 +78,34 @@ class FinderbayPackage:
                 input_text="What are your capabilities?",
                 expected={"contains": "non-LLM"},
                 tags=["meta"],
+            ),
+            EvalCase(
+                case_id="list_materials",
+                task="query_materials",
+                input_text="Show material stock and inventory",
+                expected={"count": 1, "contains": "Cement"},
+                tags=["materials"],
+            ),
+            EvalCase(
+                case_id="reserve_cement",
+                task="reserve_stock",
+                input_text="Reserve 15 bags of cement",
+                expected={"reserved": True, "qty_reserved": 15.0},
+                tags=["materials", "world_model", "execution"],
+            ),
+            EvalCase(
+                case_id="create_task",
+                task="manage_task",
+                input_text="Create task for Project A: Order safety helmets",
+                expected={"created": True, "contains": "Order safety helmets"},
+                tags=["tasks"],
+            ),
+            EvalCase(
+                case_id="document_amount_due",
+                task="document_qa",
+                input_text="What is the amount due on the invoice scan document?",
+                expected={"value": 118000.0, "contains": "amount_due"},
+                tags=["ocr", "documents"],
             ),
         ]
 
