@@ -1,3 +1,9 @@
-# Default path: pure Python stdlib only (no LLM / transformers / OpenAI).
-# Optional test runner:
+# Default path: pure Python for core cognition (no LLM).
 pytest>=7.0
+
+# Optional production perception (non-LLM engines):
+# pip install -e ".[perception]"
+# vosk>=0.3.45
+# pytesseract>=0.3.10
+# Pillow>=10.0
+# System packages: tesseract-ocr, tesseract-ocr-eng, tesseract-ocr-hin

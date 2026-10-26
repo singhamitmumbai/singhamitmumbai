@@ -1,33 +1,40 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-A runnable **complete non-LLM AI** (v0.5) built from the engineering blueprint:
+A runnable **complete non-LLM AI** (v0.6) built from the engineering blueprint:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
 pretrained general-purpose LLM at runtime**.
 
-Non-LLM does **not** mean non-neural: specialist speech/OCR models may be plugged
-in. This repo ships measurable stubs plus full symbolic / algorithmic cognition
-and the **Finderbay** domain (invoices, deliveries, materials, tasks, documents).
+### What v0.6 adds toward “general” capability
+
+| Area | Upgrade |
+|------|---------|
+| Open-domain chat | Curated common-sense KB + FAQ + analogies (not ChatGPT-scale) |
+| Speech | **Vosk** offline ASR (`models/vosk-model-small-en-us-0.15`) |
+| OCR | **Tesseract 5** production OCR (`eng+hin`) |
+| Generality | `GeneralNonLLMAI` router: Finderbay tasks ↔ open-domain chat |
+| Transfer | Skill-transfer helper across projects |
+
+**Honest limits (still):** not human-level AGI; open-domain coverage is finite/explicit; not unrestricted LLM chat.
 
 ## Quick start
 
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[dev,perception]"
+# system OCR: tesseract-ocr tesseract-ocr-eng tesseract-ocr-hin
 
-# Full Finderbay assistant demo (blueprint example + upgrades)
+# General AI (Finderbay + open-domain)
+python -m cognitive_ai general --demo
+python -m cognitive_ai general --ask "Can penguins fly?"
+
+# Finderbay-only
 python -m cognitive_ai finderbay --demo
-# or
-python scripts/demo_finderbay.py
 
-# One-shot
-python -m cognitive_ai finderbay --ask "Show unpaid invoices above ₹1 lakh for Project A, excluding disputed ones."
-
-# Chat UI (Finderbay complete system by default)
-python -m cognitive_ai chat --domain finderbay
+# Chat UI (general router by default)
+python -m cognitive_ai chat --domain general
 # open http://127.0.0.1:8765/
 
-# Independent evaluation suite
 python -m cognitive_ai eval
 pytest -q
 ```

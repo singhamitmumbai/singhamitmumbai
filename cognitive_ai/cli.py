@@ -58,8 +58,8 @@ def build_parser() -> argparse.ArgumentParser:
         "command",
         nargs="?",
         default=None,
-        choices=["os", "demo", "repl", "chat", "ui", "finderbay", "complete", "eval"],
-        help="Optional subcommand: os, chat/ui, demo, repl, finderbay/complete, eval",
+        choices=["os", "demo", "repl", "chat", "ui", "finderbay", "complete", "general", "eval"],
+        help="Optional subcommand: os, chat/ui, demo, repl, finderbay/complete, general, eval",
     )
     p.add_argument(
         "--ask",
@@ -431,6 +431,45 @@ def main(argv: Optional[list[str]] = None) -> int:
         if args.demo or not sys.stdin.isatty():
             return run_finderbay_demo()
         return finderbay_repl()
+
+    if args.command == "general":
+        from .general.agent import GeneralNonLLMAI
+
+        ai = GeneralNonLLMAI(seed_demo=True)
+        if args.ask:
+            print(ai.handle(args.ask)["text"])
+            return 0
+        if args.demo or not sys.stdin.isatty():
+            print("=" * 60)
+            print(f"General Non-LLM AI demo (v{ai.version})")
+            print(json.dumps(ai.status(), indent=2, default=str)[:2000])
+            for q in (
+                "Hello",
+                "Can penguins fly?",
+                "What is a knife used for?",
+                "dog:bark :: cat:?",
+                "Show unpaid invoices above ₹1 lakh for Project A, excluding disputed ones.",
+                "Are you ChatGPT?",
+            ):
+                print("-" * 40)
+                print("USER:", q)
+                print("AI:  ", ai.ask(q))
+            print("Demo complete. No LLM was used.")
+            return 0
+        print(f"GeneralNonLLMAI {ai.version} — Finderbay + open-domain. Type quit to exit.")
+        while True:
+            try:
+                line = input("general> ")
+            except (EOFError, KeyboardInterrupt):
+                print()
+                break
+            if line.strip().lower() in ("quit", "exit", "q"):
+                break
+            if line.strip().lower() == "status":
+                print(json.dumps(ai.status(), indent=2, default=str))
+                continue
+            print(ai.ask(line))
+        return 0
 
     if args.command == "eval":
         from .system import CompleteNonLLMAI

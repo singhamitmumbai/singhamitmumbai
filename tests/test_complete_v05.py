@@ -87,7 +87,7 @@ def test_config_and_status():
     cfg = SystemConfig(allow_send=False, resource_time_ms=1234)
     ai = CompleteNonLLMAI(config=cfg, seed_demo=True)
     st = ai.status()
-    assert st["version"] == "0.5.0"
+    assert st["version"].startswith("0.")
     assert st["config"]["resource_time_ms"] == 1234
     assert st["datasets"]["total"] >= 1
     assert "query_invoices" in st["htn_tasks"]

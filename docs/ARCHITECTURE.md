@@ -50,6 +50,15 @@ Excluded at runtime: pretrained general-purpose LLMs.
 Perception modules ship **auditable stubs**; production acoustic/OCR checkpoints
 must declare provenance separately.
 
+## v0.6 generality upgrades
+
+- **Open-domain chat** via curated common-sense KB + pattern router (`cognitive_ai/commonsense`)
+- **Production speech**: Vosk offline ASR (`perception/speech_production.py`)
+- **Production OCR**: Tesseract 5 eng+hin (`perception/ocr_production.py`)
+- **`GeneralNonLLMAI`**: routes Finderbay tasks ↔ open-domain chat
+- **Skill transfer** helper across projects
+- Honest status flags: `human_level_agi=false`, `open_domain_chat=true`
+
 ## v0.5 completion
 
 - Versioned **dataset registry** with source-group split locks (no leakage)

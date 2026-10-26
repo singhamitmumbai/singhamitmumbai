@@ -25,13 +25,18 @@ class ChatSession:
     def __init__(self, domain: str = "animals") -> None:
         self.lock = threading.RLock()
         self.domain = domain
-        self.mode = "finderbay" if domain in ("finderbay", "complete") else "symbolic"
+        self.mode = (
+            "general"
+            if domain in ("finderbay", "complete", "general")
+            else "symbolic"
+        )
         self.complete = None
+        self.general = None
         self.brain = None
-        if self.mode == "finderbay":
-            from ..system import CompleteNonLLMAI
+        if self.mode == "general":
+            from ..general.agent import GeneralNonLLMAI
 
-            self.complete = CompleteNonLLMAI(seed_demo=True)
+            self.general = GeneralNonLLMAI(seed_demo=True)
         else:
             self.brain = Brain(name="ChatBrain")
             self.brain.load_domain(domain)
@@ -40,24 +45,26 @@ class ChatSession:
 
     def status(self) -> dict[str, Any]:
         with self.lock:
-            if self.complete is not None:
-                return self.complete.status()
+            if self.general is not None:
+                return self.general.status()
             assert self.brain is not None
             return self.brain.status()
 
     def greeting(self) -> str:
         with self.lock:
-            if self.complete is not None:
+            if self.general is not None:
                 return (
-                    f"Finderbay Complete Non-LLM AI ready (v{__version__}).\n"
+                    f"General Non-LLM AI ready (v{__version__}).\n"
+                    "Finderbay tasks + open-domain common-sense chat.\n"
+                    "Speech: Vosk · OCR: Tesseract (when available).\n\n"
                     "Try:\n"
                     "  • Show unpaid invoices above ₹1 lakh for Project A, excluding disputed ones.\n"
-                    "  • From this week's delivery records, find pending items for Project A "
-                    "and prepare a follow-up. Do not send it.\n"
+                    "  • Can penguins fly?\n"
+                    "  • What is a knife used for?\n"
+                    "  • dog:bark :: cat:?\n"
                     "  • Reserve 10 bags of cement\n"
-                    "  • Create task for Project A: Site audit\n"
-                    "  • What is the amount due on the invoice scan document?\n\n"
-                    "No language model — typed knowledge, rules, planning and verification."
+                    "  • Are you ChatGPT?\n\n"
+                    "Not human-level AGI — explicit knowledge, rules, planning; no LLM."
                 )
             assert self.brain is not None
             st = self.brain.status()
@@ -74,8 +81,8 @@ class ChatSession:
 
     def handle_message(self, message: str) -> str:
         with self.lock:
-            if self.complete is not None:
-                result = self.complete.handle(message.strip())
+            if self.general is not None:
+                result = self.general.handle(message.strip())
                 return str(result.get("text") or "")
             return self._dispatch(message.strip())
 
