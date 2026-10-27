@@ -21,10 +21,15 @@ class APIState:
         self.complete: Any = None
         self.general: Any = None
         self.ai: Any = None
-        if mode in ("complete", "complete-ai"):
+        self.assistant: Any = None
+        if mode in ("complete", "complete-ai", "assistant"):
             self.complete = CompleteAI(seed_demo=True)
             self.general = self.complete.general
             self.ai = self.complete.finderbay
+            if mode == "assistant":
+                from ..assistant import FinderbayAssistant
+
+                self.assistant = FinderbayAssistant(complete=self.complete, seed_demo=True)
         elif mode == "finderbay":
             self.ai = CompleteNonLLMAI(seed_demo=True)
         else:
@@ -151,18 +156,46 @@ def serve_api(host: str = "127.0.0.1", port: int = 8787, *, mode: str = "complet
             path = parsed.path.rstrip("/") or "/"
             data = self._read_json()
             with state.lock:
-                if path in ("/ask", "/handle", "/complete"):
+                if path in ("/ask", "/handle", "/complete", "/assistant"):
                     text = data.get("text") or data.get("message") or ""
-                    if not text:
+                    if not text and not data.get("audio"):
                         return self._json(400, {"error": "text_required"})
                     mode = data.get("mode") or "auto"
-                    if state.complete is not None and data.get("route") != "finderbay":
+                    if state.assistant is not None and path == "/assistant":
+                        out = state.assistant.handle(
+                            text or "",
+                            mode=mode,
+                            audio=data.get("audio"),
+                            speak=bool(data.get("speak")),
+                        )
+                    elif state.complete is not None and data.get("route") != "finderbay":
                         out = state.complete.handle(text, mode=mode)
                     elif state.general is not None and data.get("route") != "finderbay":
                         out = state.general.handle(text)
                     else:
                         out = state.ai.handle(text)
                     return self._json(200, out)
+                if path == "/computer":
+                    if state.assistant is None:
+                        from ..assistant import FinderbayAssistant
+
+                        state.assistant = FinderbayAssistant(
+                            complete=state.complete or CompleteAI(seed_demo=True),
+                            seed_demo=True,
+                        )
+                    action = data.get("action") or "status"
+                    args = {k: v for k, v in data.items() if k != "action"}
+                    return self._json(200, state.assistant.control(action, **args))
+                if path == "/speak":
+                    if state.assistant is None:
+                        from ..assistant import FinderbayAssistant
+
+                        state.assistant = FinderbayAssistant(
+                            complete=state.complete or CompleteAI(seed_demo=True),
+                            seed_demo=True,
+                        )
+                    return self._json(200, state.assistant.speak(str(data.get("text") or "")))
+
                 if path == "/session/reset":
                     if state.complete is None:
                         return self._json(503, {"error": "complete_ai_required"})
@@ -237,7 +270,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     p.add_argument("--port", type=int, default=8787)
     p.add_argument(
         "--mode",
-        choices=["complete", "complete-ai", "general", "finderbay"],
+        choices=["complete", "complete-ai", "assistant", "general", "finderbay"],
         default="complete",
     )
     args = p.parse_args(argv)

@@ -19,7 +19,7 @@ from typing import Any, Callable, Optional
 
 
 TOOL_LINE = re.compile(
-    r"^\s*TOOL\s+(finderbay|vision|coding|status|alerts|memory)\s+(\{.*\})\s*$",
+    r"^\s*TOOL\s+(finderbay|vision|coding|status|alerts|memory|voice|computer|learn|plan)\s+(\{.*\})\s*$",
     re.I | re.M,
 )
 

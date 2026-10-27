@@ -36,7 +36,7 @@ def test_completeness_checker():
     report = run_completeness_check()
     assert report["ok"] is True
     assert report["complete_code"] is True
-    assert report["version"].startswith("1.6")
+    assert report["version"].startswith("1.")
 
 
 def test_hindi_realizers():

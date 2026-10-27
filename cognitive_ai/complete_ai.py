@@ -30,15 +30,20 @@ from .vision import VisionSystem
 
 TOOL_AWARE_SYSTEM = (
     DEFAULT_SYSTEM
-    + "\n\nYou may call local Complete AI tools by emitting one or more lines exactly like:\n"
+    + "\n\nYou may call local Complete AI / Finderbay Assistant tools by emitting lines like:\n"
     'TOOL finderbay {"text": "Show unpaid invoices for Project A"}\n'
     'TOOL vision {"task": "count_people", "image": "./crowd_people.jpg"}\n'
     'TOOL coding {"text": "generate function add(a, b)"}\n'
     'TOOL alerts {"project_id": "project_a"}\n'
     'TOOL memory {"action": "remember", "key": "user_name", "value": "Alex"}\n'
+    'TOOL voice {"action": "speak", "text": "Hello"}\n'
+    'TOOL plan {"text": "reserve 10 cement"}\n'
+    'TOOL computer {"action": "open_url", "url": "https://example.com"}\n'
+    'TOOL learn {"action": "alias", "former": "Warehouse B", "alias": "Central Store"}\n'
     'TOOL status {}\n'
     "After tool results are provided, give the user a clear final answer. "
-    "Do not invent Finderbay numbers — use TOOL finderbay / alerts."
+    "Do not invent Finderbay numbers — use TOOL finderbay / alerts. "
+    "Computer control may be disabled unless the user enabled it."
 )
 
 
@@ -96,7 +101,15 @@ class CompleteAI:
             self.llm.system_prompt = TOOL_AWARE_SYSTEM
             self.llm._complete_ai_tools = True  # type: ignore[attr-defined]
         self.tools = ToolRouter(self)
+        self.assistant = None  # optional FinderbayAssistant attached later
         self._restore()
+
+    def attach_assistant(self, assistant) -> None:
+        """Wire Finderbay Assistant tools (voice/memory/computer/learn/plan)."""
+        from .assistant.tools_ext import attach_assistant_tools
+
+        self.assistant = assistant
+        attach_assistant_tools(self, assistant)
 
     # --- primary API ----------------------------------------------------------
 

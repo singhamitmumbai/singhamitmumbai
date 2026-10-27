@@ -1,38 +1,42 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.6.0) — full code release: ChatGPT-class chat + tools + persist + Hindi + vision/coding/agent:
+**Complete AI** (v1.7.0) + **Finderbay Assistant** — voice, memory, vision, planning, gated computer control, learning:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
 pretrained general-purpose LLM at runtime**.
 
-### Complete AI — start here
+### Complete AI / Finderbay Assistant — start here
 
 ```bash
+# Finderbay Assistant (voice · memory · vision · planning · computer · learning)
+python -m cognitive_ai assistant --demo
+python -m cognitive_ai assistant --ask "remember that my warehouse is Central Store"
+python -m cognitive_ai assistant --ask "plan Show unpaid invoices for Project A"
+
 # ChatGPT-class general chat + local tools (auto-on when key is set)
 export OPENAI_API_KEY=sk-...
 python -m cognitive_ai complete-ai --ask "Write a short poem about Mars"
 python -m cognitive_ai diagnostics
 python -m cognitive_ai completeness
 
-# Full demo (tasks + vision + coding + chat)
-python -m cognitive_ai complete-ai --demo
-python -m cognitive_ai complete-ai --ask "Who are you?"
+# Enable local computer control (allowlisted; off by default)
+export COMPLETE_AI_COMPUTER_CONTROL=1
+python -m cognitive_ai assistant --ask "computer open_url https://example.com"
 
-# API + Chat UI (Complete AI default)
-python -m cognitive_ai api --port 8787
+# API + Chat UI
+python -m cognitive_ai api --mode assistant --port 8787
 python -m cognitive_ai chat --domain complete
-# POST /complete  GET /diagnostics  GET /completeness  GET /session  POST /tool
 ```
 
-Product name: **Complete AI**. Status keeps `human_level_agi=false`.  
-v1.6 completes persistence, session export, Hindi realization, UI, and a completeness checker.
+Product: **Complete AI** / **Finderbay Assistant**. `human_level_agi=false`.  
+Computer control is **gated** (no keylogging); enable explicitly.
 
 ### Release zip
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.6.0.zip
+# → dist/Complete_Non_LLM_AI_v1.7.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.

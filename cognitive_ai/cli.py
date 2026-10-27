@@ -77,8 +77,9 @@ def build_parser() -> argparse.ArgumentParser:
             "complete-ai",
             "diagnostics",
             "completeness",
+            "assistant",
         ],
-        help="Optional subcommand: complete-ai, diagnostics, completeness, os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
+        help="Optional subcommand: assistant, complete-ai, diagnostics, completeness, os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
     )
     p.add_argument(
         "--mode",
@@ -622,6 +623,45 @@ def main(argv: Optional[list[str]] = None) -> int:
         result = ai.handle(ask)
         print(result["text"])
         print(json.dumps(result.get("structured") or {}, indent=2, default=str)[:3000])
+        return 0
+
+    if args.command == "assistant":
+        from .assistant import FinderbayAssistant
+
+        assist = FinderbayAssistant(seed_demo=True, speak_replies=False)
+        if args.ask:
+            print(assist.ask(args.ask, mode=args.mode or "auto"))
+            return 0
+        if args.demo or not sys.stdin.isatty():
+            print(assist.greeting())
+            print(json.dumps(assist.status(), indent=2, default=str)[:3000])
+            for q in (
+                "Show unpaid invoices for Project A",
+                "plan reserve 10 bags of cement",
+                "remember that my warehouse is Central Store",
+                "recall warehouse",
+                "Count people in image ./crowd_people.jpg",
+                "computer status",
+                "Who are you?",
+            ):
+                print("-" * 40)
+                print("USER:", q)
+                print("AI:  ", assist.ask(q))
+            print("Finderbay Assistant demo done.")
+            return 0
+        print(assist.greeting())
+        while True:
+            try:
+                line = input("assistant> ")
+            except (EOFError, KeyboardInterrupt):
+                print()
+                break
+            if line.strip().lower() in ("quit", "exit", "q"):
+                break
+            if line.strip().lower() == "/status":
+                print(json.dumps(assist.status(), indent=2, default=str))
+                continue
+            print(assist.ask(line))
         return 0
 
     if args.command in ("complete-ai", "diagnostics", "completeness"):

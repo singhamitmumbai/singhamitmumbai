@@ -23,6 +23,11 @@ REQUIRED_MODULES = [
     "cognitive_ai.commonsense.chat",
     "cognitive_ai.runtime.persist",
     "cognitive_ai.response.hindi",
+    "cognitive_ai.assistant.finder_assistant",
+    "cognitive_ai.assistant.voice",
+    "cognitive_ai.assistant.computer",
+    "cognitive_ai.assistant.memory_hub",
+    "cognitive_ai.assistant.learning_bridge",
 ]
 
 
@@ -32,6 +37,7 @@ REQUIRED_ATTRS = {
     "cognitive_ai.chat.llm_bridge": ["LLMChatBridge", "llm_bridge_from_env"],
     "cognitive_ai.vision.system": ["VisionSystem"],
     "cognitive_ai.coding.system": ["CodingSystem"],
+    "cognitive_ai.assistant.finder_assistant": ["FinderbayAssistant"],
 }
 
 

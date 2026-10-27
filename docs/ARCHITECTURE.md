@@ -43,6 +43,7 @@ Input → Perception → Language understanding → Working state
 | `cognitive_ai/coding/` | Symbolic coding system |
 | `cognitive_ai/runtime/persist.py` | Session + memory persistence |
 | `cognitive_ai/runtime/completeness.py` | Full-code wiring checker |
+| `cognitive_ai/assistant/` | **Finderbay Assistant**: voice, memory hub, vision, planning, gated computer control, learning |
 | `cognitive_ai/brain.py` | Earlier symbolic cognitive brain (still available) |
 
 ## Distinctions preserved everywhere
