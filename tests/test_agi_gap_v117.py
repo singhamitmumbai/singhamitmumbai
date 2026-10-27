@@ -10,7 +10,8 @@ from cognitive_ai.version import __version__
 
 
 def test_version_117():
-    assert __version__.startswith("1.17")
+    major_minor = tuple(int(x) for x in __version__.split(".")[:2])
+    assert major_minor >= (1, 17)
 
 
 def test_agi_grade_eval_suite():

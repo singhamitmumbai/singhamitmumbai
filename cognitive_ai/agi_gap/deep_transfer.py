@@ -47,6 +47,20 @@ DOMAIN_SCHEMAS: dict[str, dict[str, str]] = {
         "developer": "agent",
         "test": "verify",
     },
+    "lab": {
+        "protocol": "procedure",
+        "reagent": "resource",
+        "bench": "location",
+        "scientist": "agent",
+        "result": "goal",
+    },
+    "logistics": {
+        "route_plan": "procedure",
+        "cargo": "resource",
+        "depot": "location",
+        "driver": "agent",
+        "delivery": "goal",
+    },
 }
 
 

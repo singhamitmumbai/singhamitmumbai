@@ -121,10 +121,13 @@ class ProtoAGIStack:
                 "metacognition": self.meta.self_model(),
                 "alignment": self.align.honesty_badge(),
                 "transfer_overlap_demo": self.transfer.structural_overlap("kitchen", "hospital"),
+                "transfer_lab_logistics": self.transfer.structural_overlap("lab", "logistics"),
+                "goal_queue_len": len(self.horizon.goal_queue),
+                "multimodal_session": len(self.multimodal.session_buffer),
             },
             "note": (
-                "v1.16 deepens learning, open-world, transfer, long-horizon, multimodal, "
-                "lifelong memory, metacognition, alignment — still not AGI."
+                "v1.18 deepens + persists learning/open-world/transfer/horizon/multimodal/"
+                "lifelong/meta/alignment — still not AGI."
             ),
         }
 

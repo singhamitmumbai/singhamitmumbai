@@ -4,17 +4,19 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..benchmarks.hard_novel import run_hard_novel_benchmark
+from ..memory.store import MemorySystem, Procedure
+from ..version import __version__
 from .alignment import AlignmentGuard
+from .deep_transfer import DeepTransferEngine
 from .general_learning import GeneralLearner
 from .lifelong_memory import LifelongMemory
 from .long_horizon import LongHorizonAgent
 from .metacognition import MetaCognition
 from .multimodal_hub import AlwaysOnMultimodalHub
+from .scorecard import build_scorecard
 from .stack import ProtoAGIStack
 from .world_knowledge import WorldKnowledgeHub
-from ..benchmarks.hard_novel import run_hard_novel_benchmark
-from ..memory.store import MemorySystem, Procedure
-from .deep_transfer import DeepTransferEngine
 
 
 def run_agi_grade_eval(*, allow_live_search: bool = False) -> dict[str, Any]:
@@ -112,7 +114,34 @@ def run_agi_grade_eval(*, allow_live_search: bool = False) -> dict[str, Any]:
     self_eval = stack.run_self_eval()
     add("stack_self_eval", self_eval.get("ok") is True, {"version": self_eval.get("version")})
 
+    # Multi-goal horizon queue
+    hz.enqueue_goal("research gravity then verify")
+    hz.enqueue_goal("research oxygen then verify")
+    qrun = hz.run_queue(max_goals=2, max_steps=4)
+    add("long_horizon_queue", qrun.get("ran", 0) >= 2, qrun)
+
+    # Multimodal arbitration
+    multi.ingest("low uncertainty note", modality="text")
+    arb = multi.arbitrate()
+    add("multimodal_arbitrate", arb.get("ok") is True, arb)
+
+    # Lifelong persist roundtrip
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as td:
+        path = Path(td) / "life.json"
+        life.persist(path)
+        life2 = LifelongMemory()
+        loaded = life2.load(path)
+        add("lifelong_persist", loaded.get("ok") is True and path.exists(), loaded)
+
+    # New domain transfer overlap
+    ov = deep.structural_overlap("lab", "logistics")
+    add("deep_transfer_new_domains", ov.get("overlap", 0) > 0, ov)
+
     passed = sum(1 for c in cases if c["ok"])
+    scorecard = build_scorecard(cases, version=__version__)
     return {
         "name": "agi_grade_eval_suite",
         "passed": passed,
@@ -120,6 +149,7 @@ def run_agi_grade_eval(*, allow_live_search: bool = False) -> dict[str, Any]:
         "pass_rate": passed / max(1, len(cases)),
         "ok": passed >= int(0.9 * len(cases)),
         "cases": cases,
+        "scorecard": scorecard.to_dict(),
         "human_level_agi": False,
         "certifies_agi": False,
         "note": (

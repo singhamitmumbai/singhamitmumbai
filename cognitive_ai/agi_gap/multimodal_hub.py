@@ -39,6 +39,7 @@ class AlwaysOnMultimodalHub:
             "vision": ModalityChannel("vision"),
         }
         self.event_log: list[dict[str, Any]] = []
+        self.session_buffer: list[dict[str, Any]] = []
         self._probe()
 
     def _probe(self) -> None:
@@ -108,14 +109,39 @@ class AlwaysOnMultimodalHub:
             "ts": ch.last_tick,
         }
         self.event_log.append(event)
+        self.session_buffer.append(event)
         if len(self.event_log) > 200:
             self.event_log = self.event_log[-200:]
+        if len(self.session_buffer) > 50:
+            self.session_buffer = self.session_buffer[-50:]
         return {
             "ok": True,
             "observation": obs.to_dict() if hasattr(obs, "to_dict") else event,
             "channel": ch.to_dict(),
             "human_level_agi": False,
         }
+
+    def arbitrate(self) -> dict[str, Any]:
+        """Pick the most trustworthy recent modality event (lowest uncertainty)."""
+        if not self.session_buffer:
+            return {"ok": False, "error": "empty_session_buffer", "human_level_agi": False}
+        ranked = sorted(
+            self.session_buffer,
+            key=lambda e: float(e.get("uncertainty") if e.get("uncertainty") is not None else 0.5),
+        )
+        best = ranked[0]
+        return {
+            "ok": True,
+            "winner": best,
+            "modality": best.get("modality"),
+            "confidence": round(1.0 - float(best.get("uncertainty") or 0.5), 3),
+            "candidates": len(ranked),
+            "human_level_agi": False,
+            "note": "Arbitration is heuristic — not human-level multimodal judgment.",
+        }
+
+    def clear_session(self) -> None:
+        self.session_buffer.clear()
 
     def tick_all_health(self) -> dict[str, Any]:
         """Health tick for always-on monitoring (no heavy capture required)."""

@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.17.0) — ChatGPT-level chat + **integrated proto-AGI gap stack** (learning, open-world, transfer, long-horizon, multimodal, lifelong memory, metacognition, AGI-grade eval/alignment) wired into Complete AI + Assistant routing. Still `human_level_agi=false`:
+**Complete AI** (v1.18.0) — ChatGPT-level chat + **integrated proto-AGI gap stack** with multi-goal autonomy, multimodal arbitration, lifelong persist, open-world chat grounding, and pillar scorecards. Still `human_level_agi=false`:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
@@ -36,6 +36,24 @@ python -m cognitive_ai chat --domain complete
 
 Product: **Complete AI** / **Finderbay Assistant** / **JARVIS tools**. `human_level_agi=false`.  
 Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.
+
+### What v1.18 adds — Persist, multi-goal, arbitrate, scorecard
+
+| Pillar | Upgrade |
+|------|------|
+| General learning | Session outcomes feed `GeneralLearner` when proto stack is active |
+| Open-world | Chat uses expanded world hub before fallback |
+| Deep transfer | New `lab` + `logistics` domain schemas |
+| Long-horizon | `enqueue_goal` / `run_queue` multi-goal autonomy |
+| Multimodality | Session buffer + `arbitrate()` winner selection |
+| Lifelong memory | `persist()` / `load()` continuity across restarts |
+| Metacognition | Calibration retained from v1.17 |
+| Alignment/evals | Pillar **scorecard** in `run_agi_grade_eval` |
+
+```bash
+python -m cognitive_ai agi-gap --eval
+pytest tests/test_agi_gap_v118.py -q
+```
 
 ### What v1.17 adds — Product integration + AGI-grade eval suite
 
@@ -191,7 +209,7 @@ Tool contracts, job store, provenance memory, material shortage skill, voice PTT
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.17.0.zip
+# → dist/Complete_Non_LLM_AI_v1.18.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.

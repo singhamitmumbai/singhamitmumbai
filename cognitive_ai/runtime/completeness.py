@@ -65,6 +65,7 @@ REQUIRED_MODULES = [
     "cognitive_ai.agi_gap.alignment",
     "cognitive_ai.agi_gap.general_learning",
     "cognitive_ai.agi_gap.eval_suite",
+    "cognitive_ai.agi_gap.scorecard",
     "cognitive_ai.benchmarks.hard_novel",
 ]
 
@@ -105,6 +106,7 @@ REQUIRED_ATTRS = {
     "cognitive_ai.agi_gap.alignment": ["AlignmentGuard"],
     "cognitive_ai.agi_gap.general_learning": ["GeneralLearner"],
     "cognitive_ai.agi_gap.eval_suite": ["run_agi_grade_eval"],
+    "cognitive_ai.agi_gap.scorecard": ["build_scorecard", "AGIGapScorecard"],
     "cognitive_ai.benchmarks.hard_novel": ["run_hard_novel_benchmark"],
 }
 

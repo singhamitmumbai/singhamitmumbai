@@ -352,6 +352,22 @@ class CompleteAI:
         if len(self.session) > self.session_limit:
             self.session = self.session[-self.session_limit :]
         self._save()
+        # General learning: remember verified assistant outcomes into proto stack
+        if role == "assistant" and self._proto_stack is not None:
+            try:
+                self._proto_stack.learner.observe(
+                    kind="preference",
+                    payload={"key": f"session_route:{route or 'general'}", "value": text[:120]},
+                    verified=True,
+                    source="session",
+                )
+                self._proto_stack.lifelong.remember_interaction(
+                    summary=f"session:{route}:{text[:80]}",
+                    actions=[{"op": route or "respond"}],
+                    outcome="success",
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
     # --- diagnostics ----------------------------------------------------------
 

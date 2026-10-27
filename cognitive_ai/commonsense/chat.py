@@ -127,6 +127,18 @@ class OpenDomainChat:
         self.composer = ChatGPTStyleComposer()
         self.user_name: Optional[str] = None
         self.preferences: dict[str, str] = {}
+        self._world = None  # lazy WorldKnowledgeHub for open-world framing
+
+    @property
+    def world(self):
+        if self._world is None:
+            try:
+                from ..agi_gap.world_knowledge import WorldKnowledgeHub
+
+                self._world = WorldKnowledgeHub(expand=True)
+            except Exception:  # noqa: BLE001
+                self._world = False
+        return self._world if self._world is not False else None
 
     def respond(self, message: str, *, allow_live_search: bool = True) -> dict[str, Any]:
         msg = message.strip()
@@ -478,6 +490,33 @@ class OpenDomainChat:
                     question=qinfo.to_dict(),
                     smart=frame.to_dict(),
                     style_meta=composed.to_dict(),
+                )
+
+        # Open-world framing: surface known facts / hypotheses before giving up
+        if self.world is not None and (qinfo.is_question or frame.confidence >= 0.45):
+            ow = self.world.understand(frame.normalized or msg)
+            if ow.known_facts:
+                composed = self.composer.compose(
+                    topic=" ".join(ow.entities[:2]) or "topic",
+                    ask_form=qinfo.ask_form if qinfo.ask_form != "unknown" else "define",
+                    extra_bullets=list(ow.known_facts[:8]),
+                    summary="Open-world read from expanded world knowledge:",
+                    style=style,
+                    confidence=ow.confidence,
+                )
+                if ow.hypotheses:
+                    composed_text = composed.text + "\n\nHypotheses:\n" + "\n".join(
+                        f"- {h}" for h in ow.hypotheses[:4]
+                    )
+                else:
+                    composed_text = composed.text
+                return self._emit(
+                    composed_text,
+                    method="open_world_chatgpt",
+                    confidence=ow.confidence,
+                    question=qinfo.to_dict(),
+                    smart=frame.to_dict(),
+                    style_meta={**composed.to_dict(), "open_world": ow.to_dict()},
                 )
 
         # Last resort: intelligent search for question-like input

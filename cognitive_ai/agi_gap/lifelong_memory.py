@@ -6,6 +6,8 @@ from collections import Counter
 from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
 
+from pathlib import Path
+
 from ..core.records import Claim, EvidenceStatus, utc_now
 from ..memory.store import Episode, MemorySystem, Procedure
 
@@ -156,6 +158,21 @@ class LifelongMemory:
             "preferences": dict(self.memory.preferences),
             "human_level_agi": False,
         }
+
+    def persist(self, path: str | Path) -> dict[str, Any]:
+        """Save underlying memory store for lifelong continuity across process restarts."""
+        target = self.memory.save(path)
+        return {
+            "ok": True,
+            "path": str(target),
+            "summary": self.summary(),
+            "human_level_agi": False,
+        }
+
+    def load(self, path: str | Path) -> dict[str, Any]:
+        self.memory.load(path)
+        self._cursor = 0
+        return {"ok": True, "path": str(path), "summary": self.summary(), "human_level_agi": False}
 
     def dream(self, *, n: int = 5) -> dict[str, Any]:
         """Spaced replay of salient episodes (offline consolidation aid)."""

@@ -46,6 +46,7 @@ class LongHorizonAgent:
 
     Uses injectable actuators so Finderbay/chat/coding can be plugged in.
     Always bounded (max_steps). human_level_agi=false.
+    Supports a small concurrent goal queue (multi-goal autonomy scaffold).
     """
 
     def __init__(
@@ -59,6 +60,36 @@ class LongHorizonAgent:
         self.actuator = actuator or self._default_actuator
         self.verifier = verifier or self._default_verifier
         self.history: list[HorizonGoal] = []
+        self.goal_queue: list[str] = []
+
+    def enqueue_goal(self, goal: str) -> int:
+        g = (goal or "").strip()
+        if g:
+            self.goal_queue.append(g)
+        return len(self.goal_queue)
+
+    def run_queue(
+        self,
+        *,
+        max_goals: int = 3,
+        max_steps: Optional[int] = None,
+        context: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        """Run up to max_goals queued goals sequentially with verification."""
+        results = []
+        n = 0
+        while self.goal_queue and n < max_goals:
+            goal = self.goal_queue.pop(0)
+            results.append(self.run(goal, max_steps=max_steps, context=context))
+            n += 1
+        ok = all(r.get("ok") for r in results) if results else False
+        return {
+            "ok": ok,
+            "ran": len(results),
+            "remaining": len(self.goal_queue),
+            "results": results,
+            "human_level_agi": False,
+        }
 
     def decompose(self, goal: str) -> list[str]:
         g = goal.strip()
