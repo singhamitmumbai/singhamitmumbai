@@ -53,6 +53,14 @@ Excluded at runtime: pretrained general-purpose LLMs.
 Perception modules ship **auditable stubs**; production acoustic/OCR checkpoints
 must declare provenance separately.
 
+## v0.8 operational expansion
+
+1. `runtime/alerts.py` proactive monitor (overdue / low stock / expiry / pending)  
+2. Finderbay vendors + `purchase_orders` service (auth-gated writes)  
+3. Multi-turn `ClarificationManager` slot-filling in dialogue tracker  
+4. Causal common-sense `why()` + Hindi-ish open-domain patterns  
+5. Stdlib REST API (`cognitive_ai api`) + CSV/JSON `ReportExporter`
+
 ## v0.7 capability expansion
 
 1. Large common-sense KB generator (`commonsense/generate_kb.py`) + eval suite  

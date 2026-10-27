@@ -1,20 +1,20 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-A runnable **complete non-LLM AI** (v0.7) built from the engineering blueprint:
+A runnable **complete non-LLM AI** (v0.8) built from the engineering blueprint:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
 pretrained general-purpose LLM at runtime**.
 
-### What v0.7 adds
+### What v0.8 adds
 
 | Track | Upgrade |
 |------|---------|
-| 1. Common-sense | **2000+** curated facts + rules + `python -m cognitive_ai bench` |
-| 2. Speech | EN / **Hindi** / EN-IN Vosk models + streaming mic API |
-| 3. OCR | Multi-page + table/layout heuristics (`LayoutOCR`) |
-| 4. Finderbay | **Payments**, **contracts**, **multi-user auth** |
-| 5. Benchmarks | SCAN-style composition holdouts + skill-transfer tests |
+| 1. Proactive alerts | Overdue invoices, low stock, expiring contracts, pending deliveries |
+| 2. POs / vendors | Vendor register + create/list purchase orders (auth-gated) |
+| 3. Clarification | Multi-turn slot-filling when project/amount/vendor is missing |
+| 4. Causal CS | `why …?` explanations over cause/need chains + Hindi-ish patterns |
+| 5. REST + reports | `python -m cognitive_ai api` + CSV/JSON register export |
 
 **Honest limits (still):** not human-level AGI; open-domain coverage is finite/explicit; not unrestricted LLM chat.
 
@@ -37,6 +37,8 @@ python -m cognitive_ai chat --domain general
 
 python -m cognitive_ai eval
 python -m cognitive_ai bench
+python -m cognitive_ai api --port 8787
+# GET /health /status /alerts /reports?kind=invoices  POST /ask
 pytest -q
 ```
 
