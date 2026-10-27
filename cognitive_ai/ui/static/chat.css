@@ -293,6 +293,35 @@ body {
   font-family: var(--mono);
   font-size: 0.82rem;
 }
+.msg .thinking {
+  margin-top: 0.65rem;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: var(--bg-soft);
+  padding: 0.35rem 0.65rem 0.55rem;
+}
+.msg .thinking > summary {
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-family: var(--mono);
+  list-style: none;
+  user-select: none;
+}
+.msg .thinking > summary::-webkit-details-marker { display: none; }
+.msg .thinking > summary::before {
+  content: "▸ ";
+  color: var(--accent-2);
+}
+.msg .thinking[open] > summary::before { content: "▾ "; }
+.msg .thinking-body {
+  margin-top: 0.45rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  padding-top: 0.45rem;
+}
+.msg .thinking-body p { margin: 0 0 0.35rem; }
 .msg .meta {
   margin-top: 0.55rem;
   display: flex;

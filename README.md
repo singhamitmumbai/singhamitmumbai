@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.19.0) — modern **Chat UI frontend** + ChatGPT-level chat + integrated proto-AGI gap stack. Still `human_level_agi=false`:
+**Complete AI** (v1.20.0) — universal **think→plan** layer on every question + modern Chat UI + ChatGPT-level chat + proto-AGI gap stack. Still `human_level_agi=false`:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
@@ -37,6 +37,23 @@ python -m cognitive_ai chat --domain complete --port 8765
 
 Product: **Complete AI** / **Finderbay Assistant** / **JARVIS tools**. `human_level_agi=false`.  
 Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.
+
+### What v1.20 adds — Universal thinking & planning
+
+Every situation / question runs a non-LLM deliberator **before** answering:
+
+| Piece | Role |
+|------|------|
+| `thinking/deliberator.py` | Perceive → safety → goal → strategy → constraints → plan → risks → success criteria |
+| CompleteAI / OpenDomainChat / ProtoAGIStack | Always call `ThinkingSystem.think()` first; attach `thinking` + `thinking_markdown` |
+| Chat UI | Expandable **Thinking** panel on every bot reply |
+| `/api/chat` | Returns `thinking`, `thinking_brief`, `thinking_markdown` |
+
+```bash
+python -m cognitive_ai complete-ai --ask "How do I reserve cement?"
+# reply includes thinking plan steps
+pytest tests/test_thinking_v120.py -q
+```
 
 ### What v1.19 adds — Modern Chat UI frontend
 
@@ -225,7 +242,7 @@ Tool contracts, job store, provenance memory, material shortage skill, voice PTT
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.19.0.zip
+# → dist/Complete_Non_LLM_AI_v1.20.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.

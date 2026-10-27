@@ -102,7 +102,33 @@
     else body.textContent = text;
     el.appendChild(body);
 
-    if (role === "bot" && (meta.route || meta.llm || meta.confidence != null)) {
+    if (role === "bot" && (meta.thinkingMarkdown || meta.thinkingBrief || meta.thinking)) {
+      const details = document.createElement("details");
+      details.className = "thinking";
+      const summary = document.createElement("summary");
+      summary.textContent = meta.thinkingBrief
+        ? `Thinking · ${meta.thinkingBrief}`
+        : "Thinking";
+      details.appendChild(summary);
+      const thinkBody = document.createElement("div");
+      thinkBody.className = "thinking-body";
+      if (meta.thinkingMarkdown) {
+        thinkBody.innerHTML = renderMarkdown(meta.thinkingMarkdown);
+      } else if (meta.thinking && Array.isArray(meta.thinking.plan)) {
+        const plan = (meta.thinking.plan || [])
+          .map((s, i) => `${i + 1}. ${s}`)
+          .join("\n");
+        thinkBody.innerHTML = renderMarkdown(
+          `**Plan**\n${plan || "(none)"}\n\n_strategy=\`${meta.thinking.strategy || "?"}\`_`
+        );
+      } else {
+        thinkBody.textContent = "Deliberation attached.";
+      }
+      details.appendChild(thinkBody);
+      el.appendChild(details);
+    }
+
+    if (role === "bot" && (meta.route || meta.llm || meta.confidence != null || meta.thinkingBrief)) {
       const metaEl = document.createElement("div");
       metaEl.className = "meta";
       if (meta.route) {
@@ -127,6 +153,12 @@
         const t = document.createElement("span");
         t.className = "tag";
         t.textContent = "proto-agi";
+        metaEl.appendChild(t);
+      }
+      if (meta.thinkingBrief) {
+        const t = document.createElement("span");
+        t.className = "tag";
+        t.textContent = meta.thinkingBrief;
         metaEl.appendChild(t);
       }
       el.appendChild(metaEl);
@@ -154,7 +186,7 @@
     wrap.className = "welcome";
     wrap.innerHTML = `
       <h2>How can Complete AI help?</h2>
-      <p>Chat, Finderbay tasks, vision, coding, web research, and proto-AGI multi-step goals — without claiming human-level AGI.</p>
+      <p>Every reply starts with think→plan. Chat, Finderbay, vision, coding, research, and proto-AGI goals — without claiming human-level AGI.</p>
       <div class="welcome-grid">
         <button type="button" data-prompt="Explain gravity in simple terms"><strong>Explain</strong><span>Gravity in simple terms</span></button>
         <button type="button" data-prompt="Show unpaid invoices for Project A"><strong>Business</strong><span>Unpaid invoices for Project A</span></button>
@@ -276,6 +308,9 @@
           llm: data.llm_at_runtime,
           confidence: data.confidence,
           proto_agi: data.proto_agi,
+          thinking: data.thinking,
+          thinkingBrief: data.thinking_brief,
+          thinkingMarkdown: data.thinking_markdown,
         });
         state.history.push({ user: trimmed, bot: data.reply || "", route: data.route });
         renderHistory();

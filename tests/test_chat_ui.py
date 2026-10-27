@@ -21,9 +21,11 @@ def test_static_assets_exist():
     assert "/static/chat.js" in html
     css = (STATIC_DIR / "chat.css").read_text(encoding="utf-8")
     assert "--accent" in css
+    assert ".thinking" in css
     js = (STATIC_DIR / "chat.js").read_text(encoding="utf-8")
     assert "/api/chat" in js
     assert "renderMarkdown" in js
+    assert "thinkingMarkdown" in js or "thinking_markdown" in js
 
 
 def test_chat_session_complete_mode():
@@ -34,6 +36,9 @@ def test_chat_session_complete_mode():
     assert out["human_level_agi"] is False
     assert out.get("reply")
     assert "complete ai" in out["reply"].lower()
+    assert isinstance(out.get("thinking"), dict)
+    assert out.get("thinking_brief")
+    assert out.get("thinking_markdown")
 
 
 def _get(conn: HTTPConnection, path: str):
@@ -79,6 +84,8 @@ def test_chat_ui_http_endpoints():
         assert chat.get("human_level_agi") is False
         assert chat.get("reply")
         assert "cannot" in chat["reply"].lower() or "no" in chat["reply"].lower()
+        assert isinstance(chat.get("thinking"), dict)
+        assert chat.get("thinking_markdown") or chat.get("thinking_brief")
 
         status, raw = _get(conn, "/api/completeness")
         assert status == 200

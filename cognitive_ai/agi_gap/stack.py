@@ -33,6 +33,7 @@ class ProtoAGIStack:
         self.meta = MetaCognition()
         self.align = AlignmentGuard()
         self._backends: dict[str, Any] = {}
+        self._thinker = None  # lazy ThinkingSystem
 
     def bind_backends(self, *, complete_ai: Any = None, chat: Any = None, web: Any = None) -> None:
         """Attach product backends so long-horizon / research steps can call real tools."""
@@ -132,16 +133,30 @@ class ProtoAGIStack:
         }
 
     def handle(self, text: str, *, context: Optional[dict] = None) -> dict[str, Any]:
-        """Meta-routed handle: align → open-world → debate → execute → critique → learn."""
+        """Meta-routed handle: think→plan → align → open-world → debate → execute → critique → learn."""
+        deliberation = None
+        try:
+            from ..thinking import ThinkingSystem
+
+            if self._thinker is None:
+                self._thinker = ThinkingSystem()
+            deliberation = self._thinker.think(text, context={"channel": "proto_agi", **(context or {})})
+        except Exception:  # noqa: BLE001
+            deliberation = None
+
         verdict = self.align.check(text)
         if not verdict.allowed:
-            return {
+            out = {
                 "text": self.align.wrap_response("", verdict),
                 "ok": False,
                 "route": "alignment_block",
                 "alignment": verdict.to_dict(),
                 "human_level_agi": False,
             }
+            if deliberation is not None:
+                out["thinking"] = deliberation.to_dict()
+                out["thinking_brief"] = deliberation.as_brief()
+            return out
 
         ow = self.world.understand(text)
         debate = self.meta.debate_strategies(text, open_world=ow.to_dict())
@@ -329,6 +344,9 @@ class ProtoAGIStack:
             "version": self.version,
             "product": "Complete AI Proto-AGI Stack",
         }
+        if getattr(self, "_thinker", None) is not None and self._thinker.last is not None:
+            out["thinking"] = self._thinker.last.to_dict()
+            out["thinking_brief"] = self._thinker.last.as_brief()
         if extra:
             out.update(extra)
         return out

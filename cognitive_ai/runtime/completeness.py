@@ -67,6 +67,8 @@ REQUIRED_MODULES = [
     "cognitive_ai.agi_gap.eval_suite",
     "cognitive_ai.agi_gap.scorecard",
     "cognitive_ai.benchmarks.hard_novel",
+    "cognitive_ai.thinking",
+    "cognitive_ai.thinking.deliberator",
 ]
 
 
@@ -108,6 +110,8 @@ REQUIRED_ATTRS = {
     "cognitive_ai.agi_gap.eval_suite": ["run_agi_grade_eval"],
     "cognitive_ai.agi_gap.scorecard": ["build_scorecard", "AGIGapScorecard"],
     "cognitive_ai.benchmarks.hard_novel": ["run_hard_novel_benchmark"],
+    "cognitive_ai.thinking": ["ThinkingSystem", "Deliberation", "ThoughtStep", "think_about"],
+    "cognitive_ai.thinking.deliberator": ["ThinkingSystem", "Deliberation", "think_about"],
 }
 
 

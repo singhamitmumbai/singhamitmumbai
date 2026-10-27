@@ -128,6 +128,8 @@ class OpenDomainChat:
         self.user_name: Optional[str] = None
         self.preferences: dict[str, str] = {}
         self._world = None  # lazy WorldKnowledgeHub for open-world framing
+        self._thinker = None  # lazy ThinkingSystem
+        self._last_deliberation = None
 
     @property
     def world(self):
@@ -149,6 +151,31 @@ class OpenDomainChat:
         if frame.analysis.get("focus") and not qinfo.focus:
             qinfo.focus = list(frame.analysis.get("focus") or [])
         style = frame.style or "helpful"
+
+        # Universal think→plan before answering any situation
+        try:
+            from ..thinking import ThinkingSystem
+
+            if self._thinker is None:
+                self._thinker = ThinkingSystem()
+            self._last_deliberation = self._thinker.think(
+                msg, context={"channel": "open_domain_chat"}
+            )
+            if (
+                self._last_deliberation.should_abstain
+                and self._last_deliberation.strategy == "abstain"
+            ):
+                return self._emit(
+                    "I need to stop and refuse that request after thinking it through.\n\n"
+                    + self._last_deliberation.as_markdown(),
+                    method="think_abstain",
+                    confidence=0.95,
+                    question=qinfo.to_dict(),
+                    smart=frame.to_dict(),
+                    supported=True,
+                )
+        except Exception:  # noqa: BLE001
+            self._last_deliberation = None
 
         # Remember user name
         m_name = re.search(
@@ -985,5 +1012,9 @@ class OpenDomainChat:
             "last_object": self.last_object,
             "human_level_agi": False,
         }
+        if self._last_deliberation is not None:
+            payload["thinking"] = self._last_deliberation.to_dict()
+            payload["thinking_brief"] = self._last_deliberation.as_brief()
+            payload["thinking_markdown"] = self._last_deliberation.as_markdown()
         self.history.append(ChatTurn("assistant", text, payload))
         return payload

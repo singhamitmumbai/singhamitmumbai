@@ -106,6 +106,7 @@ class CompleteAI:
         self.tools = ToolRouter(self)
         self.assistant = None  # optional FinderbayAssistant attached later
         self._proto_stack = None  # lazy ProtoAGIStack
+        self._thinker = None  # lazy ThinkingSystem — always think→plan before answer
         self._restore()
 
     @property
@@ -143,6 +144,32 @@ class CompleteAI:
         text = payload if isinstance(payload, str) else str(payload or "")
         mode = (mode or "auto").lower().strip()
         self._push("user", text, route=mode)
+
+        # Universal think→plan before any route
+        deliberation = None
+        try:
+            from .thinking import ThinkingSystem
+
+            if not hasattr(self, "_thinker") or self._thinker is None:
+                self._thinker = ThinkingSystem()
+            deliberation = self._thinker.think(text, context={"mode": mode, **(context or {})})
+            if deliberation.should_abstain and deliberation.strategy == "abstain":
+                out = self._tag(
+                    {
+                        "text": (
+                            "I need to stop and refuse that request after thinking it through.\n\n"
+                            + deliberation.as_markdown()
+                        ),
+                        "thinking": deliberation.to_dict(),
+                        "faithful": True,
+                    },
+                    route="think_abstain",
+                    llm=False,
+                )
+                self._push("assistant", out["text"], route="think_abstain", meta=out)
+                return out
+        except Exception:  # noqa: BLE001
+            deliberation = None
 
         if mode == "llm":
             out = self._llm_with_tools(text, default_route="llm")
@@ -504,6 +531,18 @@ class CompleteAI:
         result["llm_at_runtime"] = bool(llm)
         result["human_level_agi"] = False
         result.setdefault("faithful", True)
+        # Attach latest deliberation if caller didn't already
+        if "thinking" not in result and getattr(self, "_thinker", None) is not None:
+            last = getattr(self._thinker, "last", None)
+            if last is not None:
+                result["thinking"] = last.to_dict()
+                result["thinking_brief"] = last.as_brief()
+                result["thinking_markdown"] = last.as_markdown()
+        elif isinstance(result.get("thinking"), dict) and "thinking_markdown" not in result:
+            last = getattr(getattr(self, "_thinker", None), "last", None)
+            if last is not None:
+                result["thinking_brief"] = result.get("thinking_brief") or last.as_brief()
+                result["thinking_markdown"] = last.as_markdown()
         if "text" in result and result["text"] is not None:
             result["text"] = str(result["text"])
         elif result.get("code"):
@@ -520,7 +559,7 @@ class CompleteAI:
         prior: Optional[dict] = None,
         tools: Optional[list] = None,
     ) -> dict[str, Any]:
-        return {
+        out = {
             "text": llm_out.get("text"),
             "structured": {
                 "llm": True,
@@ -544,6 +583,11 @@ class CompleteAI:
             "method": llm_out.get("method"),
             "tools": tools or [],
         }
+        if getattr(self, "_thinker", None) is not None and self._thinker.last is not None:
+            out["thinking"] = self._thinker.last.to_dict()
+            out["thinking_brief"] = self._thinker.last.as_brief()
+            out["thinking_markdown"] = self._thinker.last.as_markdown()
+        return out
 
     @staticmethod
     def _is_unsupported(out: dict[str, Any]) -> bool:

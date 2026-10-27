@@ -110,6 +110,39 @@ class ChatSession:
                     conf = float(result["confidence"])
                 elif isinstance(result.get("confidence"), dict):
                     conf = result["confidence"].get("score")
+                thinking = result.get("thinking")
+                thinking_md = None
+                if isinstance(thinking, dict):
+                    # Prefer pre-rendered markdown when available
+                    thinking_md = result.get("thinking_markdown")
+                    if not thinking_md:
+                        try:
+                            from ..thinking import Deliberation, ThoughtStep
+
+                            thoughts = []
+                            for t in thinking.get("thoughts") or []:
+                                if isinstance(t, dict):
+                                    thoughts.append(
+                                        ThoughtStep(
+                                            t.get("stage") or "step",
+                                            t.get("content") or "",
+                                            float(t.get("confidence") or 0.5),
+                                        )
+                                    )
+                            d = Deliberation(
+                                situation=str(thinking.get("situation") or ""),
+                                goal=str(thinking.get("goal") or ""),
+                                thoughts=thoughts,
+                                plan=list(thinking.get("plan") or []),
+                                strategy=str(thinking.get("strategy") or ""),
+                                risks=list(thinking.get("risks") or []),
+                                unknowns=list(thinking.get("unknowns") or []),
+                                success_criteria=list(thinking.get("success_criteria") or []),
+                                confidence=float(thinking.get("confidence") or 0.5),
+                            )
+                            thinking_md = d.as_markdown()
+                        except Exception:  # noqa: BLE001
+                            thinking_md = result.get("thinking_brief")
                 return {
                     "reply": str(result.get("text") or ""),
                     "route": result.get("route"),
@@ -119,6 +152,9 @@ class ChatSession:
                     "proto_agi": bool(result.get("proto_agi")),
                     "confidence": conf,
                     "suggestions": suggestions,
+                    "thinking": thinking,
+                    "thinking_brief": result.get("thinking_brief"),
+                    "thinking_markdown": thinking_md,
                     "version": __version__,
                 }
             if self.general is not None:
