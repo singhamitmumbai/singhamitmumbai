@@ -130,6 +130,12 @@ class GeneralNonLLMAI:
             "create task",
             "list tasks",
             "warehouse",
+            "how many",
+            "purchase order",
+            "alert",
+            "payment",
+            "contract",
+            "vendor",
         )
         return any(h in lower for h in hooks)
 

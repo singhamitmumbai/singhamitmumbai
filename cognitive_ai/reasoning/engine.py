@@ -157,12 +157,21 @@ class ReasoningEngine:
         unresolved = []
         today = date.today().isoformat()
 
+        META_FIELDS = {
+            "aggregation",
+            "ask_form",
+            "report_kind",
+            "output",
+            "clause_index",
+        }
         for inv in invoices:
             ok = True
             for cond in conditions:
                 field = cond["field"]
                 op = cond["operator"]
                 val = cond["value"]
+                if field in META_FIELDS:
+                    continue
                 if field == "overdue":
                     due = inv.get("due_date")
                     status = inv.get("payment_status")

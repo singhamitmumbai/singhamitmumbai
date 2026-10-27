@@ -1,20 +1,22 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-A runnable **complete non-LLM AI** (v0.8) built from the engineering blueprint:
+A runnable **complete non-LLM AI** (v0.9) built from the engineering blueprint:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
 pretrained general-purpose LLM at runtime**.
 
-### What v0.8 adds
+### What v0.9 adds — advanced question understanding
 
-| Track | Upgrade |
+| Capability | Detail |
 |------|---------|
-| 1. Proactive alerts | Overdue invoices, low stock, expiring contracts, pending deliveries |
-| 2. POs / vendors | Vendor register + create/list purchase orders (auth-gated) |
-| 3. Clarification | Multi-turn slot-filling when project/amount/vendor is missing |
-| 4. Causal CS | `why …?` explanations over cause/need chains + Hindi-ish patterns |
-| 5. REST + reports | `python -m cognitive_ai api` + CSV/JSON register export |
+| WH / ask-form | what/who/where/when/why/how/how-many + count/sum/exists/list/causal/yes-no |
+| Multi-clause | Splits compound questions; answers the primary clause first |
+| Aggregation | `How many unpaid invoices…?` → numeric answer with sources |
+| Follow-ups | `What about Project B?` / `How many of those?` reuse prior frame |
+| Open-domain | Question analyzer drives can/is/why/where/define routing |
+
+Prior v0.8: alerts, POs/vendors, clarification, causal CS, REST API/reports.
 
 **Honest limits (still):** not human-level AGI; open-domain coverage is finite/explicit; not unrestricted LLM chat.
 

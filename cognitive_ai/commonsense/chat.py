@@ -1,7 +1,7 @@
 """Open-domain chat router — broad conversation without an LLM.
 
-Combines: greetings, FAQ, common-sense QA, analogies, topic memory,
-and graceful unsupported handling with capability pointers.
+Combines: greetings, FAQ, advanced question analysis, common-sense QA,
+analogies, topic memory, and graceful unsupported handling.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from ..nlu.questions import QuestionAnalyzer
 from .kb import CommonSenseKB
 from .reasoner import CommonSenseReasoner
 
@@ -63,16 +64,20 @@ class OpenDomainChat:
         self.reasoner = reasoner or CommonSenseReasoner()
         self.history: list[ChatTurn] = []
         self.topic: Optional[str] = None
+        self.last_predicate: str = "is_a"
+        self.last_object: str = "*"
+        self.questions = QuestionAnalyzer()
 
     def respond(self, message: str) -> dict[str, Any]:
         msg = message.strip()
         self.history.append(ChatTurn("user", msg))
         lower = msg.lower()
+        qinfo = self.questions.analyze(msg)
 
         # FAQ / meta
         for pat, ans in FAQ:
             if pat.search(msg):
-                return self._emit(ans, method="faq", confidence=0.9)
+                return self._emit(ans, method="faq", confidence=0.9, question=qinfo.to_dict())
 
         if re.search(r"^(hi|hello|hey|namaste|good (morning|evening))\b", lower):
             return self._emit(
@@ -80,10 +85,11 @@ class OpenDomainChat:
                 "(e.g. 'can penguins fly?'), or an analogy ('dog:bark :: cat:?').",
                 method="greeting",
                 confidence=1.0,
+                question=qinfo.to_dict(),
             )
 
         if lower in ("thanks", "thank you", "thx"):
-            return self._emit("You're welcome.", method="social", confidence=1.0)
+            return self._emit("You're welcome.", method="social", confidence=1.0, question=qinfo.to_dict())
 
         # Analogy: a:b :: c:?   or  a is to b as c is to
         m = re.search(
@@ -96,102 +102,71 @@ class OpenDomainChat:
         )
         if m:
             ans = self.reasoner.analogy(m.group(1), m.group(2), m.group(3))
-            return self._emit(ans.text, method=ans.method, confidence=ans.confidence, triples=ans.triples)
+            return self._emit(
+                ans.text,
+                method=ans.method,
+                confidence=ans.confidence,
+                triples=ans.triples,
+                question=qinfo.to_dict(),
+            )
 
-        # can X Y? / does X Y? / is X a Y? / what does X used for?
-        m = re.search(r"^can\s+(\w+)\s+(\w+)\??$", lower)
-        if m:
-            subj = _singularize(m.group(1))
-            ans = self.reasoner.reason(subj, "can", m.group(2))
-            self.topic = subj
-            return self._emit(ans.text, method=ans.method, confidence=ans.confidence, triples=ans.triples)
+        # Multi-clause: answer primary clause first
+        clause = qinfo.clauses[0] if qinfo.clauses else msg
+        answered = self._answer_clause(clause, qinfo)
+        if answered is not None:
+            if qinfo.is_multi_clause and len(qinfo.clauses) > 1:
+                answered["text"] = (
+                    answered["text"]
+                    + f" (Also noted {len(qinfo.clauses) - 1} more clause(s); ask separately for each.)"
+                )
+                answered["question"] = qinfo.to_dict()
+            return answered
 
-        m = re.search(r"^is\s+(\w+)\s+(?:a|an)\s+(\w+)\??$", lower)
-        if m:
-            subj = _singularize(m.group(1))
-            ans = self.reasoner.reason(subj, "is_a", _singularize(m.group(2)))
-            self.topic = subj
-            return self._emit(ans.text, method=ans.method, confidence=ans.confidence, triples=ans.triples)
-
-        m = re.search(r"^does\s+(\w+)\s+(\w+)\??$", lower)
-        if m:
-            subj = _singularize(m.group(1))
-            # try as can / has
-            for pred in ("can", "has", "needs"):
-                ans = self.reasoner.reason(subj, pred, m.group(2))
-                if ans.success:
-                    self.topic = subj
-                    return self._emit(ans.text, method=ans.method, confidence=ans.confidence, triples=ans.triples)
-            ans = self.reasoner.reason(subj, "*", m.group(2))
-            return self._emit(ans.text, method=ans.method, confidence=ans.confidence, triples=ans.triples)
-
-        m = re.search(r"what(?:'s| is)?\s+(\w+)\s+used for\??", lower)
-        if m:
-            ans = self.reasoner.reason(m.group(1), "used_for", "*")
-            self.topic = m.group(1)
-            return self._emit(ans.text, method=ans.method, confidence=ans.confidence, triples=ans.triples)
-
-        m = re.search(r"tell me about\s+(\w+)|what (?:do you know|is known) about\s+(\w+)", lower)
-        if m:
-            ent = m.group(1) or m.group(2)
-            rel = self.reasoner.cs.related(ent)
-            self.topic = ent
-            if not rel:
-                return self._emit(f"I do not yet have common-sense facts about '{ent}'.", method="lookup", confidence=0.2)
-            text = f"About {ent}: " + "; ".join(str(t) for t in rel[:12]) + "."
-            return self._emit(text, method="describe", confidence=0.8, triples=[str(t) for t in rel[:12]])
-
-        # why can / why is / why <entity>
-        m = re.search(r"why\s+(?:can|does)\s+(\w+)\s+(\w+)\??", lower)
-        if m:
-            ans = self.reasoner.why(m.group(1), "can", m.group(2))
-            self.topic = m.group(1)
-            return self._emit(ans.text, method=ans.method, confidence=ans.confidence, triples=ans.triples)
-        m = re.search(r"why\s+(?:is|are)\s+(?:a\s+|an\s+)?(\w+)\??", lower)
-        if m:
-            ans = self.reasoner.why(m.group(1))
-            self.topic = m.group(1)
-            return self._emit(ans.text, method=ans.method, confidence=ans.confidence, triples=ans.triples)
-        m = re.search(r"why\s+(\w+)\??$", lower)
-        if m:
-            ans = self.reasoner.why(m.group(1))
-            self.topic = m.group(1)
-            return self._emit(ans.text, method=ans.method, confidence=ans.confidence, triples=ans.triples)
-        # Hindi-ish can/is patterns
-        m = re.search(r"(\w+)\s+(?:ud\s*sakta|fly\s*kar\s*sakta)\s*(?:hai)?\??", lower)
-        if m:
-            ans = self.reasoner.reason(_singularize(m.group(1)), "can", "fly")
-            self.topic = _singularize(m.group(1))
-            return self._emit(ans.text, method="hi_can", confidence=ans.confidence, triples=ans.triples)
-        m = re.search(r"(\w+)\s+kya\s+(?:hai|hota\s+hai)\??", lower)
-        if m:
-            rel = self.reasoner.cs.related(_singularize(m.group(1)))
-            self.topic = _singularize(m.group(1))
-            if rel:
-                text = f"About {self.topic}: " + "; ".join(str(t) for t in rel[:10]) + "."
-                return self._emit(text, method="hi_describe", confidence=0.7, triples=[str(t) for t in rel[:10]])
-
-        # Topic follow-up: "and cats?" after talking about dogs
-        m = re.search(r"^and\s+(\w+)\??$", lower)
+        # Topic follow-up: "and cats?" / "what about dogs?"
+        m = re.search(r"^(?:and|what about|how about)\s+(\w+)\??$", lower)
         if m and self.topic:
-            # reuse last predicate if possible
-            last = self.history[-2].meta if len(self.history) >= 2 else {}
-            pred = last.get("last_predicate", "is_a")
-            ans = self.reasoner.reason(m.group(1), pred if pred != "*" else "is_a", "*")
-            # better: dump related
-            rel = self.reasoner.cs.related(m.group(1))
+            ent = _singularize(m.group(1))
+            ans = self.reasoner.reason(ent, self.last_predicate, self.last_object)
+            if ans.success:
+                self.topic = ent
+                return self._emit(
+                    ans.text,
+                    method="followup_predicate",
+                    confidence=ans.confidence,
+                    triples=ans.triples,
+                    question=qinfo.to_dict(),
+                    last_predicate=self.last_predicate,
+                    last_object=self.last_object,
+                )
+            rel = self.reasoner.cs.related(ent)
             if rel:
-                text = f"About {m.group(1)}: " + "; ".join(str(t) for t in rel[:10]) + "."
-                return self._emit(text, method="followup", confidence=0.7, triples=[str(t) for t in rel[:10]])
+                self.topic = ent
+                text = f"About {ent}: " + "; ".join(str(t) for t in rel[:10]) + "."
+                return self._emit(
+                    text,
+                    method="followup",
+                    confidence=0.7,
+                    triples=[str(t) for t in rel[:10]],
+                    question=qinfo.to_dict(),
+                )
 
         # Entity dump for short messages
         tokens = re.findall(r"[a-zA-Z_]{3,}", lower)
+        stop = {"what", "which", "where", "when", "why", "how", "the", "and", "for", "about", "tell", "know"}
         for tok in tokens:
+            if tok in stop:
+                continue
             rel = self.reasoner.cs.related(tok)
-            if rel and len(tokens) <= 4:
+            if rel and len(tokens) <= 5:
                 self.topic = tok
                 text = f"About {tok}: " + "; ".join(str(t) for t in rel[:10]) + "."
-                return self._emit(text, method="entity_mention", confidence=0.55, triples=[str(t) for t in rel[:10]])
+                return self._emit(
+                    text,
+                    method="entity_mention",
+                    confidence=0.55,
+                    triples=[str(t) for t in rel[:10]],
+                    question=qinfo.to_dict(),
+                )
 
         return self._emit(
             "I could not map that to Finderbay tools or my common-sense knowledge. "
@@ -201,7 +176,149 @@ class OpenDomainChat:
             method="fallback",
             confidence=0.2,
             supported=False,
+            question=qinfo.to_dict(),
         )
+
+    def _answer_clause(self, msg: str, qinfo) -> Optional[dict[str, Any]]:
+        lower = msg.lower().strip()
+
+        # Route by ask_form / wh_type from analyzer
+        if qinfo.ask_form == "causal" or qinfo.wh_type == "why":
+            m = re.search(r"why\s+(?:can|does)\s+(\w+)\s+(\w+)\??", lower)
+            if m:
+                ans = self.reasoner.why(m.group(1), "can", m.group(2))
+                self.topic = m.group(1)
+                return self._emit(ans.text, method=ans.method, confidence=ans.confidence, triples=ans.triples, question=qinfo.to_dict())
+            m = re.search(r"why\s+(?:is|are)\s+(?:a\s+|an\s+)?(\w+)\??", lower)
+            if m:
+                ans = self.reasoner.why(m.group(1))
+                self.topic = m.group(1)
+                return self._emit(ans.text, method=ans.method, confidence=ans.confidence, triples=ans.triples, question=qinfo.to_dict())
+            m = re.search(r"why\s+(\w+)\??$", lower)
+            if m:
+                ans = self.reasoner.why(m.group(1))
+                self.topic = m.group(1)
+                return self._emit(ans.text, method=ans.method, confidence=ans.confidence, triples=ans.triples, question=qinfo.to_dict())
+
+        # can X Y? / does X Y? / is X a Y?
+        m = re.search(r"^can\s+(\w+)\s+(\w+)\??$", lower)
+        if m:
+            subj = _singularize(m.group(1))
+            ans = self.reasoner.reason(subj, "can", m.group(2))
+            self.topic = subj
+            self.last_predicate, self.last_object = "can", m.group(2)
+            return self._emit(
+                ans.text,
+                method=ans.method,
+                confidence=ans.confidence,
+                triples=ans.triples,
+                question=qinfo.to_dict(),
+                last_predicate="can",
+                last_object=m.group(2),
+            )
+
+        m = re.search(r"^is\s+(\w+)\s+(?:a|an)\s+(\w+)\??$", lower)
+        if m:
+            subj = _singularize(m.group(1))
+            obj = _singularize(m.group(2))
+            ans = self.reasoner.reason(subj, "is_a", obj)
+            self.topic = subj
+            self.last_predicate, self.last_object = "is_a", obj
+            return self._emit(
+                ans.text,
+                method=ans.method,
+                confidence=ans.confidence,
+                triples=ans.triples,
+                question=qinfo.to_dict(),
+                last_predicate="is_a",
+                last_object=obj,
+            )
+
+        m = re.search(r"^does\s+(\w+)\s+(\w+)\??$", lower)
+        if m:
+            subj = _singularize(m.group(1))
+            for pred in ("can", "has", "needs"):
+                ans = self.reasoner.reason(subj, pred, m.group(2))
+                if ans.success:
+                    self.topic = subj
+                    self.last_predicate, self.last_object = pred, m.group(2)
+                    return self._emit(
+                        ans.text,
+                        method=ans.method,
+                        confidence=ans.confidence,
+                        triples=ans.triples,
+                        question=qinfo.to_dict(),
+                        last_predicate=pred,
+                        last_object=m.group(2),
+                    )
+            ans = self.reasoner.reason(subj, "*", m.group(2))
+            return self._emit(ans.text, method=ans.method, confidence=ans.confidence, triples=ans.triples, question=qinfo.to_dict())
+
+        # where does X live / where is X
+        m = re.search(r"where\s+(?:does|do|is|are)\s+(\w+)\s*(?:live|lives)?\??", lower)
+        if m:
+            subj = _singularize(m.group(1))
+            for pred in ("lives_in", "is_in", "is_in_continent"):
+                ans = self.reasoner.reason(subj, pred, "*")
+                if ans.success:
+                    self.topic = subj
+                    return self._emit(ans.text, method="where", confidence=ans.confidence, triples=ans.triples, question=qinfo.to_dict())
+
+        # who helps / who is
+        m = re.search(r"who\s+(?:is|are)\s+(?:a\s+|an\s+)?(\w+)\??", lower)
+        if m:
+            ans = self.reasoner.reason(_singularize(m.group(1)), "is_a", "*")
+            self.topic = _singularize(m.group(1))
+            return self._emit(ans.text, method="who", confidence=ans.confidence, triples=ans.triples, question=qinfo.to_dict())
+
+        m = re.search(r"what(?:'s| is)?\s+(\w+)\s+used for\??", lower)
+        if m:
+            ans = self.reasoner.reason(m.group(1), "used_for", "*")
+            self.topic = m.group(1)
+            self.last_predicate, self.last_object = "used_for", "*"
+            return self._emit(ans.text, method=ans.method, confidence=ans.confidence, triples=ans.triples, question=qinfo.to_dict())
+
+        # define / what is X
+        if qinfo.ask_form == "define" or qinfo.wh_type == "what":
+            m = re.search(r"what(?:'s| is| are)?\s+(?:a\s+|an\s+|the\s+)?(\w+)\??$", lower)
+            if m and m.group(1) not in ("you", "ai", "this", "that"):
+                ent = _singularize(m.group(1))
+                rel = self.reasoner.cs.related(ent)
+                self.topic = ent
+                if rel:
+                    text = f"About {ent}: " + "; ".join(str(t) for t in rel[:12]) + "."
+                    return self._emit(text, method="define", confidence=0.75, triples=[str(t) for t in rel[:12]], question=qinfo.to_dict())
+
+        m = re.search(r"tell me about\s+(\w+)|what (?:do you know|is known) about\s+(\w+)", lower)
+        if m:
+            ent = m.group(1) or m.group(2)
+            rel = self.reasoner.cs.related(ent)
+            self.topic = ent
+            if not rel:
+                return self._emit(
+                    f"I do not yet have common-sense facts about '{ent}'.",
+                    method="lookup",
+                    confidence=0.2,
+                    question=qinfo.to_dict(),
+                )
+            text = f"About {ent}: " + "; ".join(str(t) for t in rel[:12]) + "."
+            return self._emit(text, method="describe", confidence=0.8, triples=[str(t) for t in rel[:12]], question=qinfo.to_dict())
+
+        # Hindi-ish can/is patterns
+        m = re.search(r"(\w+)\s+(?:ud\s*sakta|fly\s*kar\s*sakta)\s*(?:hai)?\??", lower)
+        if m:
+            ans = self.reasoner.reason(_singularize(m.group(1)), "can", "fly")
+            self.topic = _singularize(m.group(1))
+            return self._emit(ans.text, method="hi_can", confidence=ans.confidence, triples=ans.triples, question=qinfo.to_dict())
+        m = re.search(r"(\w+)\s+kya\s+(?:hai|hota\s+hai)\??", lower)
+        if m:
+            rel = self.reasoner.cs.related(_singularize(m.group(1)))
+            self.topic = _singularize(m.group(1))
+            if rel:
+                text = f"About {self.topic}: " + "; ".join(str(t) for t in rel[:10]) + "."
+                return self._emit(text, method="hi_describe", confidence=0.7, triples=[str(t) for t in rel[:10]], question=qinfo.to_dict())
+
+        return None
 
     def _emit(
         self,
@@ -211,7 +328,14 @@ class OpenDomainChat:
         confidence: float,
         triples: Optional[list[str]] = None,
         supported: bool = True,
+        question: Optional[dict] = None,
+        last_predicate: Optional[str] = None,
+        last_object: Optional[str] = None,
     ) -> dict[str, Any]:
+        if last_predicate:
+            self.last_predicate = last_predicate
+        if last_object is not None:
+            self.last_object = last_object
         payload = {
             "text": text,
             "method": method,
@@ -221,6 +345,9 @@ class OpenDomainChat:
             "topic": self.topic,
             "llm_dependency": False,
             "open_domain": True,
+            "question": question,
+            "last_predicate": self.last_predicate,
+            "last_object": self.last_object,
         }
         self.history.append(ChatTurn("assistant", text, payload))
         return payload

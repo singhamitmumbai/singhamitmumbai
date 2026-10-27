@@ -10,6 +10,61 @@ from ..reasoning.engine import ReasoningResult
 from .hindi import prefer_hindi, realize_invoice_hi, realize_pending_hi
 
 
+def _ask_meta(frame: dict) -> dict:
+    q = frame.get("question") or {}
+    cond = {c.get("field"): c.get("value") for c in (frame.get("conditions") or [])}
+    return {
+        "ask_form": cond.get("ask_form") or q.get("ask_form"),
+        "aggregation": cond.get("aggregation") or q.get("aggregation"),
+        "expected_answer": q.get("expected_answer") or frame.get("output"),
+        "wh_type": q.get("wh_type"),
+        "is_question": bool(q.get("is_question")),
+    }
+
+
+def _reshape_for_question(
+    text: str,
+    structured: dict,
+    table: Optional[dict],
+    ask: dict,
+    frame: dict,
+) -> tuple[str, dict]:
+    """Prefer short answers for count/sum/exists questions."""
+    form = ask.get("ask_form")
+    agg = ask.get("aggregation")
+    expected = ask.get("expected_answer")
+    count = structured.get("count")
+    if count is None and table is not None:
+        count = table.get("row_count")
+    total = structured.get("total_inr")
+    if total is None and table is not None:
+        total = (table.get("meta") or {}).get("total_inr")
+
+    if form == "count" or agg == "count" or expected in ("number", "numeric_answer"):
+        if agg == "sum" or form == "sum":
+            if total is not None:
+                structured = {**structured, "answer": float(total), "answer_kind": "sum"}
+                return f"{_format_inr(float(total))}.", structured
+        if count is not None and form != "sum" and agg != "sum":
+            structured = {**structured, "answer": int(count), "answer_kind": "count"}
+            focus = [f for f in ((frame.get("question") or {}).get("focus") or []) if f not in ("those", "them", "that", "it")]
+            label = focus[0] if focus else "matching items"
+            if form == "count" or agg == "count":
+                return f"{int(count)} {label}.", structured
+
+    if form == "sum" or agg == "sum":
+        if total is not None:
+            structured = {**structured, "answer": float(total), "answer_kind": "sum"}
+            return f"Total {_format_inr(float(total))}.", structured
+
+    if form == "exists" or expected == "yes_no":
+        exists = bool(count and count > 0)
+        structured = {**structured, "answer": exists, "answer_kind": "exists"}
+        return ("Yes." if exists else "No."), structured
+
+    return text, structured
+
+
 def _format_inr(amount: float) -> str:
     if amount >= 10_000_000:
         return f"₹{amount / 10_000_000:.2f} crore".replace(".00", "")
@@ -99,6 +154,7 @@ class ResponseGenerator:
                 break
 
         lang = frame.get("language") or "en"
+        ask = _ask_meta(frame)
         if op == "query_invoices":
             text, structured = self._realize_invoices(reasoning, table)
             if prefer_hindi(lang):
@@ -177,6 +233,9 @@ class ResponseGenerator:
             text = reasoning.message if reasoning else "Done."
             structured = {"reasoning": reasoning.to_dict() if reasoning else None}
 
+        # Compact numeric / yes-no answers when question analysis requested them
+        text, structured = _reshape_for_question(text, structured, table, ask, frame)
+
         # Validation: claims in text must match structure
         faithful = self._validate(text, structured)
         answer = {
@@ -185,6 +244,7 @@ class ResponseGenerator:
             "faithful": faithful,
             "table": table,
             "language": lang,
+            "question": frame.get("question"),
         }
         state.last_answer = answer
         return answer

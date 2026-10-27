@@ -53,6 +53,14 @@ Excluded at runtime: pretrained general-purpose LLMs.
 Perception modules ship **auditable stubs**; production acoustic/OCR checkpoints
 must declare provenance separately.
 
+## v0.9 advanced question understanding
+
+1. `nlu/questions.py` — WH-type, ask-form, polarity, aggregation, multi-clause split  
+2. Semantic frames carry `question` analysis + clause list  
+3. Dialogue follow-ups reuse last Finderbay frame (`what about…`, `how many of those`)  
+4. Response reshaping for count/sum/exists questions  
+5. Open-domain chat routes via the same question analyzer  
+
 ## v0.8 operational expansion
 
 1. `runtime/alerts.py` proactive monitor (overdue / low stock / expiry / pending)  
