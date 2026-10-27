@@ -230,6 +230,26 @@ INTENT_CUES: list[tuple[str, list[tuple[str, float]]]] = [
         ],
     ),
     (
+        "understand_scene",
+        [
+            ("understand the scene", 5.0),
+            ("understand this image", 5.0),
+            ("understand the image", 5.0),
+            ("understand objects", 4.5),
+            ("what do you see", 4.5),
+            ("what is in this image", 4.5),
+            ("what's in this image", 4.5),
+            ("see analyze understand", 5.0),
+            ("analyze and understand", 4.5),
+            ("look at this image", 4.0),
+            ("describe this image", 4.0),
+            ("describe the scene", 4.0),
+            ("search the object", 4.0),
+            ("identify objects", 4.0),
+            ("perceive image", 4.0),
+        ],
+    ),
+    (
         "detect_objects",
         [
             ("detect objects", 4.5),

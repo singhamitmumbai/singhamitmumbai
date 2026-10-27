@@ -80,13 +80,22 @@ class ToolRouter:
         }
 
     def _vision(self, args: dict[str, Any]) -> dict[str, Any]:
-        task = args.get("task") or "detect_objects"
+        task = args.get("task") or "understand_scene"
         image = args.get("image") or args.get("image_path") or args.get("path")
         if task == "vision_status" or task == "status":
             return {"ok": True, **self.ai.vision.status()}
+        if task in ("explain_object", "understand_object"):
+            label = str(args.get("label") or args.get("object") or "")
+            if not label:
+                return {"ok": False, "error": "label_required"}
+            return {"ok": True, **self.ai.vision.explain_object(label, image=image)}
         if not image:
             return {"ok": False, "error": "image_path_required"}
-        return {"ok": True, **self.ai.vision.analyze(image, task=task)}
+        search_unknown = args.get("search_unknown", True)
+        return {
+            "ok": True,
+            **self.ai.vision.analyze(image, task=task, search_unknown=bool(search_unknown)),
+        }
 
     def _coding(self, args: dict[str, Any]) -> dict[str, Any]:
         text = args.get("text") or args.get("instruction") or ""

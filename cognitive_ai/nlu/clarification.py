@@ -20,6 +20,7 @@ REQUIRED_SLOTS: dict[str, list[str]] = {
     "create_purchase_order": ["project_id", "vendor_id", "item", "qty", "unit_price_inr"],
     "create_po": ["project_id", "vendor_id", "item", "qty", "unit_price_inr"],
     "export_report": ["report_kind"],
+    "understand_scene": ["image_path"],
     "detect_objects": ["image_path"],
     "detect_vehicles": ["image_path"],
     "count_people": ["image_path"],

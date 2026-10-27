@@ -131,6 +131,11 @@ class CapabilityModel:
                 ["CSV/JSON register dumps only"],
             ),
             (
+                "understand_scene",
+                ["vision_analyze"],
+                ["See→analyze→understand; search unknown objects in local KB/encyclopedia"],
+            ),
+            (
                 "detect_objects",
                 ["vision_analyze"],
                 ["Ultralytics YOLO optional; stub mode without weights"],

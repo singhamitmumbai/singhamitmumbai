@@ -104,6 +104,14 @@ class FinderbayAssistant:
         if self._looks_like_jarvis(lower):
             return self.jarvis_handle(text, speak=speak)
 
+        # Vision understand shorthand: "understand image ./x.jpg"
+        if lower.startswith("understand image ") or lower.startswith("understand scene "):
+            path = text.split(None, 2)[-1].strip().strip("\"'")
+            return self.understand_image(path)
+        if lower.startswith("see image ") or lower.startswith("look at image "):
+            path = text.split(None, 2)[-1].strip().strip("\"'")
+            return self.understand_image(path)
+
         # Default → Complete AI (vision/coding/finderbay/llm/tools)
         out = self.complete.handle(text, mode=mode)
         out = dict(out)
@@ -164,12 +172,27 @@ class FinderbayAssistant:
 
     def see(self, image: str, *, task: str = "detect_objects") -> dict[str, Any]:
         result = self.vision.analyze(image, task=task)
+        text = result.get("text") or (
+            f"Vision {task}: count={result.get('count')} engine={result.get('engine')}"
+        )
         return self._tag(
             {
-                "text": f"Vision {task}: count={result.get('count')} engine={result.get('engine')}",
+                "text": text,
                 "structured": result,
             },
             route="vision",
+        )
+
+    def understand_image(self, image: str, *, search_unknown: bool = True) -> dict[str, Any]:
+        """See → analyze → understand; search objects that are not understood."""
+        result = self.vision.understand(image, search_unknown=search_unknown)
+        return self._tag(
+            {
+                "text": result.get("text") or "Vision understanding complete.",
+                "structured": result,
+                "verified": bool((result.get("understand") or {}).get("all_understood")),
+            },
+            route="vision_understand",
         )
 
     def speak(self, text: str) -> dict[str, Any]:

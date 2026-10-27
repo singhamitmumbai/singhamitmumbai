@@ -134,6 +134,13 @@ def realize_vision_hi(structured: dict[str, Any], op: str) -> str:
         return f"आग/धुआँ अलर्ट: {alert} (इंजन={engine})।"
     if op == "vision_status":
         return "कंप्यूटर विज़न तैयार है (YOLO_Projects)।"
+    if op == "understand_scene":
+        und = int((structured.get("understand") or {}).get("understood_count") or 0)
+        unk = int((structured.get("understand") or {}).get("unknown_count") or 0)
+        return (
+            f"दृश्य समझ: {num_hi(und)} वस्तुएँ समझीं, "
+            f"{num_hi(unk)} अज्ञात (इंजन={engine})।"
+        )
     n = int(structured.get("count") or 0)
     return f"{num_hi(n)} वस्तुएँ पहचानी गईं (इंजन={engine})।"
 

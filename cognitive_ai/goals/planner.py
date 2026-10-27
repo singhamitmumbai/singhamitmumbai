@@ -417,6 +417,7 @@ class OperatorPlanner:
             return plan
 
         vision_ops = {
+            "understand_scene",
             "detect_objects",
             "detect_vehicles",
             "count_people",
@@ -438,6 +439,8 @@ class OperatorPlanner:
                 vision_task = "scan_document"
             elif op_name == "vision_status":
                 vision_task = "vision_status"
+            elif op_name == "understand_scene":
+                vision_task = "understand_scene"
             steps = [
                 PlanStepRecord(
                     operator="vision_analyze",

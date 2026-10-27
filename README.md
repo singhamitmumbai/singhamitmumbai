@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.9.0) + **Finderbay Assistant** + **JARVIS full stack** — voice, memory, vision, planning, gated computer control, learning, verified tool workflows:
+**Complete AI** (v1.10.0) + **Finderbay Assistant** + **JARVIS** + **Vision understand** — voice, memory, vision (see→analyze→understand→search), planning, gated computer control, learning, verified tool workflows:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
@@ -37,6 +37,21 @@ python -m cognitive_ai chat --domain complete
 Product: **Complete AI** / **Finderbay Assistant** / **JARVIS tools**. `human_level_agi=false`.  
 Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.
 
+### What v1.10 adds — Vision understand loop
+
+| Piece | Role |
+|------|------|
+| `vision/understand.py` | **See → Analyze → Understand**; search if unknown |
+| `vision/knowledge.py` | Local object knowledge + learned facts |
+| `vision/search.py` | Encyclopedia / partial / context search for unknown labels |
+| NLU `understand_scene` | “What do you see / understand this image …” |
+| Tools | `TOOL vision {"task":"understand_scene",...}` · `vision.understand` |
+
+```bash
+python -m cognitive_ai vision --task understand_scene --image ./crowd_people.jpg
+python -m cognitive_ai assistant --ask "Understand the scene in image ./traffic_cars.jpg"
+```
+
 ### What v1.9 adds — complete JARVIS full code
 
 | Piece | Role |
@@ -59,7 +74,7 @@ Tool contracts, job store, provenance memory, material shortage skill, voice PTT
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.9.0.zip
+# → dist/Complete_Non_LLM_AI_v1.10.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.

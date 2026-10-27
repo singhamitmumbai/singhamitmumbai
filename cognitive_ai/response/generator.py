@@ -256,6 +256,7 @@ class ResponseGenerator:
             )
             structured = {"report_ready": True, **rep}
         elif op in (
+            "understand_scene",
             "detect_objects",
             "detect_vehicles",
             "count_people",
@@ -275,6 +276,7 @@ class ResponseGenerator:
         # Compact numeric / yes-no answers when question analysis requested them
         # (skip for vision — adapters already realize counts with the right labels)
         if op not in (
+            "understand_scene",
             "detect_objects",
             "detect_vehicles",
             "count_people",
@@ -501,6 +503,16 @@ class ResponseGenerator:
                 f"{vision.get('note') or 'Custom PPE weights needed for hat/vest/mask.'}"
             )
             return text, {**vision, "count": pc, "ok": True}
+        if op == "understand_scene":
+            summary = vision.get("text") or (vision.get("understand") or {}).get("summary") or ""
+            und = (vision.get("understand") or {}).get("understood_count", 0)
+            unk = (vision.get("understand") or {}).get("unknown_count", 0)
+            searches = (vision.get("understand") or {}).get("search_count", 0)
+            if not summary:
+                summary = f"Saw {count} object(s); understood={und}, unknown={unk}, searches={searches}."
+            else:
+                summary = f"{summary} (understood={und}, unknown={unk}, searches={searches}, engine={engine})."
+            return summary, {**vision, "count": count, "ok": True}
 
         # detect_objects default
         if counts:

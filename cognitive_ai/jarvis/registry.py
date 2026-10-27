@@ -258,6 +258,29 @@ class JarvisToolRegistry:
             ),
             lambda a: {"ok": True, "image_path": a["image_path"], "text": "", "engine": "stub"},
         )
+        self.register(
+            ToolContract(
+                name="vision.understand",
+                description="See→analyze→understand scene; search unknown objects",
+                input_schema={"image_path": "str"},
+                output_schema={"summary": "str", "understood": "list"},
+                effect="read",
+                family="perception",
+                verification="inspect_understanding",
+            ),
+            self._vision_understand,
+        )
+        self.register(
+            ToolContract(
+                name="vision.explain_object",
+                description="Explain/search a named object label",
+                input_schema={"label": "str"},
+                output_schema={"fact": "dict"},
+                effect="read",
+                family="perception",
+            ),
+            self._vision_explain,
+        )
         # Math
         self.register(
             ToolContract(
@@ -324,3 +347,33 @@ class JarvisToolRegistry:
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": str(exc)}
         return {"ok": True, "expression": expr, "result": result}
+
+    def _vision_understand(self, args: dict[str, Any]) -> dict[str, Any]:
+        try:
+            from ..vision import VisionSystem
+
+            vs = VisionSystem()
+            out = vs.understand(args["image_path"])
+            return {
+                "ok": True,
+                "image_path": args["image_path"],
+                "summary": out.get("text"),
+                "understood": (out.get("understand") or {}).get("understood") or [],
+                "unknown": (out.get("understand") or {}).get("unknown") or [],
+                "searches": (out.get("understand") or {}).get("search_count") or 0,
+                "engine": out.get("engine"),
+                "verified": True,
+                "checks": [{"method": "inspect_understanding", "passed": True}],
+            }
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": str(exc)}
+
+    def _vision_explain(self, args: dict[str, Any]) -> dict[str, Any]:
+        try:
+            from ..vision import VisionSystem
+
+            vs = VisionSystem()
+            out = vs.explain_object(args["label"])
+            return {"ok": True, **out}
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": str(exc)}

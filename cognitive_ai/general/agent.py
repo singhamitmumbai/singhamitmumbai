@@ -33,6 +33,7 @@ FINDERBAY_HINTS = {
     "create_purchase_order",
     "query_vendors",
     "export_report",
+    "understand_scene",
     "detect_objects",
     "detect_vehicles",
     "count_people",

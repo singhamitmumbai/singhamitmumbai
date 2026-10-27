@@ -32,7 +32,9 @@ TOOL_AWARE_SYSTEM = (
     DEFAULT_SYSTEM
     + "\n\nYou may call local Complete AI / Finderbay Assistant tools by emitting lines like:\n"
     'TOOL finderbay {"text": "Show unpaid invoices for Project A"}\n'
+    'TOOL vision {"task": "understand_scene", "image": "./crowd_people.jpg"}\n'
     'TOOL vision {"task": "count_people", "image": "./crowd_people.jpg"}\n'
+    'TOOL vision {"task": "explain_object", "label": "rebar"}\n'
     'TOOL coding {"text": "generate function add(a, b)"}\n'
     'TOOL alerts {"project_id": "project_a"}\n'
     'TOOL memory {"action": "remember", "key": "user_name", "value": "Alex"}\n'

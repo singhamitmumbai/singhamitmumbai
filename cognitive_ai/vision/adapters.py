@@ -239,6 +239,7 @@ class VisionAdapters:
             "scan_document": self.scan_document,
             "vision_status": lambda _img=None, **_k: self.status(),
         }
+        # understand_* handled by VisionSystem.understanding
         fn = dispatch.get(task)
         if fn is None:
             return {"task": task, "error": f"unknown_vision_task:{task}", "detections": []}

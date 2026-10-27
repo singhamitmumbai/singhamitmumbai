@@ -78,6 +78,7 @@ class LanguageUnderstanding:
         "create_purchase_order",
         "query_vendors",
         "export_report",
+        "understand_scene",
         "detect_objects",
         "detect_vehicles",
         "count_people",
@@ -174,6 +175,7 @@ class LanguageUnderstanding:
         # Computer vision ops win when explicit CV cues are present
         # (but not when document_qa / OCR field extraction is clearly intended)
         vision_ops = {
+            "understand_scene",
             "detect_objects",
             "detect_vehicles",
             "count_people",
@@ -193,6 +195,7 @@ class LanguageUnderstanding:
         ):
             for v in (
                 "vision_status",
+                "understand_scene",
                 "detect_fire",
                 "detect_vehicles",
                 "count_people",
@@ -288,6 +291,7 @@ class LanguageUnderstanding:
             (("vehicle", "vehicles", "cars", "trucks"), "detect_vehicles"),
             (("people", "persons", "crowd"), "count_people"),
             (("fire", "smoke"), "detect_fire"),
+            (("understand", "what do you see", "describe this image", "what's in this"), "understand_scene"),
             (("yolo", "object detection", "detect objects"), "detect_objects"),
             (("vision status", "cv capabilities"), "vision_status"),
         ]

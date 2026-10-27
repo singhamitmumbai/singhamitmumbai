@@ -392,6 +392,7 @@ class CompleteNonLLMAI:
         answer = self.responder.generate(self.state, self.executor, self.executor.last_reasoning)
         # Surface conflict note in text when present (skip unrelated alias noise for vision)
         vision_ops = {
+            "understand_scene",
             "detect_objects",
             "detect_vehicles",
             "count_people",
