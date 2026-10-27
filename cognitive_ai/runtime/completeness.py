@@ -70,6 +70,15 @@ REQUIRED_MODULES = [
     "cognitive_ai.thinking",
     "cognitive_ai.thinking.deliberator",
     "cognitive_ai.thinking.attach",
+    "cognitive_ai.runtime.full_suite",
+    "cognitive_ai.benchmarks.scan_like",
+    "cognitive_ai.benchmarks.transfer_bench",
+    "cognitive_ai.perception.model_registry",
+    "cognitive_ai.perception.ocr_layout",
+    "cognitive_ai.perception.speech_streaming",
+    "cognitive_ai.domains.finderbay.auth",
+    "cognitive_ai.domains.finderbay.payments",
+    "cognitive_ai.domains.finderbay.contracts",
 ]
 
 
@@ -122,6 +131,15 @@ REQUIRED_ATTRS = {
     ],
     "cognitive_ai.thinking.deliberator": ["ThinkingSystem", "Deliberation", "think_about"],
     "cognitive_ai.thinking.attach": ["deliberate", "merge_thinking", "think_or_abstain", "get_thinker"],
+    "cognitive_ai.runtime.full_suite": ["run_full_suite"],
+    "cognitive_ai.benchmarks.scan_like": ["run_scan_benchmark"],
+    "cognitive_ai.benchmarks.transfer_bench": ["run_transfer_benchmark"],
+    "cognitive_ai.perception.model_registry": ["list_models", "MODELS", "ensure_model"],
+    "cognitive_ai.perception.ocr_layout": ["LayoutOCR", "DocumentResult"],
+    "cognitive_ai.perception.speech_streaming": ["StreamingASR", "mic_stream_loop"],
+    "cognitive_ai.domains.finderbay.auth": ["AuthService"],
+    "cognitive_ai.domains.finderbay.payments": ["PaymentService"],
+    "cognitive_ai.domains.finderbay.contracts": ["ContractService"],
 }
 
 

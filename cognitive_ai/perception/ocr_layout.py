@@ -179,3 +179,21 @@ class LayoutOCR:
                 if len(parts) >= 2:
                     rows.append(parts)
         return [rows] if len(rows) >= 2 else []
+
+    def analyze_layout(self, doc: DocumentResult) -> dict[str, Any]:
+        """Summarize multi-page layout: columns, tables, key fields."""
+        col_hints: list[str] = []
+        for table in doc.tables[:5]:
+            if table and isinstance(table[0], list):
+                col_hints.extend(str(c) for c in table[0][:8])
+        dense_pages = sum(1 for p in doc.pages if len((p.text or "").split()) > 20)
+        return {
+            "page_count": doc.page_count,
+            "table_count": len(doc.tables),
+            "field_keys": sorted(doc.fields.keys()),
+            "column_hints": list(dict.fromkeys(col_hints))[:20],
+            "dense_pages": dense_pages,
+            "engine": doc.engine,
+            "version": doc.version,
+            "has_multi_page": doc.page_count > 1,
+        }

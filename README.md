@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.21.0) — universal **think→plan** on *every* entrypoint (CompleteAI · chat · Assistant · JARVIS · Finderbay · proto-AGI) + modern Chat UI. Still `human_level_agi=false`:
+**Complete AI** (v1.22.0) — **full-system upgrade** + `full-test` suite across thinking, KB, Finderbay auth/payments/contracts, speech/OCR, SCAN/transfer, proto-AGI. Still `human_level_agi=false`:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
@@ -37,6 +37,24 @@ python -m cognitive_ai chat --domain complete --port 8765
 
 Product: **Complete AI** / **Finderbay Assistant** / **JARVIS tools**. `human_level_agi=false`.  
 Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.
+
+### What v1.22 adds — Full-code upgrade + full-test
+
+| Piece | Upgrade |
+|------|------|
+| Common-sense KB | More tech/business/science facts + 18 inference rules |
+| SCAN / transfer | Extra payment/contract/composition cases; retail/farm/construction schemas |
+| Speech | Hindi / English / Indian-English factories + model registry |
+| OCR | `LayoutOCR.analyze_layout()` multi-page summary |
+| Auth | Multi-user directory, session info, permission listing |
+| `runtime/full_suite.py` | End-to-end pillar runner |
+| CLI | `python -m cognitive_ai full-test` |
+
+```bash
+python -m cognitive_ai full-test
+python -m cognitive_ai diagnostics
+pytest tests/test_full_upgrade_v122.py -q
+```
 
 ### What v1.21 adds — Thinking on every entrypoint
 
@@ -253,7 +271,7 @@ Tool contracts, job store, provenance memory, material shortage skill, voice PTT
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.21.0.zip
+# → dist/Complete_Non_LLM_AI_v1.22.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.

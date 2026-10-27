@@ -159,3 +159,18 @@ class ProductionSpeech:
             ],
             "metrics_hooks": ["wer", "number_accuracy", "name_accuracy", "semantic_task_success"],
         }
+
+
+def hindi_speech(**kwargs: Any) -> ProductionSpeech:
+    """Convenience factory for Hindi (hi-small) offline ASR."""
+    return ProductionSpeech(model_name=kwargs.pop("model_name", "hi-small"), **kwargs)
+
+
+def english_speech(**kwargs: Any) -> ProductionSpeech:
+    """Convenience factory for English (en-small) offline ASR."""
+    return ProductionSpeech(model_name=kwargs.pop("model_name", "en-small"), **kwargs)
+
+
+def indian_english_speech(**kwargs: Any) -> ProductionSpeech:
+    """Convenience factory for Indian English offline ASR."""
+    return ProductionSpeech(model_name=kwargs.pop("model_name", "en-in-small"), **kwargs)

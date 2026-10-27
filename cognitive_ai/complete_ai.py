@@ -461,6 +461,32 @@ class CompleteAI:
                 is False
             ),
         )
+        check(
+            "thinking_system",
+            lambda: (
+                (lambda d: {
+                    "ok": bool(d.plan) and d.human_level_agi is False,
+                    "strategy": d.strategy,
+                    "situation_type": d.situation_type,
+                })(
+                    __import__("cognitive_ai.thinking", fromlist=["think_about"]).think_about(
+                        "Explain gravity"
+                    )
+                )
+            ),
+        )
+        check(
+            "commonsense_kb",
+            lambda: (
+                (lambda s: {"ok": s["facts"] >= 2000, **s})(
+                    getattr(self.general.chat.reasoner, "cs", None).summary()
+                    if getattr(getattr(self.general.chat, "reasoner", None), "cs", None)
+                    else __import__(
+                        "cognitive_ai.commonsense.kb", fromlist=["CommonSenseKB"]
+                    ).CommonSenseKB().summary()
+                )
+            ),
+        )
         passed = sum(1 for c in checks if c["ok"])
         return {
             "product": self.PRODUCT_NAME,
@@ -473,6 +499,12 @@ class CompleteAI:
             "llm_at_runtime": bool(self.llm.available),
             "human_level_agi": False,
         }
+
+    def full_test(self, *, allow_live_search: bool = False) -> dict[str, Any]:
+        """Run the full-system upgrade suite (all pillars)."""
+        from .runtime.full_suite import run_full_suite
+
+        return run_full_suite(allow_live_search=allow_live_search)
 
     def status(self) -> dict[str, Any]:
         return {

@@ -77,12 +77,14 @@ def build_parser() -> argparse.ArgumentParser:
             "complete-ai",
             "diagnostics",
             "completeness",
+            "full-test",
+            "full-suite",
             "assistant",
             "jarvis",
             "agi-gap",
             "proto-agi",
         ],
-        help="Optional subcommand: jarvis, assistant, complete-ai, agi-gap, diagnostics, completeness, os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
+        help="Optional subcommand: jarvis, assistant, complete-ai, agi-gap, diagnostics, completeness, full-test, os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
     )
     p.add_argument(
         "--mode",
@@ -741,7 +743,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 print(assist.ask(line))
         return 0
 
-    if args.command in ("complete-ai", "diagnostics", "completeness"):
+    if args.command in ("complete-ai", "diagnostics", "completeness", "full-test", "full-suite"):
         from .complete_ai import CompleteAI
 
         ai = CompleteAI(seed_demo=True, persist_path="data/complete_ai/state.json")
@@ -750,6 +752,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 0 if ai.diagnostics()["ok"] else 1
         if args.command == "completeness":
             report = ai.completeness()
+            print(json.dumps(report, indent=2, default=str))
+            return 0 if report.get("ok") else 1
+        if args.command in ("full-test", "full-suite"):
+            report = ai.full_test(allow_live_search=False)
             print(json.dumps(report, indent=2, default=str))
             return 0 if report.get("ok") else 1
         if args.ask:

@@ -121,3 +121,28 @@ class AuthService:
         if not user or permission not in self.permissions_for(user):
             raise PermissionError(f"permission_denied:{permission}")
         return user
+
+    def list_users(self) -> list[dict[str, Any]]:
+        """Multi-user directory (no password hashes)."""
+        return [
+            {
+                "user_id": u.user_id,
+                "name": u.name,
+                "roles": list(u.roles),
+                "active": u.active,
+                "permissions": sorted(self.permissions_for(u)),
+            }
+            for u in self.users.values()
+        ]
+
+    def session_info(self, token: Optional[str]) -> Optional[dict[str, Any]]:
+        if not token or token not in self.sessions:
+            return None
+        sess = dict(self.sessions[token])
+        user = self.users.get(sess.get("user_id") or "")
+        sess["permissions"] = sorted(self.permissions_for(user)) if user else []
+        sess["name"] = user.name if user else None
+        return sess
+
+    def active_session_count(self) -> int:
+        return len(self.sessions)

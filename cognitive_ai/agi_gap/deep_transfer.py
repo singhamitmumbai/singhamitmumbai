@@ -61,6 +61,27 @@ DOMAIN_SCHEMAS: dict[str, dict[str, str]] = {
         "driver": "agent",
         "delivery": "goal",
     },
+    "retail": {
+        "checkout": "procedure",
+        "sku": "resource",
+        "store": "location",
+        "cashier": "agent",
+        "sale": "goal",
+    },
+    "farm": {
+        "planting": "procedure",
+        "seed": "resource",
+        "field": "location",
+        "farmer": "agent",
+        "harvest": "goal",
+    },
+    "construction": {
+        "build_plan": "procedure",
+        "material": "resource",
+        "site": "location",
+        "foreman": "agent",
+        "structure": "goal",
+    },
 }
 
 

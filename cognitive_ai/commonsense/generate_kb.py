@@ -610,6 +610,64 @@ def iter_facts() -> Iterator[tuple[str, str, str]]:
     for t in langs:
         yield t
 
+    # Computing / AI / office tech (v1.22)
+    tech = [
+        ("python", "is_a", "software"),
+        ("python", "is_a", "programming_language"),
+        ("python", "runs_on", "computer"),
+        ("sqlite", "is_a", "software"),
+        ("sqlite", "is_a", "database"),
+        ("sqlite", "runs_on", "computer"),
+        ("ocr", "is_a", "software_capability"),
+        ("ocr", "converts", "image_to_text"),
+        ("asr", "is_a", "software_capability"),
+        ("asr", "converts", "speech_to_text"),
+        ("yolo", "is_a", "vision_model"),
+        ("yolo", "detects", "objects"),
+        ("api", "is_a", "software_interface"),
+        ("http", "is_a", "protocol"),
+        ("json", "is_a", "data_format"),
+        ("markdown", "is_a", "data_format"),
+        ("invoice", "is_a", "business_document"),
+        ("contract", "is_a", "business_document"),
+        ("purchase_order", "is_a", "business_document"),
+        ("payment", "is_a", "business_event"),
+        ("warehouse", "is_a", "place"),
+        ("warehouse", "stores", "materials"),
+        ("cement", "is_a", "construction_material"),
+        ("steel", "is_a", "construction_material"),
+        ("gravity", "is_a", "science_topic"),
+        ("photosynthesis", "is_a", "science_topic"),
+        ("photosynthesis", "needs", "light"),
+        ("photosynthesis", "produces", "oxygen"),
+        ("atom", "part_of", "matter"),
+        ("matter", "is_a", "science_topic"),
+        ("cpu", "is_a", "computer_part"),
+        ("ram", "is_a", "computer_part"),
+        ("gpu", "is_a", "computer_part"),
+        ("complete_ai", "is_a", "software"),
+        ("complete_ai", "runs_on", "computer"),
+        ("complete_ai", "does_not_claim", "human_level_agi"),
+        ("vosk", "is_a", "speech_engine"),
+        ("tesseract", "is_a", "ocr_engine"),
+        ("ultralytics", "is_a", "vision_engine"),
+    ]
+    for t in tech:
+        yield t
+
+    # Everyday causal / howto seeds
+    howto = [
+        ("handwashing", "requires", "soap_and_water"),
+        ("cooking_rice", "requires", "water_and_heat"),
+        ("sending_email", "requires", "address_and_message"),
+        ("reserving_stock", "requires", "quantity_and_material"),
+        ("paying_invoice", "requires", "invoice_id_and_amount"),
+        ("crossing_road", "requires", "looking_both_ways"),
+        ("backing_up_files", "requires", "storage_target"),
+    ]
+    for t in howto:
+        yield t
+
 
 def build_rules() -> list[Rule]:
     specs = [
@@ -623,6 +681,15 @@ def build_rules() -> list[Rule]:
         ("profession_role", [("?p", "is_a", "profession"), ("?p", "helps", "?h")], [("?p", "serves", "?h")]),
         ("material_instance", [("?x", "can_be_made_of", "?m"), ("?m", "is_a", "material")], [("?x", "has_material_option", "?m")]),
         ("opposite_symmetric_check", [("?a", "opposite_of", "?b")], [("?a", "contrasts_with", "?b")]),
+        # v1.22 upgrades
+        ("inherit_cannot", [("?x", "is_a", "?y"), ("?y", "cannot", "?a")], [("?x", "cannot", "?a")]),
+        ("tech_runs_on", [("?s", "is_a", "software"), ("?s", "runs_on", "?p")], [("?s", "requires_platform", "?p")]),
+        ("science_part_of", [("?x", "part_of", "?y"), ("?y", "is_a", "science_topic")], [("?x", "related_science", "?y")]),
+        ("business_doc", [("?d", "is_a", "business_document")], [("?d", "needs", "verification")]),
+        ("safety_implies_caution", [("?x", "can_cause", "?h")], [("?x", "requires_caution", "true")]),
+        ("sport_activity", [("?s", "is_a", "sport")], [("?s", "is_a", "physical_activity")]),
+        ("language_communicate", [("?l", "is_a", "language")], [("?l", "used_for", "communication")]),
+        ("city_is_place", [("?c", "is_a", "city")], [("?c", "is_a", "place")]),
     ]
     rules = []
     for name, ants, cons in specs:

@@ -67,6 +67,42 @@ CASES = [
         "manage_task",
         {"project_id": "project_b"},
     ),
+    # v1.22 expanded compositional coverage
+    ScanCase(
+        "ch6",
+        "compositional_holdout",
+        "Show payments for Project B",
+        "query_payments",
+        {"project_id": "project_b"},
+    ),
+    ScanCase(
+        "ch7",
+        "compositional_holdout",
+        "Show contracts for Project A",
+        "query_contracts",
+        {"project_id": "project_a"},
+    ),
+    ScanCase(
+        "tl4",
+        "train_like",
+        "Show payments for Project A",
+        "query_payments",
+        {"project_id": "project_a"},
+    ),
+    ScanCase(
+        "tl5",
+        "train_like",
+        "Show contracts",
+        "query_contracts",
+        {},
+    ),
+    ScanCase(
+        "ch8",
+        "compositional_holdout",
+        "Reserve 3 bags of steel for Project A",
+        "reserve_stock",
+        {"reserve_qty": 3.0, "project_id": "project_a"},
+    ),
 ]
 
 
