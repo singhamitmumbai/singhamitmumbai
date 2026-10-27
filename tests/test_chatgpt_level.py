@@ -52,7 +52,9 @@ CHATGPT_BATTERY: list[tuple[str, list[str]]] = [
 
 
 def test_version_chatgpt_level():
-    assert __version__.startswith("1.14")
+    # ChatGPT-level stack introduced in 1.14; still present in later minors
+    major_minor = tuple(int(x) for x in __version__.split(".")[:2])
+    assert major_minor >= (1, 14)
 
 
 def test_smart_frame_chatgpt_fields():

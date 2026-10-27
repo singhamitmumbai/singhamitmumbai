@@ -79,8 +79,10 @@ def build_parser() -> argparse.ArgumentParser:
             "completeness",
             "assistant",
             "jarvis",
+            "agi-gap",
+            "proto-agi",
         ],
-        help="Optional subcommand: jarvis, assistant, complete-ai, diagnostics, completeness, os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
+        help="Optional subcommand: jarvis, assistant, complete-ai, agi-gap, diagnostics, completeness, os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
     )
     p.add_argument(
         "--mode",
@@ -523,7 +525,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0 if report.failed == 0 else 1
 
     if args.command == "bench":
-        from .benchmarks import run_scan_benchmark, run_transfer_benchmark
+        from .benchmarks import (
+            run_hard_novel_benchmark,
+            run_scan_benchmark,
+            run_transfer_benchmark,
+        )
         from .commonsense.eval_suite import run_commonsense_eval
         from .nlu.pipeline import LanguageUnderstanding
         from .perception.model_registry import list_models
@@ -532,15 +538,34 @@ def main(argv: Optional[list[str]] = None) -> int:
             "commonsense": run_commonsense_eval(),
             "scan": run_scan_benchmark(LanguageUnderstanding().parse),
             "transfer": run_transfer_benchmark(),
+            "hard_novel": run_hard_novel_benchmark(allow_live_search=False),
             "speech_models": list_models(),
+            "human_level_agi": False,
         }
         print(json.dumps(payload, indent=2, default=str))
         ok = (
             payload["commonsense"]["failed"] == 0
             and payload["transfer"]["passed"]
             and payload["scan"]["by_split"]["train_like"]["passed"] >= 1
+            and payload["hard_novel"]["passed"] >= 8
         )
         return 0 if ok else 1
+
+    if args.command in ("agi-gap", "proto-agi"):
+        from .agi_gap import ProtoAGIStack, run_agi_gap_demo
+
+        stack = ProtoAGIStack()
+        if args.ask:
+            out = stack.handle(args.ask)
+            print(out.get("text") or json.dumps(out, indent=2, default=str))
+            return 0 if out.get("ok", True) or out.get("route") == "abstain" else 1
+        if args.eval:
+            report = stack.run_self_eval()
+            print(json.dumps(report, indent=2, default=str))
+            return 0 if report.get("ok") else 1
+        demo = run_agi_gap_demo()
+        print(json.dumps(demo, indent=2, default=str)[:8000])
+        return 0
 
     if args.command == "api":
         from .api.server import serve_api

@@ -386,6 +386,16 @@ class CompleteAI:
             ).SmartRouter().decide("shortage report for Site-7").route
             == "jarvis",
         )
+        check(
+            "proto_agi_stack",
+            lambda: (
+                __import__("cognitive_ai.agi_gap", fromlist=["ProtoAGIStack"])
+                .ProtoAGIStack()
+                .status()
+                .get("human_level_agi")
+                is False
+            ),
+        )
         passed = sum(1 for c in checks if c["ok"])
         return {
             "product": self.PRODUCT_NAME,
@@ -423,7 +433,9 @@ class CompleteAI:
                 "human_level_agi=false",
                 "General chat is ChatGPT-class via your API when a key is set",
                 "Tools (finderbay/vision/coding) execute locally",
+                "Proto-AGI gap stack advances learning/transfer/horizon — not AGI",
             ],
+            "proto_agi_stack": True,
         }
 
     def greeting(self) -> str:

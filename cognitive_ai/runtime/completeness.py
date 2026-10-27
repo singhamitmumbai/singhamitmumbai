@@ -54,6 +54,16 @@ REQUIRED_MODULES = [
     "cognitive_ai.nlu.smart_questions",
     "cognitive_ai.search.web_intel",
     "cognitive_ai.response.chatgpt_style",
+    "cognitive_ai.agi_gap.stack",
+    "cognitive_ai.agi_gap.world_knowledge",
+    "cognitive_ai.agi_gap.continual_skills",
+    "cognitive_ai.agi_gap.deep_transfer",
+    "cognitive_ai.agi_gap.long_horizon",
+    "cognitive_ai.agi_gap.multimodal_hub",
+    "cognitive_ai.agi_gap.lifelong_memory",
+    "cognitive_ai.agi_gap.metacognition",
+    "cognitive_ai.agi_gap.alignment",
+    "cognitive_ai.benchmarks.hard_novel",
 ]
 
 
@@ -82,6 +92,16 @@ REQUIRED_ATTRS = {
     "cognitive_ai.nlu.smart_questions": ["SmartQuestionUnderstanding"],
     "cognitive_ai.search.web_intel": ["IntelligentWebSearch", "SearchResult"],
     "cognitive_ai.response.chatgpt_style": ["ChatGPTStyleComposer", "ChatGPTStyleAnswer"],
+    "cognitive_ai.agi_gap.stack": ["ProtoAGIStack", "run_agi_gap_demo"],
+    "cognitive_ai.agi_gap.world_knowledge": ["WorldKnowledgeHub", "OpenWorldFrame"],
+    "cognitive_ai.agi_gap.continual_skills": ["GrowingSkillLibrary"],
+    "cognitive_ai.agi_gap.deep_transfer": ["DeepTransferEngine"],
+    "cognitive_ai.agi_gap.long_horizon": ["LongHorizonAgent"],
+    "cognitive_ai.agi_gap.multimodal_hub": ["AlwaysOnMultimodalHub"],
+    "cognitive_ai.agi_gap.lifelong_memory": ["LifelongMemory"],
+    "cognitive_ai.agi_gap.metacognition": ["MetaCognition"],
+    "cognitive_ai.agi_gap.alignment": ["AlignmentGuard"],
+    "cognitive_ai.benchmarks.hard_novel": ["run_hard_novel_benchmark"],
 }
 
 

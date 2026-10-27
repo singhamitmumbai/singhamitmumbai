@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.14.0) — ChatGPT-level non-LLM brain: natural answers, smarter questions, intelligent web search, SmartRouter, thermal vision, JARVIS tools:
+**Complete AI** (v1.15.0) — ChatGPT-level chat + **proto-AGI gap stack** (learning, open-world, transfer, long-horizon, multimodal, lifelong memory, metacognition, hard evals). Still `human_level_agi=false`:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
@@ -36,6 +36,30 @@ python -m cognitive_ai chat --domain complete
 
 Product: **Complete AI** / **Finderbay Assistant** / **JARVIS tools**. `human_level_agi=false`.  
 Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.
+
+### What v1.15 adds — Proto-AGI gap upgrades (not AGI)
+
+| Piece | Role |
+|------|------|
+| `agi_gap/world_knowledge.py` | Much larger combinatorial world/commonsense + open-world frames |
+| `agi_gap/continual_skills.py` | Continual learning + auto-growing verified skill library |
+| `agi_gap/deep_transfer.py` | Cross-domain schema transfer + analogy |
+| `agi_gap/long_horizon.py` | Bounded long-horizon act→verify→reflect loops |
+| `agi_gap/multimodal_hub.py` | Always-on speech/OCR/vision channel orchestration |
+| `agi_gap/lifelong_memory.py` | Episodic consolidation into semantic/procedural memory |
+| `agi_gap/metacognition.py` | Strategy selection, abstain, self-model limits |
+| `agi_gap/alignment.py` | Product alignment guard + honesty badge |
+| `benchmarks/hard_novel.py` | Hard evals on novel tasks **outside Finderbay** |
+
+```bash
+python -m cognitive_ai agi-gap --demo
+python -m cognitive_ai agi-gap --eval
+python -m cognitive_ai agi-gap --ask "multi-step research photosynthesis then verify"
+python -m cognitive_ai bench
+pytest tests/test_agi_gap_v115.py -q
+```
+
+> These modules **narrow the gap** toward broader intelligence. They do **not** achieve AGI.
 
 ### What v1.14 adds — ChatGPT-level non-LLM chat
 
@@ -131,7 +155,7 @@ Tool contracts, job store, provenance memory, material shortage skill, voice PTT
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.14.0.zip
+# → dist/Complete_Non_LLM_AI_v1.15.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.
