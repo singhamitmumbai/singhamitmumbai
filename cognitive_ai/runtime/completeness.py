@@ -63,6 +63,7 @@ REQUIRED_MODULES = [
     "cognitive_ai.agi_gap.lifelong_memory",
     "cognitive_ai.agi_gap.metacognition",
     "cognitive_ai.agi_gap.alignment",
+    "cognitive_ai.agi_gap.general_learning",
     "cognitive_ai.benchmarks.hard_novel",
 ]
 
@@ -101,6 +102,7 @@ REQUIRED_ATTRS = {
     "cognitive_ai.agi_gap.lifelong_memory": ["LifelongMemory"],
     "cognitive_ai.agi_gap.metacognition": ["MetaCognition"],
     "cognitive_ai.agi_gap.alignment": ["AlignmentGuard"],
+    "cognitive_ai.agi_gap.general_learning": ["GeneralLearner"],
     "cognitive_ai.benchmarks.hard_novel": ["run_hard_novel_benchmark"],
 }
 

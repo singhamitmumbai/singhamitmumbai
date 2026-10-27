@@ -133,3 +133,48 @@ class AlwaysOnMultimodalHub:
             },
             "human_level_agi": False,
         }
+
+    def fuse(
+        self,
+        inputs: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Confidence-weighted multimodal fusion of several ingest results/payloads.
+
+        Each item: {modality, payload} or prior ingest result with observation.
+        """
+        parts: list[dict[str, Any]] = []
+        for item in inputs:
+            if "observation" in item or item.get("ok") is not None and "channel" in item:
+                parts.append(item)
+                continue
+            modality = str(item.get("modality") or "text")
+            payload = item.get("payload", item.get("text", ""))
+            parts.append(self.ingest(payload, modality=modality, source=str(item.get("source") or "fuse")))
+        # Weight by (1 - uncertainty)
+        texts: list[str] = []
+        weight_sum = 0.0
+        conf = 0.0
+        modalities: list[str] = []
+        for p in parts:
+            obs = p.get("observation") or {}
+            if isinstance(obs, dict):
+                unc = float(obs.get("uncertainty") or 0.3)
+                val = obs.get("extracted_value") or obs.get("extracted") or ""
+                mod = obs.get("modality") or (p.get("channel") or {}).get("name") or "text"
+            else:
+                unc, val, mod = 0.3, str(obs), "text"
+            w = max(0.05, 1.0 - unc)
+            texts.append(f"[{mod} w={w:.2f}] {val}")
+            weight_sum += w
+            conf += w * (1.0 - unc)
+            modalities.append(str(mod))
+        fused_conf = (conf / weight_sum) if weight_sum else 0.0
+        return {
+            "ok": bool(parts),
+            "fused_text": " | ".join(str(t) for t in texts),
+            "modalities": modalities,
+            "confidence": round(fused_conf, 3),
+            "parts": len(parts),
+            "human_level_agi": False,
+            "note": "Fusion is heuristic — not human-level multimodal understanding.",
+        }

@@ -17,7 +17,8 @@ from cognitive_ai.version import __version__
 
 
 def test_version_115():
-    assert __version__.startswith("1.15")
+    major_minor = tuple(int(x) for x in __version__.split(".")[:2])
+    assert major_minor >= (1, 15)
 
 
 def test_world_knowledge_expansion():
@@ -28,6 +29,7 @@ def test_world_knowledge_expansion():
     frame = hub.understand("Does a penguin relate to kinetic_energy in asia?")
     assert frame.entities
     assert frame.open_world is True
+    assert frame.hypotheses is not None
 
 
 def test_continual_skill_growth():

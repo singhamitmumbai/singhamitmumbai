@@ -195,11 +195,96 @@ class OpenWorldFrame:
     known_facts: list[str] = field(default_factory=list)
     unknowns: list[str] = field(default_factory=list)
     schema_hints: list[str] = field(default_factory=list)
+    hypotheses: list[str] = field(default_factory=list)
+    relations: list[str] = field(default_factory=list)
     confidence: float = 0.0
     open_world: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+def iter_mega_world_facts() -> Iterator[tuple[str, str, str]]:
+    """Second-wave expansion: occupations × tools, cities × countries, food chain."""
+    cities = {
+        "mumbai": "india",
+        "delhi": "india",
+        "bengaluru": "india",
+        "london": "uk",
+        "paris": "france",
+        "tokyo": "japan",
+        "sydney": "australia",
+        "cairo": "egypt",
+        "nairobi": "kenya",
+        "toronto": "canada",
+        "new_york": "usa",
+        "berlin": "germany",
+        "sao_paulo": "brazil",
+        "seoul": "south_korea",
+        "dubai": "uae",
+    }
+    for city, country in cities.items():
+        yield (city, "is_a", "city")
+        yield (city, "is_in", country)
+        yield (country, "is_a", "country")
+
+    foods = ["rice", "wheat", "bread", "milk", "egg", "apple", "banana", "potato", "tomato", "lentil"]
+    for f in foods:
+        yield (f, "is_a", "food")
+        yield (f, "can_be_eaten", "true")
+        yield (f, "provides", "nutrition")
+
+    tools_extra = {
+        "laptop": "computing",
+        "server": "computing",
+        "router": "networking",
+        "microscope": "observation",
+        "telescope": "observation",
+        "thermometer": "measurement",
+        "scale": "measurement",
+        "calendar": "planning",
+        "checklist": "planning",
+    }
+    for t, use in tools_extra.items():
+        yield (t, "is_a", "tool")
+        yield (t, "used_for", use)
+
+    # Verb affordances grid
+    verbs = ["open", "close", "start", "stop", "measure", "compare", "sort", "filter", "merge", "split"]
+    objects = ["file", "door", "engine", "dataset", "list", "document"]
+    for v in verbs:
+        yield (v, "is_a", "action")
+    for o in objects:
+        yield (o, "is_a", "object")
+        for v in verbs[:4]:
+            yield (v, "can_apply_to", o)
+
+    # Simple ecology
+    ecology = [
+        ("plant", "produces", "oxygen"),
+        ("animal", "consumes", "oxygen"),
+        ("plant", "consumes", "carbon_dioxide"),
+        ("decomposer", "recycles", "nutrients"),
+        ("predator", "hunts", "prey"),
+        ("herbivore", "eats", "plants"),
+        ("carnivore", "eats", "animals"),
+        ("omnivore", "eats", "plants_and_animals"),
+    ]
+    for t in ecology:
+        yield t
+
+    # Units
+    for u, kind in [
+        ("meter", "length"),
+        ("kilogram", "mass"),
+        ("second", "time"),
+        ("ampere", "current"),
+        ("kelvin", "temperature"),
+        ("mole", "amount"),
+        ("candela", "luminosity"),
+    ]:
+        yield (u, "is_a", "si_unit")
+        yield (u, "measures", kind)
 
 
 class WorldKnowledgeHub:
@@ -215,7 +300,7 @@ class WorldKnowledgeHub:
         if self.expanded:
             return self.stats()
         base_facts, _ = materialize()
-        extra = list(iter_expanded_world_facts())
+        extra = list(iter_expanded_world_facts()) + list(iter_mega_world_facts())
         before = len(self.kb.kb)
         for s, p, o in extra:
             self.kb.kb.assert_fact(s, p, o)
@@ -274,7 +359,24 @@ class WorldKnowledgeHub:
         # Suggest schema probes for unknowns
         for u in unknown[:5]:
             schemas.append(f"probe:{u}:is_a|used_for|can|located_in")
-        conf = 0.3 + 0.05 * len(known) - 0.03 * len(unknown)
+        # Hypotheses for unknowns (open-world)
+        hypotheses: list[str] = []
+        for u in unknown[:5]:
+            if u.endswith("tion") or u.endswith("ity"):
+                hypotheses.append(f"{u} may_be abstract_concept")
+            elif u.endswith("er") or u.endswith("or"):
+                hypotheses.append(f"{u} may_be agent_or_tool")
+            else:
+                hypotheses.append(f"{u} may_be entity — ask is_a/used_for/located_in")
+        # Pairwise shallow relations among known typed entities
+        relations: list[str] = []
+        typed = [e for e, t in types.items() if t not in ("unknown",)]
+        for i, a in enumerate(typed[:5]):
+            for b in typed[i + 1 : 6]:
+                relations.append(f"co_mentioned({a},{b})")
+                if types.get(a) == types.get(b):
+                    relations.append(f"same_type({a},{b},{types[a]})")
+        conf = 0.3 + 0.05 * len(known) - 0.03 * len(unknown) + 0.02 * len(relations)
         return OpenWorldFrame(
             text=text,
             entities=ents[:12],
@@ -282,5 +384,20 @@ class WorldKnowledgeHub:
             known_facts=known[:20],
             unknowns=unknown[:10],
             schema_hints=list(dict.fromkeys(schemas))[:10],
+            hypotheses=hypotheses[:8],
+            relations=relations[:12],
             confidence=max(0.1, min(0.95, conf)),
         )
+
+    def hypothesize(self, entity: str) -> list[str]:
+        """Generate open-world probe questions for an unknown/known entity."""
+        e = (entity or "").lower().strip()
+        rel = self.kb.related(e)
+        if rel:
+            return [f"known:{t}" for t in rel[:6]]
+        return [
+            f"Is {e} a kind of animal, tool, place, or concept?",
+            f"What is {e} used for?",
+            f"Where is {e} typically found?",
+            f"What can {e} do or cause?",
+        ]

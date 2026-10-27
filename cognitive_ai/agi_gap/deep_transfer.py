@@ -194,3 +194,44 @@ class DeepTransferEngine:
             "hint": "Provide entities present in DOMAIN_SCHEMAS",
             "human_level_agi": False,
         }
+
+    def compose_transfer(
+        self,
+        procedure_name: str,
+        *,
+        chain: list[tuple[str, str]],
+    ) -> DeepTransferResult:
+        """Multi-hop domain transfer: A→B→C… composing schema maps."""
+        current = procedure_name
+        mapped: list[str] = []
+        schema_acc: dict[str, str] = {}
+        last: Optional[DeepTransferResult] = None
+        for frm, to in chain:
+            last = self.transfer_domain(current, from_domain=frm, to_domain=to)
+            if not last.success:
+                return last
+            current = last.new_skill or current
+            mapped = last.mapped_steps
+            schema_acc.update(last.schema_map)
+        return DeepTransferResult(
+            True,
+            f"Composed transfer chain {chain} → '{current}'.",
+            mapped_steps=mapped,
+            schema_map=schema_acc,
+            new_skill=current,
+            details={"chain": chain},
+        )
+
+    def structural_overlap(self, domain_a: str, domain_b: str) -> dict[str, Any]:
+        a = DOMAIN_SCHEMAS.get(domain_a) or {}
+        b = DOMAIN_SCHEMAS.get(domain_b) or {}
+        roles_a = set(a.values())
+        roles_b = set(b.values())
+        shared = sorted(roles_a & roles_b)
+        return {
+            "domain_a": domain_a,
+            "domain_b": domain_b,
+            "shared_roles": shared,
+            "overlap": len(shared) / max(1, len(roles_a | roles_b)),
+            "human_level_agi": False,
+        }

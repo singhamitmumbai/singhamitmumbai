@@ -147,6 +147,50 @@ class MetaCognition:
             "human_level_agi": False,
         }
 
+    def critique(self, text: str, draft_answer: str, *, decision: Optional[MetaDecision] = None) -> dict[str, Any]:
+        """Post-hoc critique: unsupported claims, missing uncertainty, policy drift."""
+        issues: list[str] = []
+        draft = draft_answer or ""
+        if re.search(r"\b(?:definitely|guaranteed|100%|as an agi|i am conscious)\b", draft, re.I):
+            issues.append("overclaim")
+        if "human_level_agi" not in draft.lower() and decision and decision.risk in ("high",):
+            issues.append("missing_honesty_marker")
+        if len(draft.strip()) < 8:
+            issues.append("too_short")
+        if decision and decision.unknowns and not any(u in draft.lower() for u in decision.unknowns[:2]):
+            issues.append("ignored_unknowns")
+        score = max(0.0, 1.0 - 0.2 * len(issues))
+        return {
+            "ok": not issues,
+            "issues": issues,
+            "quality": round(score, 3),
+            "suggestion": (
+                "Add uncertainty and avoid overclaim." if issues else "Draft looks acceptable."
+            ),
+            "human_level_agi": False,
+        }
+
+    def debate_strategies(self, text: str, *, open_world: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+        """Propose top-2 strategies and pick winner by simple scoring."""
+        primary = self.decide(text, open_world=open_world)
+        # Force an alternate by masking primary cues lightly
+        alt_text = text
+        if primary.strategy == "local_kb":
+            alt = MetaDecision("web_search", 0.5, False, ["alt_search"])
+        elif primary.strategy == "web_search":
+            alt = MetaDecision("long_horizon", 0.5, False, ["alt_horizon"])
+        elif primary.strategy.startswith("tool_"):
+            alt = MetaDecision("ask_clarify", 0.45, False, ["alt_clarify"])
+        else:
+            alt = MetaDecision("local_kb", 0.45, False, ["alt_local"])
+        winner = primary if primary.confidence >= alt.confidence else alt
+        return {
+            "primary": primary.to_dict(),
+            "alternate": alt.to_dict(),
+            "winner": winner.strategy,
+            "human_level_agi": False,
+        }
+
     def self_model(self) -> dict[str, Any]:
         return {
             "strategies": list(self.STRATEGIES),

@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.15.0) — ChatGPT-level chat + **proto-AGI gap stack** (learning, open-world, transfer, long-horizon, multimodal, lifelong memory, metacognition, hard evals). Still `human_level_agi=false`:
+**Complete AI** (v1.16.0) — ChatGPT-level chat + **deepened proto-AGI gap stack** (general learning, open-world, deep transfer, long-horizon replanning, multimodal fusion, lifelong dream/consolidation, metacognition critique, alignment red-team). Still `human_level_agi=false`:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
@@ -36,6 +36,25 @@ python -m cognitive_ai chat --domain complete
 
 Product: **Complete AI** / **Finderbay Assistant** / **JARVIS tools**. `human_level_agi=false`.  
 Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.
+
+### What v1.16 adds — Deepened proto-AGI gap stack (still not AGI)
+
+| Pillar | Upgrade |
+|------|------|
+| General learning | `general_learning.py` — curriculum, replay, verified multi-source updates |
+| Open-world | Mega world facts, hypotheses, relation hints, probe generator |
+| Deep transfer | `compose_transfer` multi-hop + structural overlap |
+| Long-horizon | Failure→replan recovery subgoals + verify |
+| Multimodality | Confidence-weighted `fuse()` across channels |
+| Lifelong memory | Importance scoring + `dream()` spaced replay |
+| Metacognition | Strategy debate + post-hoc `critique()` |
+| Alignment/evals | Constitutional check + red-team battery; harder novel bench (15 cases) |
+
+```bash
+python -m cognitive_ai agi-gap --eval
+python -m cognitive_ai agi-gap --ask "multi-step research photosynthesis then verify"
+pytest tests/test_agi_gap_v116.py tests/test_agi_gap_v115.py -q
+```
 
 ### What v1.15 adds — Proto-AGI gap upgrades (not AGI)
 
@@ -155,7 +174,7 @@ Tool contracts, job store, provenance memory, material shortage skill, voice PTT
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.15.0.zip
+# → dist/Complete_Non_LLM_AI_v1.16.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.

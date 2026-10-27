@@ -119,12 +119,16 @@ class LongHorizonAgent:
         hg.status = "running"
         t0 = time.perf_counter()
 
-        for i, intention in enumerate(intentions[: hg.max_steps]):
+        plan = list(intentions[: hg.max_steps])
+        i = 0
+        replans = 0
+        while i < len(plan) and len(hg.steps) < hg.max_steps:
+            intention = plan[i]
             result = self.actuator(intention, {"goal": goal, "context": ctx, "index": i})
             obs = str(result.get("observation") or result.get("text") or result.get("ok"))
             verified = bool(self.verifier(intention, result))
             step = HorizonStep(
-                index=i,
+                index=len(hg.steps),
                 intention=intention,
                 action=str(result.get("action") or intention),
                 observation=obs[:500],
@@ -132,27 +136,39 @@ class LongHorizonAgent:
                 notes=str(result.get("notes") or ""),
             )
             hg.steps.append(step)
-            ctx[f"step_{i}"] = result
+            ctx[f"step_{step.index}"] = result
             if not verified and result.get("fatal"):
                 hg.status = "failed"
                 hg.reflections.append(f"Fatal at {intention}: {obs}")
                 break
-            # Simple reflect every 2 steps
-            if (i + 1) % 2 == 0:
+            # Replan once on failure: insert recovery subgoal
+            if not verified and replans < 2:
+                recovery = self._recovery_steps(intention, goal)
+                hg.reflections.append(
+                    f"Replanning after failed '{intention}': insert {recovery}."
+                )
+                plan = plan[: i + 1] + recovery + plan[i + 1 :]
+                # trim to max_steps budget
+                plan = plan[: hg.max_steps]
+                replans += 1
+            if (len(hg.steps)) % 2 == 0:
                 n_ok = sum(1 for s in hg.steps if s.verified)
                 hg.reflections.append(
-                    f"After {i+1} steps: {n_ok}/{i+1} verified; continue toward '{goal}'."
+                    f"After {len(hg.steps)} steps: {n_ok}/{len(hg.steps)} verified; "
+                    f"replans={replans}; continue toward '{goal}'."
                 )
+            i += 1
         else:
-            # completed loop without break
-            if hg.steps and all(s.verified for s in hg.steps[-2:]):
-                hg.status = "succeeded"
-            elif hg.steps and sum(1 for s in hg.steps if s.verified) >= max(1, len(hg.steps) // 2):
-                hg.status = "succeeded"
-                hg.reflections.append("Majority steps verified — accepting bounded success.")
-            else:
-                hg.status = "failed"
-                hg.reflections.append("Insufficient verified steps.")
+            if hg.status == "running":
+                if hg.steps and all(s.verified for s in hg.steps[-2:]):
+                    hg.status = "succeeded"
+                elif hg.steps and sum(1 for s in hg.steps if s.verified) >= max(1, len(hg.steps) // 2):
+                    hg.status = "succeeded"
+                    hg.reflections.append("Majority steps verified — accepting bounded success.")
+                else:
+                    hg.status = "failed"
+                    hg.reflections.append("Insufficient verified steps.")
+        hg.reflections.append(f"Total replans={replans}.")
 
         # Persist episode
         ep = Episode(
@@ -188,3 +204,11 @@ class LongHorizonAgent:
             return False
         obs = str(result.get("observation") or "")
         return bool(obs) and "fail" not in obs.lower()
+
+    def _recovery_steps(self, failed_intention: str, goal: str) -> list[str]:
+        return [
+            f"diagnose_failure:{failed_intention}",
+            "gather_missing_context",
+            f"retry:{failed_intention}",
+            "verify_progress",
+        ]

@@ -52,6 +52,19 @@ class LifelongMemory:
                 self.memory.set_preference(k, v)
         return ep
 
+    def importance(self, episode: Episode) -> float:
+        """Heuristic importance for retention / dream replay."""
+        score = 0.3
+        if str(episode.outcome).lower() in ("ok", "success", "succeeded", "verified", "true"):
+            score += 0.3
+        score += min(0.3, 0.05 * len(episode.actions))
+        if any(
+            k in episode.summary.lower()
+            for k in ("fail", "error", "correct", "critical", "align")
+        ):
+            score += 0.2
+        return min(1.0, score)
+
     def consolidate(self, *, limit: int = 50) -> ConsolidationReport:
         """Promote recurring episode patterns into claims/procedures."""
         report = ConsolidationReport()
@@ -60,6 +73,7 @@ class LifelongMemory:
         action_counter: Counter[str] = Counter()
         outcome_ok = 0
         for ep in eps:
+            imp = self.importance(ep)
             if str(ep.outcome).lower() in ("ok", "success", "succeeded", "verified", "true"):
                 outcome_ok += 1
             for a in ep.actions:
@@ -67,17 +81,20 @@ class LifelongMemory:
                     action_counter[str(a.get("op") or a.get("step") or "act")] += 1
                 else:
                     action_counter[str(a)] += 1
-            # Semantic: store summary claim
+            # Semantic: store summary claim (importance in notes)
             claim = Claim(
                 subject="episode",
                 relationship="summary",
                 value=ep.summary[:200],
                 source="lifelong_consolidation",
                 evidence_status=EvidenceStatus.ASSERTED,
-                notes=f"episode:{ep.episode_id}",
+                notes=f"episode:{ep.episode_id}|importance={imp:.2f}",
             )
             self.memory.remember_claim(claim)
             report.claims_added += 1
+            if imp >= 0.7:
+                self.memory.set_preference(f"salient:{ep.episode_id}", ep.summary[:120])
+                report.preferences_updated += 1
 
         # Reinforce top action sequences as micro-procedures
         for op, cnt in action_counter.most_common(5):
@@ -139,6 +156,28 @@ class LifelongMemory:
             "preferences": dict(self.memory.preferences),
             "human_level_agi": False,
         }
+
+    def dream(self, *, n: int = 5) -> dict[str, Any]:
+        """Spaced replay of salient episodes (offline consolidation aid)."""
+        ranked = sorted(self.memory.episodes, key=self.importance, reverse=True)[:n]
+        replayed = []
+        for ep in ranked:
+            replayed.append(
+                {
+                    "episode_id": ep.episode_id,
+                    "summary": ep.summary,
+                    "importance": self.importance(ep),
+                }
+            )
+            # Soft reinforce top action
+            if ep.actions:
+                a0 = ep.actions[0]
+                op = a0.get("op") if isinstance(a0, dict) else str(a0)
+                name = f"lifelong_{op}"
+                proc = self.memory.procedures.get(name)
+                if proc:
+                    proc.success_count += 1
+        return {"dreamed": len(replayed), "items": replayed, "human_level_agi": False}
 
     def summary(self) -> dict[str, Any]:
         ms = self.memory.summary()
