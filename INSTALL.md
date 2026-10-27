@@ -1,17 +1,18 @@
-# Install — Complete AI v1.3.0
+# Install — Complete AI v1.4.0
 
 ## Requirements
 
 - Python 3.10+ (3.12 recommended)
-- Core runs **without** any LLM
-- Optional ChatGPT-class chat: OpenAI-compatible API key
+- For ChatGPT-class general chat: `OPENAI_API_KEY` (OpenAI-compatible)
+- Specialist engines (Finderbay / vision / coding) run locally without an LLM
 
-## Quick install (core)
+## Quick install
 
 ```bash
-unzip Complete_Non_LLM_AI_v1.3.0.zip
+unzip Complete_Non_LLM_AI_v1.4.0.zip
 cd Complete_Non_LLM_AI
 pip install -e ".[dev]"
+export OPENAI_API_KEY=sk-...   # enables Complete AI general chat
 pytest -q
 python -m cognitive_ai complete-ai --demo
 ```
@@ -49,24 +50,23 @@ python scripts/demo_vision.py
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.3.0.zip
+# → dist/Complete_Non_LLM_AI_v1.4.0.zip
 ```
 
-## Optional ChatGPT-class general chat
+## ChatGPT-class general chat (Complete AI default open chat)
 
 ```bash
-export COMPLETE_AI_ENABLE_LLM=1
 export OPENAI_API_KEY=sk-...
 # optional: COMPLETE_AI_LLM_MODEL=gpt-4o-mini
-python -m cognitive_ai complete-ai --mode llm --ask "Explain recursion simply"
+python -m cognitive_ai complete-ai --ask "Explain recursion simply"
+python -m cognitive_ai complete-ai --mode llm --ask "Write a cover letter"
+# force symbolic-only: COMPLETE_AI_DISABLE_LLM=1
 ```
 
-When the LLM bridge is off (default), open questions use the curated non-LLM chat.
-When on, unrestricted-style chat uses your API and reports `llm_at_runtime=true`.
+With a key, general chat uses your ChatGPT-class model (`llm_at_runtime=true`).  
+Business / vision / coding still use local engines.
 
-## Honest limits
+## Limits (status flags)
 
-- Not human-level AGI (`human_level_agi: false`)
-- “Complete AI” = full product stack, not unrestricted intelligence
-- Computer vision uses CNN / classical CV
-- Stub vision mode works without Ultralytics; install `[vision]` for real detections
+- `human_level_agi: false` — Complete AI does not claim AGI
+- Vision: CNN / classical CV (`pip install -e ".[vision]"` for real YOLO)

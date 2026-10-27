@@ -1,16 +1,19 @@
-"""Complete AI — unified product facade.
+"""Complete AI — unified product.
 
-Branding: **Complete AI** (full stack). Honest limits remain:
-- human_level_agi = false (never claimed)
-- Core engines are non-LLM (Finderbay, vision, coding, common-sense)
-- Optional ChatGPT-class general chat via LLM bridge when enabled
+Product name: **Complete AI** (no subtitle required).
 
-Modes for a message:
-  auto     — Finderbay/vision/coding if it looks like a task, else open-domain;
-             if open-domain fails and LLM bridge is available, use LLM
-  symbolic — never call LLM
-  llm      — force optional LLM bridge (ChatGPT-class)
+Capabilities:
+  • ChatGPT-class general chat when OPENAI_API_KEY is set (primary open chat)
+  • Finderbay business tasks, YOLO vision, coding, SelfBrain agent (always)
+  • Symbolic open-domain fallback when no LLM key
+
+Modes:
+  auto      — tools for tasks/vision/coding; else LLM chat if available; else symbolic
+  llm       — force ChatGPT-class chat
+  symbolic  — never call LLM
   finderbay / vision / coding / agent — force subsystem
+
+human_level_agi is always false (Complete AI ≠ claimed AGI).
 """
 
 from __future__ import annotations
@@ -20,7 +23,6 @@ from typing import Any, Optional
 
 from .agent import FinderbayAgentSystem
 from .chat.llm_bridge import LLMChatBridge, llm_bridge_from_env
-from .coding import CodingSystem
 from .config import SystemConfig
 from .general.agent import GeneralNonLLMAI
 from .version import __version__
@@ -28,7 +30,7 @@ from .vision import VisionSystem
 
 
 class CompleteAI:
-    """One entrypoint for the full Complete AI product."""
+    """Complete AI product entrypoint."""
 
     PRODUCT_NAME = "Complete AI"
 
@@ -48,19 +50,12 @@ class CompleteAI:
         self.coding = self.agent.coding
         if llm is not None:
             self.llm = llm
+            if enable_llm is not None:
+                self.llm.enabled = enable_llm
         else:
             self.llm = llm_bridge_from_env()
             if enable_llm is not None:
                 self.llm.enabled = enable_llm
-            elif os.environ.get("COMPLETE_AI_ENABLE_LLM", "").strip().lower() in (
-                "1",
-                "true",
-                "yes",
-                "on",
-            ):
-                self.llm.enabled = True
-
-    # --- primary API ----------------------------------------------------------
 
     def ask(self, text: str, *, mode: str = "auto") -> str:
         return self.handle(text, mode=mode)["text"]
@@ -77,27 +72,24 @@ class CompleteAI:
         mode = (mode or "auto").lower().strip()
 
         if mode == "llm":
-            llm_out = self.llm.chat(text)
-            wrapped = self._wrap_llm(llm_out, route="llm_forced")
-            # Only mark llm_at_runtime when a model was actually reachable/configured
-            wrapped["llm_at_runtime"] = bool(llm_out.get("ok") and self.llm.available)
-            return wrapped
+            return self._finish_llm(self.llm.chat(text), route="llm")
 
-        if mode == "coding" or self._looks_coding(text):
-            if mode in ("auto", "coding"):
-                out = self.coding.handle(text)
-                return self._tag(out, route="coding", llm=False)
+        if mode in ("auto", "coding") and (mode == "coding" or self._looks_coding(text)):
+            out = self.coding.handle(text)
+            return self._tag(out, route="coding", llm=False)
 
-        if mode == "vision" or self._looks_vision(text):
-            if mode in ("auto", "vision"):
-                out = self.finderbay.handle(text, modality=modality, context=context)
-                return self._tag(out, route="vision", llm=False)
+        if mode in ("auto", "vision") and (mode == "vision" or self._looks_vision(text)):
+            out = self.finderbay.handle(text, modality=modality, context=context)
+            return self._tag(out, route="vision", llm=False)
 
         if mode == "agent":
             report = self.agent.auto([text])
             return self._tag(
                 {
-                    "text": f"Agent run finished: succeeded={report.get('succeeded')} failed={report.get('failed')}",
+                    "text": (
+                        f"Agent run finished: succeeded={report.get('succeeded')} "
+                        f"failed={report.get('failed')}"
+                    ),
                     "structured": report,
                     "faithful": True,
                 },
@@ -105,90 +97,71 @@ class CompleteAI:
                 llm=False,
             )
 
-        if mode == "finderbay":
+        if mode == "finderbay" or (mode == "auto" and self._looks_finderbay(text)):
             out = self.finderbay.handle(payload, modality=modality, context=context)
-            return self._tag(out, route="finderbay", llm=False)
+            # If Finderbay unsupported and LLM available, fall through to general chat
+            if mode == "finderbay" or (out.get("frame") or {}).get("operation") != "unsupported":
+                if (out.get("frame") or {}).get("operation") != "unsupported":
+                    return self._tag(out, route="finderbay", llm=False)
 
         if mode == "symbolic":
             out = self.general.handle(payload, modality=modality, context=context, force="auto")
             return self._tag(out, route=out.get("route") or "symbolic", llm=False)
 
-        # auto: prefer symbolic/general; escalate to LLM only if unsupported + bridge ready
-        out = self.general.handle(payload, modality=modality, context=context, force="auto")
-        route = out.get("route") or "general"
-        supported = True
-        if route == "open_domain":
-            supported = bool((out.get("structured") or {}).get("method") not in ("fallback",))
-            # OpenDomainChat puts supported on frame / structured
-            frame = out.get("frame") or {}
-            if frame.get("supported") is False:
-                supported = False
-            if out.get("structured", {}).get("open_domain") and (
-                (out.get("frame") or {}).get("supported") is False
-                or (out.get("method") == "fallback")
-            ):
-                supported = False
-            # General wrap uses frame.supported
-            if (out.get("frame") or {}).get("operation") == "open_domain_chat":
-                # check method via asking chat history — use confidence/text heuristic
-                if (out.get("frame") or {}).get("supported") is False:
-                    supported = False
-        if (out.get("frame") or {}).get("operation") == "unsupported":
-            supported = False
-        # Detect open-domain fallback text
-        if route == "open_domain" and "could not map that" in (out.get("text") or "").lower():
-            supported = False
-
-        if not supported and self.llm.available and mode == "auto":
+        # --- General chat: ChatGPT-class first when available -----------------
+        if mode == "auto" and self.llm.available and not self._looks_finderbay(text):
             llm_out = self.llm.chat(text)
             if llm_out.get("ok"):
-                return self._wrap_llm(llm_out, route="llm_fallback", prior=out)
+                return self._finish_llm(llm_out, route="llm_chat")
+
+        # Symbolic / Finderbay general path
+        out = self.general.handle(payload, modality=modality, context=context, force="auto")
+        route = out.get("route") or "general"
+        unsupported = self._is_unsupported(out)
+
+        if unsupported and self.llm.available:
+            llm_out = self.llm.chat(text)
+            if llm_out.get("ok"):
+                return self._finish_llm(llm_out, route="llm_fallback", prior=out)
 
         return self._tag(out, route=route, llm=False)
-
-    # --- status / identity ----------------------------------------------------
 
     def status(self) -> dict[str, Any]:
         return {
             "name": self.PRODUCT_NAME,
             "version": self.version,
-            "tagline": "Complete AI — full stack: tasks, vision, coding, agent, general chat",
+            "tagline": "Complete AI",
+            "chatgpt_class_general_chat": self.llm.available,
             "llm_at_runtime": bool(self.llm.available),
             "human_level_agi": False,
             "modes": {
-                "symbolic_core": True,
+                "general_chat": "llm" if self.llm.available else "symbolic",
                 "finderbay": True,
                 "vision": True,
                 "coding": True,
                 "agent": True,
-                "open_domain_chat": True,
-                "llm_general_chat": self.llm.status(),
+                "llm": self.llm.status(),
             },
-            "general": self.general.status(),
-            "how_to_enable_chatgpt_class_chat": (
-                "export COMPLETE_AI_ENABLE_LLM=1 OPENAI_API_KEY=sk-... "
-                "then ask general questions; or force mode=llm"
+            "setup_general_chat": (
+                "export OPENAI_API_KEY=sk-...  # enables ChatGPT-class chat automatically"
             ),
             "limits": [
-                "Not human-level AGI",
-                "Without LLM bridge: curated open-domain + Finderbay (not unrestricted ChatGPT)",
-                "With LLM bridge: ChatGPT-class general chat via your API key (llm_at_runtime=true)",
+                "human_level_agi=false",
+                "General chat is ChatGPT-class via your API when a key is set",
+                "Specialist engines (Finderbay/vision/coding) stay local/symbolic",
             ],
         }
 
     def greeting(self) -> str:
-        llm = "ON" if self.llm.available else "OFF"
+        chat = "ChatGPT-class (API key detected)" if self.llm.available else "symbolic (set OPENAI_API_KEY for ChatGPT-class chat)"
         return (
-            f"{self.PRODUCT_NAME} v{self.version} ready.\n"
-            f"LLM general chat: {llm} (ChatGPT-class when ON).\n"
-            "I handle Finderbay business tasks, computer vision, coding, autonomous agent jobs,\n"
-            "and open-domain chat. Not human-level AGI.\n\n"
-            "Try:\n"
+            f"{self.PRODUCT_NAME} v{self.version}\n"
+            f"General chat: {chat}\n"
+            "Also: Finderbay tasks · computer vision · coding · autonomous agent\n\n"
+            "Try anything — casual chat, writing, explanations — or:\n"
             "  • Show unpaid invoices for Project A\n"
             "  • Count people in image ./crowd_people.jpg\n"
             "  • generate function add(a, b)\n"
-            "  • Can penguins fly?\n"
-            "  • Explain gravity simply\n"
         )
 
     # --- helpers --------------------------------------------------------------
@@ -201,9 +174,15 @@ class CompleteAI:
         result["llm_at_runtime"] = bool(llm)
         result["human_level_agi"] = False
         result.setdefault("faithful", True)
+        if "text" in result and result["text"] is not None:
+            result["text"] = str(result["text"])
+        elif result.get("code"):
+            result["text"] = str(result.get("code"))
+        else:
+            result.setdefault("text", result.get("error") or "Done.")
         return result
 
-    def _wrap_llm(
+    def _finish_llm(
         self,
         llm_out: dict[str, Any],
         *,
@@ -223,15 +202,27 @@ class CompleteAI:
             "frame": {
                 "operation": "llm_chat",
                 "supported": bool(llm_out.get("ok")),
-                "confidence": 0.7 if llm_out.get("ok") else 0.0,
+                "confidence": 0.85 if llm_out.get("ok") else 0.0,
             },
             "product": self.PRODUCT_NAME,
             "version": self.version,
             "route": route,
-            "llm_at_runtime": True,
+            "llm_at_runtime": bool(llm_out.get("ok") and self.llm.available),
             "human_level_agi": False,
             "method": llm_out.get("method"),
         }
+
+    @staticmethod
+    def _is_unsupported(out: dict[str, Any]) -> bool:
+        frame = out.get("frame") or {}
+        if frame.get("operation") == "unsupported":
+            return True
+        if frame.get("supported") is False:
+            return True
+        text = (out.get("text") or "").lower()
+        if "could not map that" in text:
+            return True
+        return False
 
     @staticmethod
     def _looks_coding(text: str) -> bool:
@@ -266,6 +257,33 @@ class CompleteAI:
                 "computer vision",
             )
         )
+
+    @staticmethod
+    def _looks_finderbay(text: str) -> bool:
+        lower = text.lower()
+        hooks = (
+            "invoice",
+            "delivery",
+            "deliveries",
+            "follow-up",
+            "followup",
+            "reserve",
+            "project a",
+            "project b",
+            "purchase order",
+            "create po",
+            "alert",
+            "payment",
+            "contract",
+            "vendor",
+            "warehouse",
+            "create task",
+            "list tasks",
+            "export report",
+            "unpaid",
+            "cement",
+        )
+        return any(h in lower for h in hooks)
 
 
 def create_complete_ai(**kwargs: Any) -> CompleteAI:

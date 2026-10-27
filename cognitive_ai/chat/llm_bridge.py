@@ -1,15 +1,20 @@
-"""Optional ChatGPT-class chat bridge (OpenAI-compatible HTTP API).
+"""ChatGPT-class general chat for Complete AI (OpenAI-compatible HTTP API).
 
-This is the *only* path that uses a pretrained general-purpose LLM at runtime.
-It is OFF by default. Enable with env:
+Primary general-chat engine when an API key is present.
 
-  COMPLETE_AI_ENABLE_LLM=1
-  OPENAI_API_KEY=...
-  COMPLETE_AI_LLM_MODEL=gpt-4o-mini          (optional)
-  COMPLETE_AI_LLM_BASE=https://api.openai.com/v1  (optional)
+Enable (any of):
+  OPENAI_API_KEY=sk-...                         # auto-enables general LLM chat
+  COMPLETE_AI_ENABLE_LLM=1                      # force enable
+  COMPLETE_AI_LLM_KEY=...                       # alt key name
 
-When disabled, Complete AI stays fully non-LLM.
-When enabled, status reports llm_at_runtime=true for that turn — never claims AGI.
+Disable:
+  COMPLETE_AI_DISABLE_LLM=1
+
+Optional:
+  COMPLETE_AI_LLM_MODEL=gpt-4o-mini
+  COMPLETE_AI_LLM_BASE=https://api.openai.com/v1
+
+Status always reports human_level_agi=false. When active, llm_at_runtime=true.
 """
 
 from __future__ import annotations
@@ -22,15 +27,27 @@ from typing import Any, Optional
 
 
 DEFAULT_SYSTEM = (
-    "You are Complete AI's optional general-chat mode — a helpful assistant. "
-    "Be clear and accurate. You are not human-level AGI; do not claim to be conscious. "
-    "For Finderbay business tasks (invoices, stock, POs), prefer directing the user "
-    "to the symbolic task engine when appropriate."
+    "You are Complete AI — a full general assistant for conversation, writing, "
+    "brainstorming, coding help, explanations, and everyday Q&A (ChatGPT-class). "
+    "Be helpful, clear, and accurate. Match the user's language. "
+    "Do not claim to be conscious or human-level AGI. "
+    "If the user asks about Finderbay invoices, inventory, purchase orders, or "
+    "on-device YOLO vision jobs, note that Complete AI also has dedicated task "
+    "and vision engines for those."
 )
 
 
+def _env_flag(name: str) -> Optional[bool]:
+    raw = os.environ.get(name, "").strip().lower()
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    if raw in ("0", "false", "no", "off"):
+        return False
+    return None
+
+
 class LLMChatBridge:
-    """Thin OpenAI-compatible chat completions client (stdlib urllib)."""
+    """OpenAI-compatible chat completions client (stdlib urllib)."""
 
     def __init__(
         self,
@@ -40,15 +57,8 @@ class LLMChatBridge:
         model: Optional[str] = None,
         enabled: Optional[bool] = None,
         system_prompt: str = DEFAULT_SYSTEM,
-        timeout_s: float = 60.0,
+        timeout_s: float = 90.0,
     ) -> None:
-        env_on = os.environ.get("COMPLETE_AI_ENABLE_LLM", "").strip().lower() in (
-            "1",
-            "true",
-            "yes",
-            "on",
-        )
-        self.enabled = env_on if enabled is None else enabled
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY") or os.environ.get(
             "COMPLETE_AI_LLM_KEY"
         )
@@ -62,6 +72,19 @@ class LLMChatBridge:
         self.timeout_s = timeout_s
         self.history: list[dict[str, str]] = []
 
+        if enabled is not None:
+            self.enabled = enabled
+        else:
+            disable = _env_flag("COMPLETE_AI_DISABLE_LLM")
+            force_on = _env_flag("COMPLETE_AI_ENABLE_LLM")
+            if disable is True:
+                self.enabled = False
+            elif force_on is True:
+                self.enabled = True
+            else:
+                # Auto-on when a key is present → ChatGPT-class general chat by default
+                self.enabled = bool(self.api_key)
+
     @property
     def available(self) -> bool:
         return bool(self.enabled and self.api_key)
@@ -69,6 +92,7 @@ class LLMChatBridge:
     def status(self) -> dict[str, Any]:
         return {
             "name": "LLMChatBridge",
+            "role": "chatgpt_class_general_chat",
             "enabled": self.enabled,
             "available": self.available,
             "model": self.model if self.available else None,
@@ -77,8 +101,8 @@ class LLMChatBridge:
             "llm_at_runtime": self.available,
             "human_level_agi": False,
             "note": (
-                "ChatGPT-class general chat when enabled with API key; "
-                "OFF by default so core Complete AI stays non-LLM."
+                "Primary general chat when API key is set. "
+                "Set COMPLETE_AI_DISABLE_LLM=1 to force symbolic-only chat."
             ),
         }
 
@@ -93,9 +117,9 @@ class LLMChatBridge:
             return {
                 "ok": False,
                 "text": (
-                    "LLM chat is not enabled. Set COMPLETE_AI_ENABLE_LLM=1 and "
-                    "OPENAI_API_KEY to use ChatGPT-class general chat, or keep "
-                    "talking to the non-LLM Complete AI engine."
+                    "General LLM chat needs an API key. Set OPENAI_API_KEY "
+                    "(or COMPLETE_AI_LLM_KEY), then ask again. "
+                    "Until then Complete AI still answers with its symbolic engines."
                 ),
                 "error": "llm_disabled_or_no_key",
                 "llm_at_runtime": False,
@@ -106,7 +130,7 @@ class LLMChatBridge:
         messages: list[dict[str, str]] = [
             {"role": "system", "content": system or self.system_prompt}
         ]
-        messages.extend(self.history[-20:])
+        messages.extend(self.history[-40:])
         messages.append({"role": "user", "content": message})
         try:
             data = self._post_chat(messages)
@@ -122,7 +146,7 @@ class LLMChatBridge:
                 "method": "llm_bridge",
                 "raw_usage": data.get("usage"),
             }
-        except Exception as exc:  # noqa: BLE001 — surface as chat error
+        except Exception as exc:  # noqa: BLE001
             return {
                 "ok": False,
                 "text": f"LLM chat failed: {exc}",

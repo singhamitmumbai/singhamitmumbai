@@ -30,30 +30,28 @@ def _singularize(word: str) -> str:
 FAQ = [
     (
         re.compile(r"what (?:is|are) you|who are you|what can you do", re.I),
-        "I am Complete AI: Finderbay tasks, computer vision, coding tools, an autonomous "
-        "agent, speech/OCR, and open-domain chat. Core reasoning is symbolic/non-LLM; "
-        "optional ChatGPT-class chat can be enabled with an API key. Not human-level AGI.",
+        "I am Complete AI — general chat (ChatGPT-class when an API key is set), "
+        "Finderbay business tasks, computer vision, coding, and an autonomous agent. "
+        "Ask me anything.",
     ),
     (
         re.compile(r"are you (?:chatgpt|an? llm|a language model)", re.I),
-        "By default I am not ChatGPT — my core uses structured knowledge, rules, planning "
-        "and specialist models. If COMPLETE_AI_ENABLE_LLM is on with an API key, I can also "
-        "use ChatGPT-class general chat for open questions.",
+        "I am Complete AI. With OPENAI_API_KEY set I use ChatGPT-class models for general "
+        "chat; I also run local task, vision, and coding engines. I do not claim to be AGI.",
     ),
     (
         re.compile(r"what is (?:ai|artificial intelligence)", re.I),
-        "Artificial intelligence here means software that perceives, understands supported "
-        "language, remembers, reasons, plans, acts and verifies — under declared limits.",
+        "Artificial intelligence means software that can chat, perceive, remember, reason, "
+        "plan, act and verify — Complete AI packages those capabilities together.",
     ),
     (
         re.compile(r"how (?:do you|does .+ ) think", re.I),
-        "I run a perceive → understand → update state → reason → plan → act → verify → "
-        "respond cycle, with a separate reviewed learning loop.",
+        "For open chat I use a general LLM when configured; for business/vision/coding I "
+        "use dedicated engines (perceive → understand → reason → plan → act → verify).",
     ),
     (
         re.compile(r"are you (?:complete ai|a complete ai)", re.I),
-        "Yes — I am Complete AI (full stack). I still set human_level_agi=false: complete "
-        "product coverage is not the same as unrestricted human-level intelligence.",
+        "Yes. I am Complete AI.",
     ),
 ]
 

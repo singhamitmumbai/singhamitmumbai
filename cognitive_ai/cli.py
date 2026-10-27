@@ -637,7 +637,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 print("-" * 40)
                 print("USER:", q)
                 print("AI:  ", ai.ask(q))
-            print("Complete AI demo done. human_level_agi=false")
+            print("Complete AI demo done.")
             return 0
         print(ai.greeting())
         print("Type quit to exit. Commands: /status /mode <auto|symbolic|llm|...>")
