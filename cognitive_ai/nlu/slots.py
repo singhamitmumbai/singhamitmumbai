@@ -144,6 +144,44 @@ def extract_slots(text: str, project_id: Optional[str] = None) -> SlotBundle:
         bundle.conditions.append(Condition("username", "eq", m_user.group(1)))
         bundle.conditions.append(Condition("password", "eq", m_user.group(2)))
 
+    # Purchase order / vendor slots
+    m_vendor = re.search(r"\b(?:vendor|supplier)\s+(vendor_[a-z0-9_]+|[a-z][a-z0-9_]*)\b", lower)
+    if m_vendor:
+        raw = m_vendor.group(1)
+        vid = raw if raw.startswith("vendor_") else f"vendor_{raw}"
+        bundle.conditions.append(Condition("vendor_id", "eq", vid))
+    m_po = re.search(
+        r"(?:create|raise|new)\s+(?:purchase\s+order|po)\s+(?:for\s+)?(.+?)\s+"
+        r"(?:qty|quantity)\s+(\d+(?:\.\d+)?)\s+(?:@|at|rate|price)\s*(?:₹|rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)",
+        lower,
+    )
+    if m_po:
+        bundle.conditions.append(Condition("item", "eq", m_po.group(1).strip()))
+        bundle.conditions.append(Condition("qty", "eq", float(m_po.group(2))))
+        bundle.conditions.append(
+            Condition("unit_price_inr", "eq", float(m_po.group(3).replace(",", "")))
+        )
+    # Simpler: create po cement qty 10 @ 500 vendor buildco
+    m_po2 = re.search(
+        r"(?:create|raise)\s+(?:po|purchase\s+order)\s+(\w+)\s+qty\s+(\d+(?:\.\d+)?)\s+"
+        r"(?:@|at)\s*([\d,]+(?:\.\d+)?)",
+        lower,
+    )
+    if m_po2 and not m_po:
+        bundle.conditions.append(Condition("item", "eq", m_po2.group(1)))
+        bundle.conditions.append(Condition("qty", "eq", float(m_po2.group(2))))
+        bundle.conditions.append(
+            Condition("unit_price_inr", "eq", float(m_po2.group(3).replace(",", "")))
+        )
+
+    # Report kind
+    for kind in ("invoices", "payments", "alerts", "purchase_orders", "contracts", "materials", "deliveries"):
+        if re.search(rf"\b{kind}\b", lower) and re.search(r"\b(?:export|report|csv)\b", lower):
+            bundle.conditions.append(Condition("report_kind", "eq", kind))
+            break
+    if re.search(r"\b(?:export|report).*\bpos?\b|\bpo\s+report\b", lower):
+        bundle.conditions.append(Condition("report_kind", "eq", "purchase_orders"))
+
     # Prohibitions
     if re.search(r"do not send|don't send|mat bhejo|do not email", lower):
         bundle.prohibitions.append("send")

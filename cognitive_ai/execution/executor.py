@@ -52,6 +52,12 @@ class Executor:
         self.auth = None
         self.payments = None
         self.contracts = None
+        self.purchase_orders = None
+        self.alerts = None
+        self.reports = None
+        self.last_alerts = None
+        self.last_po = None
+        self.last_report = None
         self.auth_token: Optional[str] = None
 
     def run_plan(self, plan: PlanRecord, state: WorkingState) -> list[ActionResult]:
@@ -159,6 +165,8 @@ class Executor:
                 "document_qa": "document",
                 "query_payments": "payment",
                 "query_contracts": "contract",
+                "query_purchase_orders": "purchase_order",
+                "query_vendors": "vendor",
             }
             kind = kind_map.get(operation, "invoice")
             rows = self.memory.get_records(kind)
@@ -305,6 +313,52 @@ class Executor:
             result.external_receipt = out["payment"]["id"]
             return [{"payment_posted": True, **out}]
 
+        if op == "scan_alerts":
+            alerts = getattr(self, "alerts", None)
+            if alerts is None:
+                raise RuntimeError("alerts_not_configured")
+            summary = alerts.summary(project_id=step.args.get("project_id"))
+            self.last_alerts = summary
+            self.last_table = {
+                "columns": ["kind", "severity", "entity_id", "message", "project_id"],
+                "rows": summary.get("alerts") or [],
+                "row_count": summary.get("count", 0),
+                "meta": {"kind": "alerts", "by_severity": summary.get("by_severity")},
+            }
+            result.external_receipt = f"alerts:{summary.get('count', 0)}"
+            return [{"alerts_ready": True, **summary}]
+
+        if op == "create_purchase_order":
+            pos = getattr(self, "purchase_orders", None)
+            if pos is None:
+                raise RuntimeError("purchase_order_service_not_configured")
+            token = getattr(self, "auth_token", None)
+            out = pos.create_po(
+                token=token,
+                project_id=str(step.args.get("project_id")),
+                vendor_id=str(step.args.get("vendor_id")),
+                item=str(step.args.get("item")),
+                qty=float(step.args.get("qty") or 0),
+                unit_price_inr=float(step.args.get("unit_price_inr") or 0),
+                notes=str(step.args.get("notes") or ""),
+            )
+            self.last_po = out
+            result.external_receipt = out["purchase_order"]["id"]
+            return [{"po_created": True, **out}]
+
+        if op == "export_report":
+            reports = getattr(self, "reports", None)
+            if reports is None:
+                raise RuntimeError("report_exporter_not_configured")
+            out = reports.export(
+                str(step.args.get("kind") or "invoices"),
+                project_id=step.args.get("project_id"),
+                fmt=str(step.args.get("format") or "csv"),
+            )
+            self.last_report = out
+            result.external_receipt = f"report:{out.get('kind')}:{out.get('count')}"
+            return [{"report_ready": True, **out}]
+
         raise ValueError(f"Unknown operator: {op}")
 
     def _reserve(
@@ -426,7 +480,7 @@ class Executor:
                 "row_count": len(rows),
                 "meta": {"kind": "task"},
             }
-        if ctype in ("payments", "contracts"):
+        if ctype in ("payments", "contracts", "purchase_orders", "vendors"):
             rows = conc.get("items") or []
             return {
                 "columns": list(rows[0].keys()) if rows else [],
@@ -435,6 +489,7 @@ class Executor:
                 "meta": {
                     "kind": ctype,
                     "active_value_inr": conc.get("active_value_inr"),
+                    "open_value_inr": conc.get("open_value_inr"),
                     "count": conc.get("count"),
                 },
             }

@@ -76,8 +76,8 @@ class ResponseGenerator:
             answer = {
                 "text": (
                     "I am a complete non-LLM assistant for Finderbay. "
-                    "Supported: invoice queries, delivery pending lists, material lookup/reserve, "
-                    "local tasks, document field extraction, alias learning and follow-up drafts "
+                    "Supported: invoices, deliveries, materials, tasks, documents, payments, "
+                    "contracts, vendors/POs, proactive alerts, CSV reports, auth, and follow-up drafts "
                     "(without sending). "
                     "I keep unknown ≠ false, predicted ≠ observed, attempted ≠ confirmed."
                 ),
@@ -133,13 +133,46 @@ class ResponseGenerator:
                 f"for {p.get('invoice_id')}. Invoice paid total ₹{pay.get('invoice_paid_total')}."
             )
             structured = {"payment_posted": True, **pay}
-        elif op in ("query_payments", "query_contracts"):
+        elif op in ("query_payments", "query_contracts", "query_purchase_orders", "query_vendors"):
             n = table.get("row_count", 0) if table else 0
-            kind = "payment" if op == "query_payments" else "contract"
+            kind = {
+                "query_payments": "payment",
+                "query_contracts": "contract",
+                "query_purchase_orders": "purchase order",
+                "query_vendors": "vendor",
+            }[op]
             text = f"{n} {kind}(s) found."
             if table and table.get("meta", {}).get("active_value_inr") is not None:
                 text += f" Active contract value ₹{table['meta']['active_value_inr']:,.0f}."
+            if reasoning and reasoning.conclusions:
+                ov = reasoning.conclusions[0].get("open_value_inr")
+                if ov is not None:
+                    text += f" Open PO value ₹{ov:,.0f}."
             structured = {"count": n, "listed": True}
+        elif op == "query_alerts":
+            alerts = executor.last_alerts or {}
+            n = alerts.get("count", 0)
+            by = alerts.get("by_severity") or {}
+            text = (
+                f"{n} alert(s) as of {alerts.get('as_of')}: "
+                f"{by.get('critical', 0)} critical, {by.get('warn', 0)} warn, {by.get('info', 0)} info."
+            )
+            structured = {"count": n, "alerts": alerts.get("alerts") or [], "by_severity": by}
+        elif op == "create_purchase_order":
+            po = (executor.last_po or {}).get("purchase_order") or {}
+            text = (
+                f"Created purchase order {po.get('id')} for {po.get('item')} "
+                f"qty {po.get('qty')} @ ₹{po.get('unit_price_inr')} "
+                f"(total ₹{po.get('total_inr')}) via {po.get('vendor_name')}."
+            )
+            structured = {"po_created": True, **(executor.last_po or {})}
+        elif op == "export_report":
+            rep = executor.last_report or {}
+            text = (
+                f"Exported {rep.get('kind')} report with {rep.get('count', 0)} row(s) "
+                f"as {rep.get('format')}."
+            )
+            structured = {"report_ready": True, **rep}
         else:
             text = reasoning.message if reasoning else "Done."
             structured = {"reasoning": reasoning.to_dict() if reasoning else None}

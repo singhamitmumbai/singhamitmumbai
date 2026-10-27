@@ -193,6 +193,48 @@ def seed_memory(memory: MemorySystem | None = None) -> MemorySystem:
         },
     )
 
+    # Vendors + purchase orders
+    memory.upsert_record(
+        "vendor",
+        "vendor_buildco",
+        {"name": "BuildCo", "category": "cement", "status": "active", "city": "mumbai"},
+    )
+    memory.upsert_record(
+        "vendor",
+        "vendor_colorworks",
+        {"name": "ColorWorks", "category": "paint", "status": "active", "city": "pune"},
+    )
+    memory.upsert_record(
+        "purchase_order",
+        "po_1",
+        {
+            "project_id": "project_a",
+            "vendor_id": "vendor_buildco",
+            "vendor_name": "BuildCo",
+            "item": "Cement bags",
+            "qty": 100,
+            "unit_price_inr": 450,
+            "total_inr": 45000,
+            "status": "open",
+            "created_at": "2026-03-01T00:00:00+00:00",
+        },
+    )
+    memory.upsert_record(
+        "purchase_order",
+        "po_2",
+        {
+            "project_id": "project_b",
+            "vendor_id": "vendor_colorworks",
+            "vendor_name": "ColorWorks",
+            "item": "Exterior paint",
+            "qty": 20,
+            "unit_price_inr": 1200,
+            "total_inr": 24000,
+            "status": "received",
+            "created_at": "2026-02-15T00:00:00+00:00",
+        },
+    )
+
     # Sample invoice scan / document for OCR QA
     memory.upsert_record(
         "document",

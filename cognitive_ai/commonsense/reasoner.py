@@ -122,6 +122,56 @@ class CommonSenseReasoner:
             0.1,
         )
 
+    def why(self, subject: str, predicate: str = "*", obj: str = "*") -> CSAnswer:
+        """Causal / explanatory answer from can_cause / because / needs chains."""
+        subject = subject.lower()
+        predicate = predicate.lower()
+        obj = obj.lower()
+        causes = self.cs.kb.query(subject, "can_cause", "*")
+        needs = self.cs.kb.query(subject, "needs", "*")
+        because = self.cs.kb.query(subject, "because", "*")
+        reduces = list(self.cs.kb.query(subject, "can_reduce", "*")) + list(
+            self.cs.kb.query(subject, "reduces", "*")
+        )
+        # also inverse: what causes subject
+        caused_by = self.cs.kb.query("*", "can_cause", subject)
+        parts: list[str] = []
+        triples: list[str] = []
+        for t in list(because)[:4]:
+            parts.append(f"because {t.object}")
+            triples.append(str(t))
+        for t in list(causes)[:4]:
+            parts.append(f"it can cause {t.object}")
+            triples.append(str(t))
+        for t in list(caused_by)[:4]:
+            parts.append(f"it can be caused by {t.subject}")
+            triples.append(str(t))
+        for t in list(needs)[:3]:
+            parts.append(f"it needs {t.object}")
+            triples.append(str(t))
+        for t in list(reduces)[:3]:
+            parts.append(f"it can reduce {t.object}")
+            triples.append(str(t))
+        if predicate != "*" and obj != "*":
+            direct = self.reason(subject, predicate, obj)
+            if direct.success:
+                parts.insert(0, f"({subject} {predicate} {obj}) holds")
+                triples = list(direct.triples) + triples
+        if not parts:
+            related = self.cs.related(subject)
+            if related:
+                return CSAnswer(
+                    False,
+                    f"No explicit causal chain for {subject}; related facts: "
+                    + "; ".join(str(t) for t in related[:6]),
+                    [str(t) for t in related[:6]],
+                    "why_related",
+                    0.35,
+                )
+            return CSAnswer(False, f"No causal explanation for {subject}.", [], "why_unknown", 0.1)
+        text = f"Why {subject}: " + "; ".join(parts) + "."
+        return CSAnswer(True, text, triples[:12], "causal", 0.8)
+
     def analogy(self, a: str, b: str, c: str) -> CSAnswer:
         """Simple relational analogy: a:b :: c:? using shared predicates."""
         a, b, c = a.lower(), b.lower(), c.lower()

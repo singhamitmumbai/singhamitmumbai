@@ -69,8 +69,9 @@ def build_parser() -> argparse.ArgumentParser:
             "general",
             "eval",
             "bench",
+            "api",
         ],
-        help="Optional subcommand: os, chat/ui, demo, repl, finderbay/complete, general, eval, bench",
+        help="Optional subcommand: os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api",
     )
     p.add_argument(
         "--ask",
@@ -508,6 +509,23 @@ def main(argv: Optional[list[str]] = None) -> int:
             and payload["scan"]["by_split"]["train_like"]["passed"] >= 1
         )
         return 0 if ok else 1
+
+    if args.command == "api":
+        from .api.server import serve_api
+        from .version import __version__
+
+        host = args.host if args.host != "0.0.0.0" else "127.0.0.1"
+        port = 8787 if args.port == 8765 else args.port
+        mode = "finderbay" if (args.domain or "") in ("finderbay", "complete") else "general"
+        httpd = serve_api(host, port, mode=mode)
+        print(f"API http://{host}:{port}/  (v{__version__}, mode={mode}, human_level_agi=false)")
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            httpd.server_close()
+        return 0
 
     # Chat UI launcher
     if args.command in ("chat", "ui"):

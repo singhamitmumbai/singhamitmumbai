@@ -68,6 +68,11 @@ class LanguageUnderstanding:
         "record_payment",
         "query_contracts",
         "login",
+        "query_alerts",
+        "query_purchase_orders",
+        "create_purchase_order",
+        "query_vendors",
+        "export_report",
         "status",
         "cancel",
         "correct",
@@ -130,6 +135,17 @@ class LanguageUnderstanding:
             x in normalized.lower() for x in ("amount due", "invoice scan", "document", "ocr")
         ):
             operation = "document_qa"
+        if "create_purchase_order" in intents:
+            operation = "create_purchase_order"
+        if "export_report" in intents:
+            operation = "export_report"
+        if "query_alerts" in intents and any(
+            x in normalized.lower()
+            for x in ("alert", "alerts", "low stock", "needs attention", "what needs attention", "expiring contract")
+        ):
+            # Prefer invoice query when "overdue invoices" is explicit
+            if not (("invoice" in normalized.lower() or "invoices" in normalized.lower()) and "overdue" in normalized.lower()):
+                operation = "query_alerts"
 
         needs: list[str] = []
         if slots.unknown_policies.get("time") == "clarify_kal":

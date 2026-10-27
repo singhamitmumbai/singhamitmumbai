@@ -15,7 +15,10 @@ from .domains.finderbay.auth import AuthService
 from .domains.finderbay.contracts import ContractService
 from .domains.finderbay.package import FinderbayPackage
 from .domains.finderbay.payments import PaymentService
+from .domains.finderbay.purchase_orders import PurchaseOrderService
 from .domains.finderbay.seed import seed_memory
+from .reporting.exporter import ReportExporter
+from .runtime.alerts import ProactiveMonitor
 from .evaluation.harness import EvaluationHarness, EvalCase, EvalReport
 from .execution.executor import Executor
 from .execution.recovery import RecoveryManager
@@ -95,9 +98,15 @@ class CompleteNonLLMAI:
         self.auth = AuthService()
         self.payments = PaymentService(self.memory, self.auth)
         self.contracts = ContractService(self.memory, self.auth)
+        self.purchase_orders = PurchaseOrderService(self.memory, self.auth)
+        self.alerts = ProactiveMonitor(self.memory)
+        self.reports = ReportExporter(self.memory, self.alerts)
         self.executor.auth = self.auth
         self.executor.payments = self.payments
         self.executor.contracts = self.contracts
+        self.executor.purchase_orders = self.purchase_orders
+        self.executor.alerts = self.alerts
+        self.executor.reports = self.reports
         self.responder = ResponseGenerator()
         self.learner = LearningSystem(self.memory, dataset_dir=self.config.dataset_dir)
         self.datasets = DatasetRegistry(self.config.dataset_dir)
@@ -178,6 +187,11 @@ class CompleteNonLLMAI:
             "query_payments",
             "query_contracts",
             "record_payment",
+            "query_alerts",
+            "query_purchase_orders",
+            "create_purchase_order",
+            "query_vendors",
+            "export_report",
         ) and not self.capability_model.can(frame.operation):
             answer = {
                 "text": self.capability_model.describe(frame.operation),

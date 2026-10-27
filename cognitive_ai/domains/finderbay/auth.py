@@ -24,7 +24,7 @@ class User:
 PERMISSIONS = {
     "viewer": {"read"},
     "clerk": {"read", "draft", "task_write", "write_alias"},
-    "accountant": {"read", "draft", "task_write", "payment_write", "invoice_write"},
+    "accountant": {"read", "draft", "task_write", "payment_write", "invoice_write", "po_write"},
     "manager": {
         "read",
         "draft",
@@ -34,6 +34,7 @@ PERMISSIONS = {
         "contract_write",
         "inventory_write",
         "write_alias",
+        "po_write",
     },
     "admin": {
         "read",
@@ -44,6 +45,7 @@ PERMISSIONS = {
         "contract_write",
         "inventory_write",
         "write_alias",
+        "po_write",
         "send",
         "admin",
     },

@@ -305,6 +305,114 @@ class OperatorPlanner:
             state.set_plan(plan)
             return plan
 
+
+        if op_name == "query_alerts":
+            steps = [
+                PlanStepRecord(
+                    operator="scan_alerts",
+                    args={"project_id": frame.get("project_id")},
+                    verification=["alerts_ready"],
+                ),
+                PlanStepRecord(operator="respond", args={}, verification=["claims_match_structure"]),
+            ]
+            plan = PlanRecord(
+                goal_id=goal.goal_id,
+                steps=steps,
+                outcome="feasible",
+                explanation="Proactive alerts scan.",
+                cost=2.0,
+            )
+            state.set_plan(plan)
+            return plan
+
+        if op_name == "query_vendors":
+            steps = [
+                PlanStepRecord(
+                    operator="retrieve_records",
+                    args={"project_id": frame.get("project_id"), "operation": op_name},
+                    verification=["record_count_available"],
+                ),
+                PlanStepRecord(operator="reason_over_records", args={}, verification=["conclusion_present"]),
+                PlanStepRecord(operator="build_table", args={}, verification=["table_row_count"]),
+                PlanStepRecord(operator="respond", args={}, verification=["claims_match_structure"]),
+            ]
+            plan = PlanRecord(
+                goal_id=goal.goal_id,
+                steps=steps,
+                outcome="feasible",
+                explanation="Vendor list plan.",
+                cost=4.0,
+            )
+            state.set_plan(plan)
+            return plan
+
+        if op_name == "query_purchase_orders":
+            steps = [
+                PlanStepRecord(
+                    operator="retrieve_records",
+                    args={"project_id": frame.get("project_id"), "operation": op_name},
+                    verification=["record_count_available"],
+                ),
+                PlanStepRecord(operator="reason_over_records", args={}, verification=["conclusion_present"]),
+                PlanStepRecord(operator="build_table", args={}, verification=["table_row_count"]),
+                PlanStepRecord(operator="respond", args={}, verification=["claims_match_structure"]),
+            ]
+            plan = PlanRecord(
+                goal_id=goal.goal_id,
+                steps=steps,
+                outcome="feasible",
+                explanation="Purchase order query plan.",
+                cost=4.0,
+            )
+            state.set_plan(plan)
+            return plan
+
+        if op_name == "create_purchase_order":
+            args = {"project_id": frame.get("project_id")}
+            for c in frame.get("conditions") or []:
+                if c.get("field") in ("vendor_id", "item", "qty", "unit_price_inr", "notes"):
+                    args[c["field"]] = c.get("value")
+            steps = [
+                PlanStepRecord(
+                    operator="create_purchase_order",
+                    args=args,
+                    verification=["po_created"],
+                ),
+                PlanStepRecord(operator="respond", args={}, verification=["claims_match_structure"]),
+            ]
+            plan = PlanRecord(
+                goal_id=goal.goal_id,
+                steps=steps,
+                outcome="feasible",
+                explanation="Create purchase order plan.",
+                cost=2.0,
+            )
+            state.set_plan(plan)
+            return plan
+
+        if op_name == "export_report":
+            kind = None
+            for c in frame.get("conditions") or []:
+                if c.get("field") == "report_kind":
+                    kind = c.get("value")
+            steps = [
+                PlanStepRecord(
+                    operator="export_report",
+                    args={"kind": kind, "project_id": frame.get("project_id"), "format": "csv"},
+                    verification=["report_ready"],
+                ),
+                PlanStepRecord(operator="respond", args={}, verification=["claims_match_structure"]),
+            ]
+            plan = PlanRecord(
+                goal_id=goal.goal_id,
+                steps=steps,
+                outcome="feasible",
+                explanation="Report export plan.",
+                cost=2.0,
+            )
+            state.set_plan(plan)
+            return plan
+
         # Default query workflow
         steps: list[PlanStepRecord] = []
         steps.append(

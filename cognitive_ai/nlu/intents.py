@@ -177,6 +177,58 @@ INTENT_CUES: list[tuple[str, list[tuple[str, float]]]] = [
             ("authenticate", 2.0),
         ],
     ),
+    (
+        "query_alerts",
+        [
+            ("alert", 2.0),
+            ("alerts", 2.2),
+            ("overdue", 1.5),
+            ("low stock", 2.5),
+            ("expiring", 1.8),
+            ("what needs attention", 2.5),
+            ("proactive", 1.5),
+            ("monitor", 1.2),
+        ],
+    ),
+    (
+        "query_purchase_orders",
+        [
+            ("purchase order", 2.5),
+            ("purchase orders", 2.7),
+            ("po list", 2.2),
+            ("show pos", 2.0),
+            ("open pos", 2.0),
+        ],
+    ),
+    (
+        "create_purchase_order",
+        [
+            ("create purchase order", 4.5),
+            ("create po", 4.0),
+            ("new purchase order", 4.0),
+            ("raise po", 3.5),
+            ("raise purchase order", 4.0),
+        ],
+    ),
+    (
+        "query_vendors",
+        [
+            ("vendor", 2.0),
+            ("vendors", 2.2),
+            ("supplier list", 2.0),
+            ("show suppliers", 2.0),
+        ],
+    ),
+    (
+        "export_report",
+        [
+            ("export report", 3.5),
+            ("export csv", 3.5),
+            ("download report", 3.0),
+            ("generate report", 2.5),
+            ("csv report", 3.0),
+        ],
+    ),
 ]
 
 

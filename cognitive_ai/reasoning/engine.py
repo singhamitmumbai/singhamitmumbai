@@ -97,6 +97,47 @@ class ReasoningEngine:
                 }],
                 message=f"{len(rows)} contract(s); active value INR {total:.0f}.",
             )
+        if op == "query_purchase_orders":
+            rows = self.memory.get_records("purchase_order")
+            pid = frame.get("project_id")
+            if pid:
+                rows = [r for r in rows if r.get("project_id") == pid]
+            open_value = sum(float(r.get("total_inr") or 0) for r in rows if r.get("status") == "open")
+            return ReasoningResult(
+                method="lookup",
+                conclusions=[{
+                    "type": "purchase_orders",
+                    "items": rows,
+                    "count": len(rows),
+                    "open_value_inr": open_value,
+                }],
+                message=f"{len(rows)} purchase order(s); open value INR {open_value:.0f}.",
+            )
+        if op == "query_vendors":
+            rows = self.memory.get_records("vendor")
+            return ReasoningResult(
+                method="lookup",
+                conclusions=[{"type": "vendors", "items": rows, "count": len(rows)}],
+                message=f"{len(rows)} vendor(s).",
+            )
+        if op == "query_alerts":
+            return ReasoningResult(
+                method="proactive_monitor",
+                success=True,
+                message="Alerts produced by proactive monitor operator.",
+            )
+        if op == "export_report":
+            return ReasoningResult(
+                method="report_export",
+                success=True,
+                message="Report export handled by exporter operator.",
+            )
+        if op == "create_purchase_order":
+            return ReasoningResult(
+                method="purchase_order_write",
+                success=True,
+                message="Purchase order creation handled by PO service.",
+            )
         return ReasoningResult(
             method="passthrough",
             success=True,

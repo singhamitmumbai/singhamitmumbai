@@ -141,17 +141,35 @@ class OpenDomainChat:
             text = f"About {ent}: " + "; ".join(str(t) for t in rel[:12]) + "."
             return self._emit(text, method="describe", confidence=0.8, triples=[str(t) for t in rel[:12]])
 
-        # why can / why is
+        # why can / why is / why <entity>
         m = re.search(r"why\s+(?:can|does)\s+(\w+)\s+(\w+)\??", lower)
         if m:
-            ans = self.reasoner.reason(m.group(1), "can", m.group(2))
-            if ans.success:
-                return self._emit(
-                    f"Because the knowledge base supports it: {', '.join(ans.triples) or ans.text}",
-                    method="why",
-                    confidence=ans.confidence,
-                    triples=ans.triples,
-                )
+            ans = self.reasoner.why(m.group(1), "can", m.group(2))
+            self.topic = m.group(1)
+            return self._emit(ans.text, method=ans.method, confidence=ans.confidence, triples=ans.triples)
+        m = re.search(r"why\s+(?:is|are)\s+(?:a\s+|an\s+)?(\w+)\??", lower)
+        if m:
+            ans = self.reasoner.why(m.group(1))
+            self.topic = m.group(1)
+            return self._emit(ans.text, method=ans.method, confidence=ans.confidence, triples=ans.triples)
+        m = re.search(r"why\s+(\w+)\??$", lower)
+        if m:
+            ans = self.reasoner.why(m.group(1))
+            self.topic = m.group(1)
+            return self._emit(ans.text, method=ans.method, confidence=ans.confidence, triples=ans.triples)
+        # Hindi-ish can/is patterns
+        m = re.search(r"(\w+)\s+(?:ud\s*sakta|fly\s*kar\s*sakta)\s*(?:hai)?\??", lower)
+        if m:
+            ans = self.reasoner.reason(_singularize(m.group(1)), "can", "fly")
+            self.topic = _singularize(m.group(1))
+            return self._emit(ans.text, method="hi_can", confidence=ans.confidence, triples=ans.triples)
+        m = re.search(r"(\w+)\s+kya\s+(?:hai|hota\s+hai)\??", lower)
+        if m:
+            rel = self.reasoner.cs.related(_singularize(m.group(1)))
+            self.topic = _singularize(m.group(1))
+            if rel:
+                text = f"About {self.topic}: " + "; ".join(str(t) for t in rel[:10]) + "."
+                return self._emit(text, method="hi_describe", confidence=0.7, triples=[str(t) for t in rel[:10]])
 
         # Topic follow-up: "and cats?" after talking about dogs
         m = re.search(r"^and\s+(\w+)\??$", lower)

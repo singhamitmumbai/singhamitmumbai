@@ -104,6 +104,31 @@ class CapabilityModel:
                 ["login"],
                 ["multi-user local auth; passwords are demo-only"],
             ),
+            (
+                "query_alerts",
+                ["scan_alerts", "respond"],
+                ["rule-based overdue/low-stock/expiry heuristics"],
+            ),
+            (
+                "query_purchase_orders",
+                ["retrieve_records", "respond"],
+                ["requires read access"],
+            ),
+            (
+                "create_purchase_order",
+                ["create_purchase_order"],
+                ["requires accountant/manager auth token"],
+            ),
+            (
+                "query_vendors",
+                ["retrieve_records", "respond"],
+                ["requires read access"],
+            ),
+            (
+                "export_report",
+                ["export_report"],
+                ["CSV/JSON register dumps only"],
+            ),
         ]:
             self.entries[name] = CapabilityEntry(name=name, tools=tools, limitations=limits)
 

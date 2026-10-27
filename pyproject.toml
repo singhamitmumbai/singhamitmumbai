@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cognitive-ai"
-version = "0.7.0"
-description = "Complete non-LLM AI — large CS KB, multilingual ASR, layout OCR, payments/contracts"
+version = "0.8.0"
+description = "Complete non-LLM AI — alerts, POs, clarification, causal CS, REST API/reports"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
