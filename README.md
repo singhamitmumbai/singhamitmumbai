@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.12.0) — stronger/smarter full stack: SmartRouter, confidence bands, hybrid JARVIS NLU, fuzzy BM25, thermal vision, verified tools:
+**Complete AI** (v1.13.0) — smarter non-LLM brain: question understanding, intelligent web search, SmartRouter, thermal vision, JARVIS tools:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
@@ -36,6 +36,22 @@ python -m cognitive_ai chat --domain complete
 
 Product: **Complete AI** / **Finderbay Assistant** / **JARVIS tools**. `human_level_agi=false`.  
 Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.
+
+### What v1.13 adds — Smarter questions + intelligent internet search
+
+| Piece | Role |
+|------|------|
+| `nlu/smart_questions.py` | Paraphrase normalize, domain tag, answer policy |
+| `nlu/questions.py` | Stronger WH/ask-form (search, inline WH, Hinglish) |
+| `search/web_intel.py` | Rewrite → local KB → DuckDuckGo/Wikipedia → cite |
+| OpenDomainChat | Uses smart frames + web escalation on KB miss |
+| JARVIS `web.search` | Typed research tool with sources |
+
+```bash
+python -m cognitive_ai assistant --ask "What is gravity?"
+python -m cognitive_ai assistant --ask "Search the web for photosynthesis"
+pytest tests/test_smart_questions_and_search.py -q
+```
 
 ### What v1.12 adds — Full-code strength upgrade
 
@@ -95,7 +111,7 @@ Tool contracts, job store, provenance memory, material shortage skill, voice PTT
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.12.0.zip
+# → dist/Complete_Non_LLM_AI_v1.13.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.

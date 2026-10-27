@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..nlu.questions import QuestionAnalyzer
+from ..nlu.smart_questions import SmartQuestionUnderstanding
+from ..search import IntelligentWebSearch
 from .kb import CommonSenseKB
 from .reasoner import CommonSenseReasoner
 
@@ -71,14 +73,20 @@ class OpenDomainChat:
         self.last_predicate: str = "is_a"
         self.last_object: str = "*"
         self.questions = QuestionAnalyzer()
+        self.smart_q = SmartQuestionUnderstanding()
+        self.web = IntelligentWebSearch(allow_live=True)
         self.user_name: Optional[str] = None
         self.preferences: dict[str, str] = {}
 
-    def respond(self, message: str) -> dict[str, Any]:
+    def respond(self, message: str, *, allow_live_search: bool = True) -> dict[str, Any]:
         msg = message.strip()
         self.history.append(ChatTurn("user", msg))
         lower = msg.lower()
-        qinfo = self.questions.analyze(msg)
+        frame = self.smart_q.understand(msg)
+        qinfo = self.questions.analyze(frame.normalized)
+        # Prefer richer analysis from smart frame when available
+        if frame.analysis.get("focus") and not qinfo.focus:
+            qinfo.focus = list(frame.analysis.get("focus") or [])
 
         # Remember user name
         m_name = re.search(
@@ -125,6 +133,15 @@ class OpenDomainChat:
             bye = f"Goodbye{', ' + self.user_name if self.user_name else ''}."
             return self._emit(bye + " Come back anytime.", method="social", confidence=1.0, question=qinfo.to_dict())
 
+        # Explicit web / internet search
+        m_search = re.search(
+            r"(?:search(?:\s+the\s+web)?(?:\s+for)?|look\s+up|google|find\s+online)\s+(.+)$",
+            lower,
+        )
+        if m_search or frame.answer_policy == "search" or qinfo.ask_form == "search":
+            topic = (m_search.group(1) if m_search else frame.normalized).strip(" ?.")
+            return self._web_answer(topic or msg, qinfo, frame, allow_live=allow_live_search)
+
         # Explain / ELI5
         m_ex = re.search(
             r"(?:explain|describe|eli5|what does .+ mean(?: by)?)\s+(.+?)(?:\s+simply)?\??$",
@@ -142,15 +159,16 @@ class OpenDomainChat:
                     + "; ".join(str(t) for t in rel[:8])
                     + ". (From Complete AI common-sense KB — not an LLM essay.)"
                 )
-                return self._emit(text, method="explain", confidence=0.8, triples=[str(t) for t in rel[:8]], question=qinfo.to_dict())
-            return self._emit(
-                f"I don't have a deep essay on '{topic}' in my curated KB. "
-                "Try a shorter entity ('explain penguin') or enable LLM chat for open essays.",
-                method="explain_miss",
-                confidence=0.35,
-                supported=False,
-                question=qinfo.to_dict(),
-            )
+                return self._emit(
+                    text,
+                    method="explain",
+                    confidence=0.8,
+                    triples=[str(t) for t in rel[:8]],
+                    question=qinfo.to_dict(),
+                    smart=frame.to_dict(),
+                )
+            # Escalate to intelligent search when KB miss
+            return self._web_answer(topic or msg, qinfo, frame, allow_live=allow_live_search)
 
         # Compare X and Y
         m_cmp = re.search(r"compare\s+(\w+)\s+(?:and|vs\.?|versus)\s+(\w+)", lower)
@@ -209,9 +227,14 @@ class OpenDomainChat:
             )
 
         # Multi-clause: answer primary clause first
-        clause = qinfo.clauses[0] if qinfo.clauses else msg
+        clause = qinfo.clauses[0] if qinfo.clauses else frame.normalized
         answered = self._answer_clause(clause, qinfo)
         if answered is not None:
+            # Escalate define/lookup misses to intelligent search
+            if str(answered.get("text") or "").startswith("__SEARCH__:"):
+                topic = answered["text"].split(":", 1)[1]
+                return self._web_answer(topic, qinfo, frame, allow_live=allow_live_search)
+            answered["smart"] = frame.to_dict()
             if qinfo.is_multi_clause and len(qinfo.clauses) > 1:
                 answered["text"] = (
                     answered["text"]
@@ -219,6 +242,10 @@ class OpenDomainChat:
                 )
                 answered["question"] = qinfo.to_dict()
             return answered
+
+        # Smart policy: search when local KB cannot answer a define/science question
+        if frame.needs_search or frame.answer_policy == "search":
+            return self._web_answer(frame.normalized, qinfo, frame, allow_live=allow_live_search)
 
         # Topic follow-up: "and cats?" / "what about dogs?"
         m = re.search(r"^(?:and|what about|how about)\s+(\w+)\??$", lower)
@@ -266,11 +293,18 @@ class OpenDomainChat:
                     question=qinfo.to_dict(),
                 )
 
+        # Last resort: try intelligent search once for question-like input
+        if qinfo.is_question or frame.confidence >= 0.5:
+            web = self._web_answer(frame.normalized, qinfo, frame, allow_live=allow_live_search)
+            if web.get("supported") and web.get("confidence", 0) >= 0.45:
+                return web
+
         return self._emit(
             "I could not map that to Finderbay tools or my common-sense knowledge. "
             "Try a task ('show unpaid invoices for Project A'), "
             "a fact question ('can penguins fly?'), "
             "an explanation ('explain gravity'), "
+            "web search ('search the web for photosynthesis'), "
             "or an analogy ('knife:cutting :: umbrella:?'). "
             "For open unrestricted chat like ChatGPT, enable COMPLETE_AI_ENABLE_LLM=1 "
             "with OPENAI_API_KEY.",
@@ -278,6 +312,7 @@ class OpenDomainChat:
             confidence=0.2,
             supported=False,
             question=qinfo.to_dict(),
+            smart=frame.to_dict(),
         )
 
     def _answer_clause(self, msg: str, qinfo) -> Optional[dict[str, Any]]:
@@ -379,27 +414,47 @@ class OpenDomainChat:
             self.last_predicate, self.last_object = "used_for", "*"
             return self._emit(ans.text, method=ans.method, confidence=ans.confidence, triples=ans.triples, question=qinfo.to_dict())
 
-        # define / what is X
+        # define / what is X (single or multi-word)
         if qinfo.ask_form == "define" or qinfo.wh_type == "what":
-            m = re.search(r"what(?:'s| is| are)?\s+(?:a\s+|an\s+|the\s+)?(\w+)\??$", lower)
-            if m and m.group(1) not in ("you", "ai", "this", "that"):
-                ent = _singularize(m.group(1))
-                rel = self.reasoner.cs.related(ent)
-                self.topic = ent
-                if rel:
-                    text = f"About {ent}: " + "; ".join(str(t) for t in rel[:12]) + "."
-                    return self._emit(text, method="define", confidence=0.75, triples=[str(t) for t in rel[:12]], question=qinfo.to_dict())
+            m = re.search(
+                r"what(?:'s| is| are)?\s+(?:a\s+|an\s+|the\s+)?(.+?)\??$",
+                lower,
+            )
+            if m:
+                phrase = m.group(1).strip()
+                if phrase.split()[0] not in ("you", "this", "that", "your"):
+                    ent = _singularize(phrase.split()[0])
+                    rel = self.reasoner.cs.related(ent)
+                    self.topic = ent
+                    if rel:
+                        text = f"About {ent}: " + "; ".join(str(t) for t in rel[:12]) + "."
+                        return self._emit(
+                            text,
+                            method="define",
+                            confidence=0.75,
+                            triples=[str(t) for t in rel[:12]],
+                            question=qinfo.to_dict(),
+                        )
+                    # Fall through — caller may web-search multi-word science/computing topics
+                    return self._emit(
+                        f"__SEARCH__:{phrase}",
+                        method="define_escalate_search",
+                        confidence=0.4,
+                        question=qinfo.to_dict(),
+                        supported=True,
+                    )
 
-        m = re.search(r"tell me about\s+(\w+)|what (?:do you know|is known) about\s+(\w+)", lower)
+        m = re.search(r"tell me about\s+(.+)|what (?:do you know|is known) about\s+(.+)", lower)
         if m:
-            ent = m.group(1) or m.group(2)
-            rel = self.reasoner.cs.related(ent)
+            ent_raw = (m.group(1) or m.group(2) or "").strip(" ?.")
+            ent = _singularize(ent_raw.split()[0]) if ent_raw else ""
+            rel = self.reasoner.cs.related(ent) if ent else []
             self.topic = ent
             if not rel:
                 return self._emit(
-                    f"I do not yet have common-sense facts about '{ent}'.",
-                    method="lookup",
-                    confidence=0.2,
+                    f"__SEARCH__:{ent_raw or ent}",
+                    method="lookup_escalate_search",
+                    confidence=0.35,
                     question=qinfo.to_dict(),
                 )
             text = f"About {ent}: " + "; ".join(str(t) for t in rel[:12]) + "."
@@ -421,6 +476,29 @@ class OpenDomainChat:
 
         return None
 
+    def _web_answer(
+        self,
+        topic: str,
+        qinfo,
+        frame,
+        *,
+        allow_live: bool = True,
+    ) -> dict[str, Any]:
+        result = self.web.search(
+            topic,
+            question=qinfo.to_dict() if hasattr(qinfo, "to_dict") else (qinfo or {}),
+            allow_live=allow_live,
+        )
+        return self._emit(
+            result.answer,
+            method=f"web_{result.method}",
+            confidence=result.confidence,
+            supported=result.ok,
+            question=qinfo.to_dict() if hasattr(qinfo, "to_dict") else qinfo,
+            smart=frame.to_dict() if hasattr(frame, "to_dict") else frame,
+            search=result.to_dict(),
+        )
+
     def _emit(
         self,
         text: str,
@@ -432,6 +510,8 @@ class OpenDomainChat:
         question: Optional[dict] = None,
         last_predicate: Optional[str] = None,
         last_object: Optional[str] = None,
+        smart: Optional[dict] = None,
+        search: Optional[dict] = None,
     ) -> dict[str, Any]:
         if last_predicate:
             self.last_predicate = last_predicate
@@ -447,8 +527,11 @@ class OpenDomainChat:
             "llm_dependency": False,
             "open_domain": True,
             "question": question,
+            "smart": smart,
+            "search": search,
             "last_predicate": self.last_predicate,
             "last_object": self.last_object,
+            "human_level_agi": False,
         }
         self.history.append(ChatTurn("assistant", text, payload))
         return payload

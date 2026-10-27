@@ -33,6 +33,7 @@ class SmartRouter:
         "computer",
         "learning",
         "planning",
+        "web_search",
         "general",
     )
 
@@ -116,6 +117,18 @@ class SmartRouter:
         if lower.startswith("plan ") or lower.startswith("how would you "):
             scores["planning"] += 4.5
             reasons.append("planning_cue")
+
+        # Web / internet research
+        if re.search(
+            r"\b(search the web|look up|google|wikipedia|find online|internet search|"
+            r"search online|web search)\b",
+            lower,
+        ):
+            scores["web_search"] += 4.5
+            reasons.append("web_search_cue")
+        if re.search(r"\b(what is|what's|explain|tell me about)\b", lower) and not scores["finderbay"]:
+            scores["web_search"] += 1.2
+            scores["general"] += 1.0
 
         # Mild prior for general chat questions
         if re.search(r"\b(who are you|what can you do|explain|why|how does)\b", lower):

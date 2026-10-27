@@ -20,9 +20,15 @@ WH_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("who", re.compile(r"^\s*(?:who|kisne|kaun)\b", re.I)),
     ("where", re.compile(r"^\s*(?:where|kahan|kahaan)\b", re.I)),
     ("when", re.compile(r"^\s*(?:when|kab)\b", re.I)),
-    ("why", re.compile(r"^\s*(?:why|kyun|kyu)\b", re.I)),
+    ("why", re.compile(r"^\s*(?:why|kyun|kyu|kyon)\b", re.I)),
     ("whose", re.compile(r"^\s*whose\b", re.I)),
 ]
+
+# Mid-sentence WH (not only line-start) — for "Please tell me what gravity is"
+WH_INLINE = re.compile(
+    r"\b(?:how\s+many|how\s+much|what|which|who|where|when|why|whose|kya|kitne|kitni|kyun)\b",
+    re.I,
+)
 
 YESNO_STARTERS = re.compile(
     r"^\s*(?:can|could|does|do|did|is|are|was|were|will|would|should|has|have|had|"
@@ -35,9 +41,10 @@ ASK_FORM_RULES: list[tuple[str, re.Pattern[str]]] = [
     ("sum", re.compile(r"\b(?:how\s+much|total(?:\s+of)?|sum(?:\s+of)?|grand\s+total)\b", re.I)),
     ("exists", re.compile(r"\b(?:is\s+there|are\s+there|any\s+\w+|do\s+we\s+have|kya\s+hai)\b", re.I)),
     ("compare", re.compile(r"\b(?:compare|versus|vs\.?|difference\s+between|more\s+than|less\s+than|bigger|smaller)\b", re.I)),
-    ("causal", re.compile(r"\b(?:why|because|cause|kyun|reason)\b", re.I)),
+    ("causal", re.compile(r"\b(?:why|because|cause|kyun|kyon|reason)\b", re.I)),
     ("howto", re.compile(r"\b(?:how\s+(?:do|to|can|should)|steps?\s+to|tarika)\b", re.I)),
-    ("define", re.compile(r"\b(?:what\s+(?:is|are)|define|meaning\s+of|kya\s+(?:hai|hota))\b", re.I)),
+    ("define", re.compile(r"\b(?:what\s+(?:is|are)|define|meaning\s+of|kya\s+(?:hai|hota)|tell\s+me\s+about)\b", re.I)),
+    ("search", re.compile(r"\b(?:search(?:\s+the\s+web)?|look\s+up|google|wikipedia|find\s+online)\b", re.I)),
     ("list", re.compile(r"\b(?:list|show|which|dikhao|batao|find|get)\b", re.I)),
     ("yesno", re.compile(r"^\s*(?:can|does|do|is|are|will|should|has|have|kya)\b", re.I)),
 ]
@@ -88,9 +95,20 @@ class QuestionAnalyzer:
 
         has_qmark = raw.endswith("?")
         wh = self._wh_type(lower)
+        if wh == "none" and WH_INLINE.search(lower):
+            # Inline WH: "Please tell me what gravity is"
+            for name, pat in WH_PATTERNS:
+                # match mid-string by dropping start anchor semantics
+                inline = re.compile(pat.pattern.lstrip("^\\s*"), pat.flags)
+                if inline.search(lower):
+                    wh = name
+                    break
         looks_yesno = bool(YESNO_STARTERS.match(lower))
         is_q = has_qmark or wh != "none" or looks_yesno or bool(
-            re.search(r"\b(?:tell me|explain|describe)\b", lower)
+            re.search(
+                r"\b(?:tell me|explain|describe|search|look up|define|meaning of)\b",
+                lower,
+            )
         )
         qa.is_question = is_q
         qa.wh_type = wh if wh != "none" else ("yesno" if looks_yesno and is_q else "none")
@@ -143,6 +161,8 @@ class QuestionAnalyzer:
             return "yesno"
         if wh == "what":
             return "define"
+        if re.search(r"\b(?:search|look\s+up|google)\b", lower):
+            return "search"
         return "unknown"
 
     def _aggregation(self, lower: str, ask_form: str) -> Optional[str]:
@@ -239,6 +259,10 @@ class QuestionAnalyzer:
             return "explanation"
         if qa.ask_form == "exists":
             return "boolean"
+        if qa.ask_form == "search":
+            return "text"
+        if qa.ask_form == "define":
+            return "explanation"
         return "text"
 
     def _confidence(self, qa: QuestionAnalysis, has_qmark: bool) -> float:

@@ -140,6 +140,8 @@ class FinderbayAssistant:
             return self._computer_cmd(text)
         if route == "planning":
             return self.plan(text)
+        if route == "web_search" or lower.startswith("search the web") or lower.startswith("look up "):
+            return self.web_search(text, speak=speak)
 
         # Vision shorthand prefixes
         if lower.startswith("understand image ") or lower.startswith("understand scene "):
@@ -271,6 +273,44 @@ class FinderbayAssistant:
             },
             route="vision_thermal",
         )
+
+    def web_search(self, text: str, *, speak: Optional[bool] = None) -> dict[str, Any]:
+        """Intelligent internet/local research for open questions."""
+        from ..nlu.smart_questions import SmartQuestionUnderstanding
+        from ..search import IntelligentWebSearch
+
+        frame = SmartQuestionUnderstanding().understand(text)
+        query = text
+        m = __import__("re").search(
+            r"(?:search(?:\s+the\s+web)?(?:\s+for)?|look\s+up|google|find\s+online)\s+(.+)$",
+            text,
+            __import__("re").I,
+        )
+        if m:
+            query = m.group(1).strip(" ?.")
+        elif frame.entities:
+            query = " ".join(frame.entities[:3])
+        result = IntelligentWebSearch(allow_live=True).search(
+            query, question=frame.analysis
+        )
+        out = self._tag(
+            {
+                "text": result.answer,
+                "structured": result.to_dict(),
+                "smart": frame.to_dict(),
+                "verified": result.ok,
+                "confidence": score_response(
+                    verified=result.ok,
+                    supported=result.ok,
+                    intent_confidence=result.confidence,
+                ).to_dict(),
+            },
+            route="web_search",
+        )
+        do_speak = self.speak_replies if speak is None else speak
+        if do_speak and out.get("text"):
+            out["voice"] = self.voice.speak(str(out["text"])[:500])
+        return out
 
     def speak(self, text: str) -> dict[str, Any]:
         return self.voice.speak(text)

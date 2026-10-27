@@ -51,6 +51,8 @@ REQUIRED_MODULES = [
     "cognitive_ai.intelligence.router",
     "cognitive_ai.intelligence.confidence",
     "cognitive_ai.intelligence.hardening",
+    "cognitive_ai.nlu.smart_questions",
+    "cognitive_ai.search.web_intel",
 ]
 
 
@@ -76,6 +78,8 @@ REQUIRED_ATTRS = {
     "cognitive_ai.intelligence.router": ["SmartRouter", "RouteDecision"],
     "cognitive_ai.intelligence.confidence": ["score_response", "ConfidenceScore"],
     "cognitive_ai.intelligence.hardening": ["SelfCheck", "harden_text"],
+    "cognitive_ai.nlu.smart_questions": ["SmartQuestionUnderstanding"],
+    "cognitive_ai.search.web_intel": ["IntelligentWebSearch", "SearchResult"],
 }
 
 

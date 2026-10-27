@@ -58,6 +58,7 @@ _INTENT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("memory.query", re.compile(r"(what.*(remember|know)|recall|memory)", re.I)),
     ("math.calculate", re.compile(r"(calculate|compute|how much is|\d+\s*[\+\-\*/])", re.I)),
     ("system.health", re.compile(r"(health|status|are you (ok|ready))", re.I)),
+    ("web.search", re.compile(r"(search the web|look up|google|find online|wikipedia|internet search)", re.I)),
 ]
 
 
@@ -247,6 +248,11 @@ class JarvisPipeline:
                 "That request is outside the supported command set. "
                 "Try material shortage report, file search, schedule, or system health."
             )
+        if intent == "web.search":
+            last = (evidence.get("last") or {})
+            if last.get("answer"):
+                return str(last["answer"])
+            return "Web search finished without a clear answer."
         if verified:
             return f"Completed and verified: {intent}."
         return f"Finished {intent}, but outcome not fully verified."
@@ -424,6 +430,13 @@ class JarvisPipeline:
             slots["job_id"] = "current"
         if intent == "memory.query":
             slots["query"] = text
+        if intent == "web.search":
+            m = re.search(
+                r"(?:search(?:\s+the\s+web)?(?:\s+for)?|look\s+up|google|find\s+online)\s+(.+)$",
+                text,
+                re.I,
+            )
+            slots["query"] = m.group(1).strip(" ?.") if m else text
         slots["_missing"] = missing
         return slots
 
@@ -437,6 +450,8 @@ class JarvisPipeline:
         if tool_name == "math.calculate":
             return {"expression": slots.get("expression", "0")}
         if tool_name == "memory.query":
+            return {"query": slots.get("query", "")}
+        if tool_name == "web.search":
             return {"query": slots.get("query", "")}
         if tool_name == "jobs.cancel":
             return {"job_id": slots.get("job_id", "current")}

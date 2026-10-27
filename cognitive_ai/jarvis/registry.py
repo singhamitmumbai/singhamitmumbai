@@ -235,6 +235,18 @@ class JarvisToolRegistry:
             ),
             lambda _a: {"ok": True, "status": "ok", "controller": "non_llm"},
         )
+        self.register(
+            ToolContract(
+                name="web.search",
+                description="Intelligent web/local research with citations",
+                input_schema={"query": "str"},
+                output_schema={"answer": "str", "hits": "list"},
+                effect="read",
+                family="web",
+                verification="inspect_sources",
+            ),
+            self._web_search,
+        )
         # Perception stubs
         self.register(
             ToolContract(
@@ -409,3 +421,24 @@ class JarvisToolRegistry:
             }
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": str(exc), "image_path": args.get("image_path"), "text": ""}
+
+    def _web_search(self, args: dict[str, Any]) -> dict[str, Any]:
+        try:
+            from ..search import IntelligentWebSearch
+
+            q = str(args.get("query") or "")
+            result = IntelligentWebSearch(allow_live=True).search(q)
+            return {
+                "ok": result.ok,
+                "query": result.query,
+                "rewritten_query": result.rewritten_query,
+                "answer": result.answer,
+                "hits": [h.to_dict() for h in result.hits],
+                "method": result.method,
+                "confidence": result.confidence,
+                "live": result.live,
+                "verified": bool(result.hits),
+                "checks": [{"method": "inspect_sources", "passed": bool(result.hits or result.ok)}],
+            }
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": str(exc)}
