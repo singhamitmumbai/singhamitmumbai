@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.20.0) — universal **think→plan** layer on every question + modern Chat UI + ChatGPT-level chat + proto-AGI gap stack. Still `human_level_agi=false`:
+**Complete AI** (v1.21.0) — universal **think→plan** on *every* entrypoint (CompleteAI · chat · Assistant · JARVIS · Finderbay · proto-AGI) + modern Chat UI. Still `human_level_agi=false`:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
@@ -38,13 +38,24 @@ python -m cognitive_ai chat --domain complete --port 8765
 Product: **Complete AI** / **Finderbay Assistant** / **JARVIS tools**. `human_level_agi=false`.  
 Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.
 
+### What v1.21 adds — Thinking on every entrypoint
+
+Same deliberator, now also wired into **FinderbayAssistant**, **JARVIS**, **GeneralNonLLMAI**, and **CompleteNonLLMAI** cycle (`think` stage). Plans include situation type, alternatives considered, next actions, and a reflect step.
+
+```bash
+python -m cognitive_ai assistant --ask "Explain OCR simply"
+python -m cognitive_ai jarvis --ask "are you ready"
+pytest tests/test_thinking_v120.py -q
+```
+
 ### What v1.20 adds — Universal thinking & planning
 
 Every situation / question runs a non-LLM deliberator **before** answering:
 
 | Piece | Role |
 |------|------|
-| `thinking/deliberator.py` | Perceive → safety → goal → strategy → constraints → plan → risks → success criteria |
+| `thinking/deliberator.py` | Perceive → safety → goal → strategy → alternatives → plan → risks → reflect |
+| `thinking/attach.py` | Shared `think_or_abstain` / `merge_thinking` for any handler |
 | CompleteAI / OpenDomainChat / ProtoAGIStack | Always call `ThinkingSystem.think()` first; attach `thinking` + `thinking_markdown` |
 | Chat UI | Expandable **Thinking** panel on every bot reply |
 | `/api/chat` | Returns `thinking`, `thinking_brief`, `thinking_markdown` |
@@ -242,7 +253,7 @@ Tool contracts, job store, provenance memory, material shortage skill, voice PTT
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.20.0.zip
+# → dist/Complete_Non_LLM_AI_v1.21.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.

@@ -43,9 +43,12 @@ class Deliberation:
     thoughts: list[ThoughtStep] = field(default_factory=list)
     plan: list[str] = field(default_factory=list)
     strategy: str = "local_kb"
+    situation_type: str = "general"  # question|task|creative|math|social|research|vision|coding|refuse
+    alternatives: list[str] = field(default_factory=list)
     risks: list[str] = field(default_factory=list)
     unknowns: list[str] = field(default_factory=list)
     success_criteria: list[str] = field(default_factory=list)
+    next_actions: list[str] = field(default_factory=list)
     confidence: float = 0.5
     should_abstain: bool = False
     deliberation_id: str = field(default_factory=lambda: new_id("think"))
@@ -61,13 +64,22 @@ class Deliberation:
 
     def as_markdown(self) -> str:
         lines = ["**Thinking**", ""]
+        lines.append(f"- Situation type: `{self.situation_type}`")
+        lines.append(f"- Goal: {self.goal or '(forming)'}")
+        lines.append("")
         for i, t in enumerate(self.thoughts, 1):
             lines.append(f"{i}. *{t.stage}*: {t.content}")
+        if self.alternatives:
+            lines.append("")
+            lines.append("**Alternatives considered**: " + "; ".join(self.alternatives[:4]))
         if self.plan:
             lines.append("")
             lines.append("**Plan**")
             for i, step in enumerate(self.plan, 1):
                 lines.append(f"{i}. {step}")
+        if self.next_actions:
+            lines.append("")
+            lines.append("**Next actions**: " + "; ".join(self.next_actions[:3]))
         if self.risks:
             lines.append("")
             lines.append("**Risks / checks**: " + "; ".join(self.risks[:4]))
@@ -83,7 +95,7 @@ class Deliberation:
     def as_brief(self) -> str:
         """One-line summary for compact UI tags."""
         return (
-            f"think:{self.strategy} · {len(self.plan)} steps · "
+            f"think:{self.strategy}/{self.situation_type} · {len(self.plan)} steps · "
             f"conf={self.confidence:.2f}"
         )
 
@@ -111,8 +123,10 @@ class ThinkingSystem:
         # 0) Empty
         if not raw:
             d.goal = "clarify_empty_input"
+            d.situation_type = "social"
             d.thoughts.append(ThoughtStep("perceive", "No input received.", 0.9))
             d.plan = ["Ask the user what they need"]
+            d.next_actions = ["Wait for a concrete question or task"]
             d.strategy = "ask_clarify"
             d.should_abstain = False
             d.confidence = 0.3
@@ -121,11 +135,13 @@ class ThinkingSystem:
 
         # 1) Perceive + understand question frame
         frame = self.questions.understand(raw)
+        d.situation_type = self._situation_type(raw, frame)
         d.thoughts.append(
             ThoughtStep(
                 "perceive",
-                f"Understood as domain=`{frame.domain}`, ask_form=`{frame.analysis.get('ask_form')}`, "
-                f"policy=`{frame.answer_policy}`, style=`{frame.style}`.",
+                f"Situation=`{d.situation_type}`; domain=`{frame.domain}`; "
+                f"ask_form=`{frame.analysis.get('ask_form')}`; "
+                f"policy=`{frame.answer_policy}`; style=`{frame.style}`.",
                 frame.confidence,
             )
         )
@@ -142,9 +158,11 @@ class ThinkingSystem:
         )
         if not verdict.allowed:
             d.goal = "refuse_disallowed_request"
+            d.situation_type = "refuse"
             d.strategy = "abstain"
             d.should_abstain = True
             d.plan = ["Refuse politely", "Offer a safe alternative topic"]
+            d.next_actions = ["Do not provide harmful detail"]
             d.risks = ["policy_violation"]
             d.confidence = 0.95
             d.success_criteria = ["request_refused_without_harmful_detail"]
@@ -208,17 +226,33 @@ class ThinkingSystem:
                 ThoughtStep("constraints", "Constraints: " + "; ".join(constraints), 0.7)
             )
 
-        # 6) Plan by strategy / ask_form
+        # 6) Alternatives considered (so planning is not single-path)
+        d.alternatives = self._alternatives(strategy, frame)
+        if d.alternatives:
+            d.thoughts.append(
+                ThoughtStep(
+                    "alternatives",
+                    "Also considered: " + "; ".join(d.alternatives[:4]),
+                    0.65,
+                )
+            )
+
+        # 7) Plan by strategy / ask_form / situation
         d.plan = self._build_plan(raw, frame, strategy)
+        # Compound / multi-clause questions get an explicit decompose step
+        if (frame.analysis or {}).get("is_multi_clause") and d.plan:
+            d.plan = ["Split into sub-questions and answer each in order"] + d.plan
+        d.next_actions = list(d.plan[:2]) if d.plan else ["Produce best-effort answer"]
         d.thoughts.append(
             ThoughtStep(
                 "plan",
-                f"Built a {len(d.plan)}-step plan before answering.",
+                f"Built a {len(d.plan)}-step plan before answering "
+                f"(next: {d.next_actions[0] if d.next_actions else 'n/a'}).",
                 0.8,
             )
         )
 
-        # 7) Risks & success criteria
+        # 8) Risks & success criteria
         d.risks = self._risks(frame, strategy, verdict.risk)
         d.success_criteria = self._success_criteria(frame, strategy)
         d.thoughts.append(
@@ -229,7 +263,11 @@ class ThinkingSystem:
             )
         )
 
-        # 8) Confidence blend
+        # 9) Reflect — is the plan adequate for this situation?
+        reflection = self._reflect(raw, frame, strategy, d.plan)
+        d.thoughts.append(ThoughtStep("reflect", reflection, 0.7))
+
+        # 10) Confidence blend
         d.confidence = round(
             min(
                 0.95,
@@ -242,6 +280,7 @@ class ThinkingSystem:
         )
         if d.should_abstain:
             d.plan = ["Abstain or ask a clarifying question", "Offer safer alternatives"]
+            d.next_actions = list(d.plan[:2])
         return self._finish(d, t0)
 
     def _finish(self, d: Deliberation, t0: float) -> Deliberation:
@@ -249,6 +288,59 @@ class ThinkingSystem:
         d.human_level_agi = False
         self.last = d
         return d
+
+    def _situation_type(self, raw: str, frame) -> str:
+        if frame.dialogue_act in ("greet", "thanks", "bye", "affirm", "deny"):
+            return "social"
+        if frame.math_expr or frame.answer_policy == "math":
+            return "math"
+        if frame.creative_kind or frame.answer_policy == "creative":
+            return "creative"
+        if frame.domain == "vision":
+            return "vision"
+        if frame.domain == "finderbay":
+            return "task"
+        if frame.answer_policy == "search" or (frame.analysis or {}).get("ask_form") == "search":
+            return "research"
+        if re.search(r"\b(?:generate function|refactor|unit test|python code|write code)\b", raw, re.I):
+            return "coding"
+        if (frame.analysis or {}).get("ask_form") in ("howto",) or frame.answer_policy == "tool":
+            return "task"
+        if (frame.analysis or {}).get("is_question") or raw.strip().endswith("?"):
+            return "question"
+        return "general"
+
+    def _alternatives(self, strategy: str, frame) -> list[str]:
+        pool = {
+            "local_kb": ["web_search", "ask_clarify"],
+            "web_search": ["local_kb", "ask_clarify"],
+            "tool_finderbay": ["ask_clarify", "local_kb"],
+            "tool_vision": ["ask_clarify"],
+            "tool_coding": ["ask_clarify", "local_kb"],
+            "math": ["ask_clarify"],
+            "creative_template": ["local_kb", "ask_clarify"],
+            "long_horizon": ["ask_clarify", "local_kb"],
+            "transfer": ["local_kb", "long_horizon"],
+            "ask_clarify": ["local_kb"],
+            "abstain": ["ask_clarify"],
+        }
+        alts = list(pool.get(strategy, ["local_kb", "ask_clarify"]))
+        if frame.answer_policy == "search" and "web_search" not in alts and strategy != "web_search":
+            alts.insert(0, "web_search")
+        return alts[:4]
+
+    def _reflect(self, raw: str, frame, strategy: str, plan: list[str]) -> str:
+        if not plan:
+            return "Plan is empty — will ask to clarify."
+        if strategy == "ask_clarify":
+            return "Ambiguity high; clarifying before acting is safer than guessing."
+        if len(raw.split()) > 40:
+            return "Long request — plan prioritizes structure and chunked answering."
+        if (frame.analysis or {}).get("is_multi_clause"):
+            return "Multi-part ask detected; plan decomposes before synthesizing."
+        if strategy == "web_search":
+            return "Will prefer local KB first, then live search; cite sources honestly."
+        return f"Plan has {len(plan)} steps under strategy=`{strategy}`; proceed then verify."
 
     def _goal_from_frame(self, raw: str, frame) -> str:
         ask = (frame.analysis or {}).get("ask_form") or "unknown"

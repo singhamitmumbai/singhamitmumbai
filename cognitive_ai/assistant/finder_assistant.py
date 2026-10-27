@@ -81,6 +81,23 @@ class FinderbayAssistant:
         text = harden_text(text or "")
         lower = text.lower().strip()
 
+        # Universal think→plan before any assistant route
+        try:
+            from ..thinking import think_or_abstain
+
+            deliberation, refuse = think_or_abstain(
+                self, text, context={"channel": "assistant", "mode": mode}
+            )
+            self._last_deliberation = deliberation
+            if refuse is not None:
+                out = self._tag(refuse, route="think_abstain")
+                do_speak = self.speak_replies if speak is None else speak
+                if do_speak and out.get("text"):
+                    out["voice"] = self.voice.speak(str(out["text"])[:500])
+                return out
+        except Exception:  # noqa: BLE001
+            self._last_deliberation = None
+
         # Assistant meta commands
         if lower.startswith("remember that ") or lower.startswith("remember "):
             return self._remember_cmd(text)
@@ -581,4 +598,9 @@ class FinderbayAssistant:
         result["human_level_agi"] = False
         result["llm_at_runtime"] = False
         result["assistant"] = True
+        last = getattr(self, "_last_deliberation", None)
+        if last is not None and "thinking" not in result:
+            result["thinking"] = last.to_dict()
+            result["thinking_brief"] = last.as_brief()
+            result["thinking_markdown"] = last.as_markdown()
         return result

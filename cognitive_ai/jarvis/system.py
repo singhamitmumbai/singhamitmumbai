@@ -103,6 +103,19 @@ class JarvisSystem:
                     route="voice_failed",
                 )
 
+        # Universal think→plan before JARVIS pipeline
+        try:
+            from ..thinking import think_or_abstain
+
+            deliberation, refuse = think_or_abstain(
+                self, text or "", context={"channel": "jarvis", "source": source}
+            )
+            self._last_deliberation = deliberation
+            if refuse is not None:
+                return self._tag(refuse, route="think_abstain")
+        except Exception:  # noqa: BLE001
+            self._last_deliberation = None
+
         # Follow-up resolution
         follow = self.dialogue.resolve_followup(text)
         # Prefer learning-active classifier for intent when available
@@ -214,4 +227,9 @@ class JarvisSystem:
         result["human_level_agi"] = False
         result["llm_at_runtime"] = False
         result["controller"] = "non_llm"
+        last = getattr(self, "_last_deliberation", None)
+        if last is not None and "thinking" not in result:
+            result["thinking"] = last.to_dict()
+            result["thinking_brief"] = last.as_brief()
+            result["thinking_markdown"] = last.as_markdown()
         return result

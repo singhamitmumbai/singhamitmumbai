@@ -217,6 +217,36 @@ class CompleteNonLLMAI:
             self.last_cycle = cycle.trace
             return answer
 
+        # 1b. Universal think→plan for any Finderbay/system situation
+        deliberation = None
+        try:
+            from .thinking import think_or_abstain
+
+            deliberation, refuse = think_or_abstain(
+                self, text, context={"channel": "finderbay_system", "modality": modality}
+            )
+            self._last_deliberation = deliberation
+            cycle.stage(
+                "think",
+                ok=True,
+                summary=deliberation.as_brief(),
+                data={
+                    "strategy": deliberation.strategy,
+                    "situation_type": deliberation.situation_type,
+                    "plan_len": len(deliberation.plan),
+                },
+                duration_ms=deliberation.duration_ms,
+            )
+            if refuse is not None:
+                refuse["cycle"] = cycle.finish("abstained").to_dict()
+                refuse["version"] = self.version
+                refuse["llm_dependency"] = False
+                self.history.append(refuse)
+                self.last_cycle = cycle.trace
+                return refuse
+        except Exception:  # noqa: BLE001
+            self._last_deliberation = None
+
         # 2. Understand
         t_stage = time.perf_counter()
         frame = self.dialogue.process(text, self.state)
@@ -498,6 +528,15 @@ class CompleteNonLLMAI:
             "version": self.version,
             "llm_dependency": False,
             "human_level_agi": False,
+            **(
+                {
+                    "thinking": self._last_deliberation.to_dict(),
+                    "thinking_brief": self._last_deliberation.as_brief(),
+                    "thinking_markdown": self._last_deliberation.as_markdown(),
+                }
+                if getattr(self, "_last_deliberation", None) is not None
+                else {}
+            ),
         }
 
     # --- improvement / evaluation ---------------------------------------------

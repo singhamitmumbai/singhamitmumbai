@@ -105,10 +105,14 @@
     if (role === "bot" && (meta.thinkingMarkdown || meta.thinkingBrief || meta.thinking)) {
       const details = document.createElement("details");
       details.className = "thinking";
+      details.open = false;
       const summary = document.createElement("summary");
+      const sit = (meta.thinking && meta.thinking.situation_type) || "";
       summary.textContent = meta.thinkingBrief
         ? `Thinking · ${meta.thinkingBrief}`
-        : "Thinking";
+        : sit
+          ? `Thinking · ${sit}`
+          : "Thinking";
       details.appendChild(summary);
       const thinkBody = document.createElement("div");
       thinkBody.className = "thinking-body";

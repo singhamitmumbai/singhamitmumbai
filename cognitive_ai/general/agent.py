@@ -97,6 +97,23 @@ class GeneralNonLLMAI:
             modality = "text"
             payload = text
 
+        # Universal think→plan (Finderbay path; open-domain chat also deliberates)
+        deliberation = None
+        try:
+            from ..thinking import think_or_abstain, merge_thinking
+
+            deliberation, refuse = think_or_abstain(
+                self,
+                text if text else str(payload),
+                context={"channel": "general", "force": force, **(context or {})},
+            )
+            if refuse is not None:
+                refuse["version"] = self.version
+                refuse["general_ai"] = True
+                return refuse
+        except Exception:  # noqa: BLE001
+            deliberation = None
+
         if force == "finderbay" or (force == "auto" and self._looks_like_task(text)):
             result = self.task_ai.handle(payload, modality=modality, source=source, context=context)
             # If task AI abstains as unsupported, fall through to open-domain
@@ -109,10 +126,20 @@ class GeneralNonLLMAI:
             result = dict(result)
             result["route"] = "finderbay"
             result["general_ai"] = True
+            if deliberation is not None:
+                result = merge_thinking(result, deliberation)
             return result
 
         od = self.chat.respond(text if text else str(payload))
-        return self._wrap_open(od)
+        wrapped = self._wrap_open(od)
+        # Prefer open-domain's own thinking when present; else attach ours
+        if "thinking" not in wrapped and deliberation is not None:
+            wrapped = merge_thinking(wrapped, deliberation)
+        elif od.get("thinking") and "thinking" not in wrapped:
+            wrapped["thinking"] = od["thinking"]
+            wrapped["thinking_brief"] = od.get("thinking_brief")
+            wrapped["thinking_markdown"] = od.get("thinking_markdown")
+        return wrapped
 
     def ask(self, text: str) -> str:
         return self.handle(text)["text"]
@@ -158,7 +185,7 @@ class GeneralNonLLMAI:
         return any(h in lower for h in hooks)
 
     def _wrap_open(self, od: dict[str, Any], fallback_from: str = "") -> dict[str, Any]:
-        return {
+        out = {
             "text": od.get("text"),
             "structured": {
                 "open_domain": True,
@@ -178,7 +205,13 @@ class GeneralNonLLMAI:
             "llm_dependency": False,
             "version": self.version,
             "commonsense": self.cs_kb.summary(),
+            "human_level_agi": False,
         }
+        if od.get("thinking"):
+            out["thinking"] = od["thinking"]
+            out["thinking_brief"] = od.get("thinking_brief")
+            out["thinking_markdown"] = od.get("thinking_markdown")
+        return out
 
     def status(self) -> dict[str, Any]:
         from ..perception.ocr_production import ProductionOCR
