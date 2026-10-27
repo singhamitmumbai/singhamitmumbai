@@ -101,6 +101,19 @@ def serve_api(host: str = "127.0.0.1", port: int = 8787, *, mode: str = "general
                             "summary": state.ai.purchase_orders.summarize(project_id=project),
                         },
                     )
+                if path in ("/vision", "/vision/status"):
+                    vision = getattr(state.ai, "vision", None)
+                    if vision is None:
+                        return self._json(503, {"error": "vision_unavailable"})
+                    return self._json(
+                        200,
+                        {
+                            "status": vision.status(),
+                            "projects": vision.projects(),
+                            "llm_at_runtime": False,
+                            "human_level_agi": False,
+                        },
+                    )
             return self._json(404, {"error": "not_found", "path": path})
 
         def do_POST(self) -> None:  # noqa: N802
@@ -125,6 +138,22 @@ def serve_api(host: str = "127.0.0.1", port: int = 8787, *, mode: str = "general
                         return self._json(401, {"error": "auth_failed"})
                     state.ai.executor.auth_token = tok
                     return self._json(200, {"token": tok, "logged_in": True})
+                if path == "/vision/analyze":
+                    vision = getattr(state.ai, "vision", None)
+                    if vision is None:
+                        return self._json(503, {"error": "vision_unavailable"})
+                    image = data.get("image") or data.get("image_path") or data.get("path")
+                    task = data.get("task") or "detect_objects"
+                    if task == "vision_status":
+                        return self._json(200, vision.status())
+                    if not image:
+                        return self._json(400, {"error": "image_path_required"})
+                    # Also accept natural-language ask through the full AI cycle
+                    if data.get("ask"):
+                        out = state.ai.handle(str(data["ask"]))
+                        return self._json(200, out)
+                    out = vision.analyze(image, task=task)
+                    return self._json(200, out)
             return self._json(404, {"error": "not_found", "path": path})
 
     httpd = ThreadingHTTPServer((host, port), Handler)

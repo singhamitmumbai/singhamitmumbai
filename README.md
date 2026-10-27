@@ -1,10 +1,19 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-A runnable **complete non-LLM AI** (v1.2) built from the engineering blueprint:
+A runnable **complete non-LLM AI** (v1.2.1) built from the engineering blueprint:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
 pretrained general-purpose LLM at runtime**.
+
+### Release zip
+
+```bash
+python scripts/package_release.py
+# → dist/Complete_Non_LLM_AI_v1.2.1.zip
+```
+
+See `INSTALL.md` for install steps after unzipping.
 
 ### What v1.2 adds — Computer vision (YOLO_Projects)
 

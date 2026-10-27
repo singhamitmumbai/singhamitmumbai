@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cognitive-ai"
-version = "1.2.0"
+version = "1.2.1"
 description = "Complete non-LLM AI — SelfBrain + coding + YOLO computer vision"
 readme = "README.md"
 requires-python = ">=3.10"

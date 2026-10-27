@@ -20,3 +20,5 @@ generated/
 *.pt
 runs/
 wandb/
+# Release zips are generated into dist/; keep folder local
+dist/*.zip

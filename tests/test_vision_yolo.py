@@ -109,3 +109,14 @@ def test_ai_status_includes_vision():
     assert "vision" in s
     assert s["vision"]["llm"] is False
     assert s["version"].startswith("1.2")
+
+
+def test_package_release_script_imports():
+    import importlib.util
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / "package_release.py"
+    spec = importlib.util.spec_from_file_location("package_release", path)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert callable(mod.build_zip)

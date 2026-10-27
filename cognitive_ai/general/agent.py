@@ -33,6 +33,14 @@ FINDERBAY_HINTS = {
     "create_purchase_order",
     "query_vendors",
     "export_report",
+    "detect_objects",
+    "detect_vehicles",
+    "count_people",
+    "detect_fire",
+    "scan_document_vision",
+    "vision_status",
+    "ppe_compliance",
+    "estimate_queue",
     "status",
     "cancel",
     "correct",
@@ -136,6 +144,14 @@ class GeneralNonLLMAI:
             "payment",
             "contract",
             "vendor",
+            "detect objects",
+            "detect vehicles",
+            "count people",
+            "detect fire",
+            "vision status",
+            "yolo",
+            "ppe compliance",
+            "computer vision",
         )
         return any(h in lower for h in hooks)
 
@@ -182,10 +198,12 @@ class GeneralNonLLMAI:
                 "engine": "tesseract",
                 "available": ProductionOCR().available,
             },
+            "vision": self.task_ai.vision.status(),
             "limits": [
                 "Not human-level AGI",
                 "Open-domain chat is curated common-sense + patterns, not unrestricted LLM chat",
                 "Common-sense coverage is finite and explicit",
+                "Vision uses YOLO/classical CV (optional Ultralytics) — not an LLM",
             ],
         }
 
