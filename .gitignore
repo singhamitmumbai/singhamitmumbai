@@ -16,3 +16,7 @@ data/finderbay/examples/ex_*.json
 models/vosk-model-*/
 # CodingSystem scratch output
 generated/
+# YOLO / Ultralytics downloaded weights (large)
+*.pt
+runs/
+wandb/

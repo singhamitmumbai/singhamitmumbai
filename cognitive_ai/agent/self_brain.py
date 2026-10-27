@@ -171,6 +171,10 @@ class SelfBrainAgent:
             job.finished_at = utc_now()
             return
 
+        # Vision-tagged jobs still go through CompleteNonLLMAI (YOLO adapters)
+        if self._is_vision_job(job):
+            job.tags = list(dict.fromkeys([*(job.tags or []), "vision"]))
+
         # Finderbay / general task via CompleteNonLLMAI
         last_err = None
         while job.attempts <= job.max_attempts:
@@ -252,6 +256,24 @@ class SelfBrainAgent:
             "code search",
             "find symbol",
             "add test",
+        )
+        return any(h in lower for h in hooks)
+
+    def _is_vision_job(self, job: AgentJob) -> bool:
+        if "vision" in (job.tags or []) or job.metadata.get("domain") == "vision":
+            return True
+        lower = job.instruction.lower()
+        hooks = (
+            "detect objects",
+            "detect vehicles",
+            "count people",
+            "detect fire",
+            "vision status",
+            "scan document",
+            "ppe compliance",
+            "estimate queue",
+            "yolo ",
+            "computer vision",
         )
         return any(h in lower for h in hooks)
 

@@ -58,6 +58,8 @@ class Executor:
         self.last_alerts = None
         self.last_po = None
         self.last_report = None
+        self.last_vision = None
+        self.vision = None  # optional VisionSystem injected by CompleteNonLLMAI
         self.auth_token: Optional[str] = None
 
     def run_plan(self, plan: PlanRecord, state: WorkingState) -> list[ActionResult]:
@@ -261,6 +263,29 @@ class Executor:
             if parsed.get("issues"):
                 effects["issues"] = parsed["issues"]
             return [effects]
+
+        if op == "vision_analyze":
+            from ..vision.system import VisionSystem
+
+            vision = self.vision or VisionSystem()
+            self.vision = vision
+            task = step.args.get("task") or "detect_objects"
+            image = step.args.get("image_path")
+            if task != "vision_status" and not image:
+                # Fall back to last vision/image observation
+                for obs in reversed(state.observations):
+                    if obs.modality in ("vision", "image") and obs.raw_evidence:
+                        image = obs.raw_evidence
+                        break
+            if task == "vision_status":
+                out = vision.status()
+            else:
+                if not image:
+                    raise ValueError("image_path_required")
+                out = vision.analyze(image, task=task, state=state)
+            self.last_vision = out
+            result.external_receipt = f"vision:{task}:{out.get('count', out.get('engine'))}"
+            return [{"detections_ready": True, "vision": out}]
 
         if op == "reserve_stock":
             return self._reserve(step, state, result)

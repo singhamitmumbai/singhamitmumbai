@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cognitive-ai"
-version = "1.1.0"
-description = "Complete non-LLM AI — SelfBrain agent + advanced symbolic coding system"
+version = "1.2.0"
+description = "Complete non-LLM AI — SelfBrain + coding + YOLO computer vision"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -15,7 +15,8 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]
 perception = ["vosk>=0.3.45", "pytesseract>=0.3.10", "Pillow>=10.0"]
-all = ["cognitive-ai[dev,perception]"]
+vision = ["ultralytics>=8.0", "opencv-python-headless>=4.8", "numpy>=1.24"]
+all = ["cognitive-ai[dev,perception,vision]"]
 
 [project.scripts]
 cognitive-ai = "cognitive_ai.cli:main"

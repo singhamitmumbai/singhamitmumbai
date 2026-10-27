@@ -109,4 +109,20 @@ FINDERBAY_CAPABILITIES: list[CapabilitySpec] = [
         failure_behavior="Reject unverified model-proposed aliases.",
         resource_limits={"time_ms": 500},
     ),
+    CapabilitySpec(
+        name="computer_vision",
+        task="Run YOLO / classical CV on an image path (objects, vehicles, people, fire, document scan).",
+        inputs=["text", "image"],
+        operating_conditions=[
+            "image path provided",
+            "Ultralytics optional (stub without weights)",
+            "vendored YOLO_Projects (MIT)",
+        ],
+        output="detections + counts_by_label + natural language summary",
+        knowledge_required=["YOLO COCO classes", "task adapters"],
+        permitted_actions=["vision_analyze"],
+        success_condition="Structured detections returned; engine=ultralytics or documented stub.",
+        failure_behavior="Clarify missing image_path; never invent detections when path missing.",
+        resource_limits={"time_ms": 15000, "external_calls": 2},
+    ),
 ]

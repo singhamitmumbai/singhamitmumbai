@@ -45,6 +45,7 @@ from .runtime.cycle import OperatingCycle
 from .runtime.monitor import RuntimeMonitor
 from .uncertainty.calibration import calibrate_report
 from .uncertainty.router import UncertaintyRouter
+from .vision.system import VisionSystem
 from .world.model import WorldModel
 from .version import __version__
 
@@ -81,7 +82,8 @@ class CompleteNonLLMAI:
             "steps": self.config.resource_steps,
             "external_calls": self.config.resource_external_calls,
         }
-        self.gateway = InputGateway()
+        self.vision = VisionSystem()
+        self.gateway = InputGateway(vision=self.vision)
         self.nlu = LanguageUnderstanding(entity_linker=EntityLinker(self.memory))
         self.dialogue = DialogueTracker(self.nlu)
         self.attention = AttentionScheduler()
@@ -102,6 +104,7 @@ class CompleteNonLLMAI:
             allow_send=self.config.allow_send,
             allow_inventory_write=self.config.allow_inventory_write,
         )
+        self.executor.vision = self.vision
         self.auth = AuthService()
         self.payments = PaymentService(self.memory, self.auth)
         self.contracts = ContractService(self.memory, self.auth)
@@ -162,14 +165,26 @@ class CompleteNonLLMAI:
 
         # 1. Perceive
         t_stage = time.perf_counter()
+        ctx = dict(context or {})
+        # Allow image path + vision task via context when modality=vision
+        if modality == "vision" and "vision_task" not in ctx:
+            ctx["vision_task"] = "detect_objects"
         obs = self.gateway.ingest(
-            payload, modality=modality, source=source, context=context, state=self.state
+            payload, modality=modality, source=source, context=ctx, state=self.state
         )
         text = (
             obs.extracted_value
             if isinstance(obs.extracted_value, str)
             else str(obs.extracted_value or "")
         )
+        # If caller passed a vision image but typed a natural-language ask in context
+        if modality == "vision" and ctx.get("ask"):
+            text = str(ctx["ask"])
+        elif modality == "vision" and isinstance(obs.context.get("vision_result"), dict):
+            # Keep a usable NL ask so NLU can route; stash result for executor
+            self.executor.last_vision = obs.context["vision_result"]
+            task = ctx.get("vision_task") or "detect_objects"
+            text = ctx.get("ask") or f"{task.replace('_', ' ')} in image {payload}"
         cycle.stage(
             "perceive",
             ok=True,
@@ -375,8 +390,18 @@ class CompleteNonLLMAI:
             )
 
         answer = self.responder.generate(self.state, self.executor, self.executor.last_reasoning)
-        # Surface conflict note in text when present
-        if conflict_reports and answer.get("text"):
+        # Surface conflict note in text when present (skip unrelated alias noise for vision)
+        vision_ops = {
+            "detect_objects",
+            "detect_vehicles",
+            "count_people",
+            "detect_fire",
+            "scan_document_vision",
+            "vision_status",
+            "ppe_compliance",
+            "estimate_queue",
+        }
+        if conflict_reports and answer.get("text") and frame.operation not in vision_ops:
             answer["text"] = (
                 answer["text"]
                 + " Note: "
@@ -526,6 +551,7 @@ class CompleteNonLLMAI:
             "config": self.config.to_dict(),
             "capabilities": [c.name for c in self.capabilities],
             "capability_model": self.capability_model.to_dict(),
+            "vision": self.vision.status(),
             "monitor": self.monitor.summary(),
             "memory": self.memory.summary(),
             "datasets": self.datasets.summary(),

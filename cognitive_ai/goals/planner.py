@@ -56,6 +56,9 @@ class OperatorPlanner:
                      expected_effects=["tasks_listed"], verification=["record_count_available"]),
             Operator("ocr_extract", "Extract and validate document fields",
                      expected_effects=["fields_ready"], verification=["fields_present"]),
+            Operator("vision_analyze", "Run YOLO/classical CV on an image",
+                     preconditions=["image_path_known"], expected_effects=["detections_ready"],
+                     verification=["vision_result_present"]),
             Operator("respond", "Generate validated natural-language response",
                      preconditions=["conclusions_ready"], expected_effects=["answer_ready"],
                      verification=["claims_match_structure"]),
@@ -408,6 +411,46 @@ class OperatorPlanner:
                 steps=steps,
                 outcome="feasible",
                 explanation="Report export plan.",
+                cost=2.0,
+            )
+            state.set_plan(plan)
+            return plan
+
+        vision_ops = {
+            "detect_objects",
+            "detect_vehicles",
+            "count_people",
+            "detect_fire",
+            "scan_document_vision",
+            "vision_status",
+            "ppe_compliance",
+            "estimate_queue",
+        }
+        if op_name in vision_ops:
+            image_path = None
+            vision_task = op_name
+            for c in frame.get("conditions") or []:
+                if c.get("field") == "image_path":
+                    image_path = c.get("value")
+                if c.get("field") == "vision_task":
+                    vision_task = c.get("value") or vision_task
+            if op_name == "scan_document_vision":
+                vision_task = "scan_document"
+            elif op_name == "vision_status":
+                vision_task = "vision_status"
+            steps = [
+                PlanStepRecord(
+                    operator="vision_analyze",
+                    args={"image_path": image_path, "task": vision_task, "operation": op_name},
+                    verification=["vision_result_present"],
+                ),
+                PlanStepRecord(operator="respond", args={}, verification=["claims_match_structure"]),
+            ]
+            plan = PlanRecord(
+                goal_id=goal.goal_id,
+                steps=steps,
+                outcome="feasible",
+                explanation=f"Computer vision plan ({vision_task}).",
                 cost=2.0,
             )
             state.set_plan(plan)

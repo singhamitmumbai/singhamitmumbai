@@ -28,6 +28,7 @@ class CapabilityModel:
             "send_email": False,  # forbidden by default in Finderbay demo
             "acoustic_model": False,
             "ocr_engine": False,
+            "yolo_engine": False,
         }
         self.resource_budgets: dict[str, Any] = {
             "time_ms": 10000,
@@ -128,6 +129,46 @@ class CapabilityModel:
                 "export_report",
                 ["export_report"],
                 ["CSV/JSON register dumps only"],
+            ),
+            (
+                "detect_objects",
+                ["vision_analyze"],
+                ["Ultralytics YOLO optional; stub mode without weights"],
+            ),
+            (
+                "detect_vehicles",
+                ["vision_analyze"],
+                ["COCO vehicle classes; ByteTrack live tracking in vendor scripts"],
+            ),
+            (
+                "count_people",
+                ["vision_analyze"],
+                ["person class only; IN/OUT line logic in vendor people-counter"],
+            ),
+            (
+                "detect_fire",
+                ["vision_analyze"],
+                ["custom fire/smoke weights recommended"],
+            ),
+            (
+                "scan_document_vision",
+                ["vision_analyze"],
+                ["OpenCV + optional Tesseract; classical CV not YOLO"],
+            ),
+            (
+                "vision_status",
+                ["vision_analyze"],
+                ["lists vendored YOLO_Projects adapters"],
+            ),
+            (
+                "ppe_compliance",
+                ["vision_analyze"],
+                ["custom PPE weights required for hat/vest/mask"],
+            ),
+            (
+                "estimate_queue",
+                ["vision_analyze"],
+                ["people count × seconds_per_person heuristic"],
             ),
         ]:
             self.entries[name] = CapabilityEntry(name=name, tools=tools, limitations=limits)

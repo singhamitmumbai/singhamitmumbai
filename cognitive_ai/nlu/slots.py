@@ -124,6 +124,42 @@ def extract_slots(text: str, project_id: Optional[str] = None) -> SlotBundle:
         if field_name.replace("_", " ") in lower or field_name in lower:
             bundle.conditions.append(Condition("document_field", "eq", field_name))
 
+    # Vision image path: "in image foo.jpg" / "on photo /path/to/x.png" / bare path
+    m_img = re.search(
+        r"(?:in|on|from|of)\s+(?:the\s+)?(?:image|photo|picture|frame|video)\s+[\"']?([^\s\"']+\.(?:jpg|jpeg|png|bmp|webp|mp4|avi))[\"']?",
+        text,
+        flags=re.I,
+    )
+    if not m_img:
+        m_img = re.search(
+            r"[\"']?((?:/|\./)?[^\s\"']+\.(?:jpg|jpeg|png|bmp|webp|mp4|avi))[\"']?",
+            text,
+            flags=re.I,
+        )
+    if m_img:
+        bundle.conditions.append(Condition("image_path", "eq", m_img.group(1)))
+
+    # Vision task override hints stored for planner
+    for task_name in (
+        "detect_objects",
+        "detect_vehicles",
+        "count_people",
+        "detect_fire",
+        "scan_document",
+        "ppe_compliance",
+        "estimate_queue",
+        "crowd_heatmap",
+        "parking_occupancy",
+        "read_plates",
+        "blur_faces",
+        "detect_fall",
+        "detect_intrusion",
+    ):
+        cue = task_name.replace("_", " ")
+        if cue in lower or task_name in lower:
+            bundle.conditions.append(Condition("vision_task", "eq", task_name))
+            break
+
     # Payment / contract slots
     m_inv = re.search(r"\binvoice\s+(\d+)\b", lower)
     if m_inv:

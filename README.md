@@ -1,10 +1,23 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-A runnable **complete non-LLM AI** (v1.1) built from the engineering blueprint:
+A runnable **complete non-LLM AI** (v1.2) built from the engineering blueprint:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
 pretrained general-purpose LLM at runtime**.
+
+### What v1.2 adds — Computer vision (YOLO_Projects)
+
+Vendored from [Nawaf-Rayhan585/YOLO_Projects](https://github.com/Nawaf-Rayhan585/YOLO_Projects) (MIT):
+
+| Piece | Role |
+|------|------|
+| `cognitive_ai/vision/` | VisionSystem + YOLO engine (Ultralytics or stub) + task adapters |
+| `third_party/YOLO_Projects/` | Source projects (vehicles, people, fire, PPE, document scan, …) |
+| NLU / planner / executor | Intents: detect objects/vehicles/people/fire, scan document, vision status |
+| CLI | `python -m cognitive_ai vision --task vision_status` · `--image path.jpg` |
+
+CNN detectors are specialist **perception** (blueprint §5C) — not a general LLM.
 
 ### What v1.1 adds — SelfBrain agent + coding system
 
@@ -35,6 +48,8 @@ Also includes v0.9 question understanding, v0.8 alerts/POs/API, speech/OCR, 2000
 
 ```bash
 pip install -e ".[dev,perception]"
+# optional real YOLO CNN inference:
+# pip install -e ".[vision]"
 # system OCR: tesseract-ocr tesseract-ocr-eng tesseract-ocr-hin
 
 # General AI (Finderbay + open-domain)
@@ -43,6 +58,12 @@ python -m cognitive_ai general --ask "Can penguins fly?"
 
 # Finderbay-only
 python -m cognitive_ai finderbay --demo
+
+# Computer vision (stub without ultralytics; real CNN with [vision] extra)
+python -m cognitive_ai vision --task vision_status
+python -m cognitive_ai finderbay --ask "Count people in image ./crowd_people.jpg"
+python -m cognitive_ai finderbay --ask "Detect vehicles in image ./traffic_cars.jpg"
+python -m cognitive_ai vision --image ./photo.jpg --task detect_objects
 
 # Chat UI (general router by default)
 python -m cognitive_ai chat --domain general

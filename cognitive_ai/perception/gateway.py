@@ -17,6 +17,7 @@ class InputGateway:
         self,
         speech: Optional[Any] = None,
         documents: Optional[Any] = None,
+        vision: Optional[Any] = None,
         *,
         prefer_production: bool = True,
     ) -> None:
@@ -28,6 +29,7 @@ class InputGateway:
         else:
             self.speech = speech or SpeechPipeline()
             self.documents = documents or DocumentPipeline()
+        self.vision = vision  # optional VisionSystem; lazy-loaded on vision modality
 
     def ingest(
         self,
@@ -51,6 +53,26 @@ class InputGateway:
             uncertainty = float(result.get("uncertainty") or 0.0)
             version = result.get("version", "speech_v1")
             context = {**context, "speech_meta": {k: result.get(k) for k in ("engine", "error", "model")}}
+        elif modality == "vision":
+            if self.vision is None:
+                from ..vision.system import VisionSystem
+
+                self.vision = VisionSystem()
+            task = (context or {}).get("vision_task") or "detect_objects"
+            result = self.vision.analyze(payload, task=task, state=None)
+            extracted = (
+                f"vision {task}: {result.get('count', 0)} detections"
+                if task != "vision_status"
+                else "vision status"
+            )
+            uncertainty = float(result.get("uncertainty") or (0.15 if result.get("engine") == "ultralytics" else 0.45))
+            version = f"vision_{result.get('engine', 'stub')}"
+            alternatives = result.get("detections") or []
+            context = {
+                **context,
+                "vision_result": result,
+                "vision_meta": {k: result.get(k) for k in ("engine", "error", "project", "note", "weights")},
+            }
         elif modality in ("image", "document"):
             result = self.documents.recognize(payload, context=context)
             extracted = result.get("fields") or result.get("text")

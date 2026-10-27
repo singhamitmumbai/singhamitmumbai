@@ -229,6 +229,94 @@ INTENT_CUES: list[tuple[str, list[tuple[str, float]]]] = [
             ("csv report", 3.0),
         ],
     ),
+    (
+        "detect_objects",
+        [
+            ("detect objects", 4.5),
+            ("object detection", 4.0),
+            ("what objects", 3.0),
+            ("yolo detect", 4.0),
+            ("run vision", 3.5),
+            ("analyze image", 3.5),
+            ("computer vision", 3.5),
+        ],
+    ),
+    (
+        "detect_vehicles",
+        [
+            ("detect vehicles", 4.5),
+            ("vehicle detection", 4.0),
+            ("count cars", 3.5),
+            ("count vehicles", 4.0),
+            ("track vehicles", 3.5),
+            ("cars in image", 3.0),
+            ("traffic detection", 3.5),
+        ],
+    ),
+    (
+        "count_people",
+        [
+            ("count people", 4.5),
+            ("people counter", 4.0),
+            ("how many people", 4.0),
+            ("person count", 3.5),
+            ("crowd count", 3.5),
+            ("count persons", 4.0),
+        ],
+    ),
+    (
+        "detect_fire",
+        [
+            ("detect fire", 4.5),
+            ("fire detection", 4.0),
+            ("smoke detection", 4.0),
+            ("is there fire", 3.5),
+            ("fire alert", 3.5),
+        ],
+    ),
+    (
+        "scan_document_vision",
+        [
+            ("document scanner", 4.5),
+            ("scan this page", 4.0),
+            ("perspective scan", 4.0),
+            ("warp document", 4.0),
+            ("scan this document with opencv", 5.0),
+            ("cv document scan", 4.5),
+            ("deskew document", 4.0),
+            ("scan page edges", 4.0),
+        ],
+    ),
+    (
+        "vision_status",
+        [
+            ("vision status", 4.5),
+            ("yolo status", 4.0),
+            ("vision projects", 4.0),
+            ("computer vision status", 4.5),
+            ("list vision", 3.5),
+            ("cv capabilities", 3.5),
+        ],
+    ),
+    (
+        "ppe_compliance",
+        [
+            ("ppe compliance", 4.5),
+            ("hard hat", 3.0),
+            ("safety vest", 3.0),
+            ("ppe check", 4.0),
+            ("safety compliance", 3.5),
+        ],
+    ),
+    (
+        "estimate_queue",
+        [
+            ("estimate queue", 4.5),
+            ("queue wait", 4.0),
+            ("wait time", 3.0),
+            ("queue length", 3.5),
+        ],
+    ),
 ]
 
 

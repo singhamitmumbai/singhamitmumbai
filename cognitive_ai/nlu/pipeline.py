@@ -78,6 +78,14 @@ class LanguageUnderstanding:
         "create_purchase_order",
         "query_vendors",
         "export_report",
+        "detect_objects",
+        "detect_vehicles",
+        "count_people",
+        "detect_fire",
+        "scan_document_vision",
+        "vision_status",
+        "ppe_compliance",
+        "estimate_queue",
         "status",
         "cancel",
         "correct",
@@ -163,6 +171,39 @@ class LanguageUnderstanding:
             operation = "create_purchase_order"
         if "export_report" in intents:
             operation = "export_report"
+        # Computer vision ops win when explicit CV cues are present
+        # (but not when document_qa / OCR field extraction is clearly intended)
+        vision_ops = {
+            "detect_objects",
+            "detect_vehicles",
+            "count_people",
+            "detect_fire",
+            "scan_document_vision",
+            "vision_status",
+            "ppe_compliance",
+            "estimate_queue",
+        }
+        lower_n = normalized.lower()
+        document_field_ask = any(
+            x in lower_n
+            for x in ("amount due", "invoice scan", "ocr", "document field", "subtotal", "tax")
+        )
+        if any(v in intents for v in vision_ops) and not (
+            document_field_ask and "document_qa" in intents
+        ):
+            for v in (
+                "vision_status",
+                "detect_fire",
+                "detect_vehicles",
+                "count_people",
+                "ppe_compliance",
+                "estimate_queue",
+                "scan_document_vision",
+                "detect_objects",
+            ):
+                if v in intents:
+                    operation = v
+                    break
         if "query_alerts" in intents and any(
             x in normalized.lower()
             for x in ("alert", "alerts", "low stock", "needs attention", "what needs attention", "expiring contract")
@@ -244,6 +285,11 @@ class LanguageUnderstanding:
             (("alert", "alerts", "attention"), "query_alerts"),
             (("vendor", "vendors", "supplier"), "query_vendors"),
             (("purchase order", "purchase orders", " po "), "query_purchase_orders"),
+            (("vehicle", "vehicles", "cars", "trucks"), "detect_vehicles"),
+            (("people", "persons", "crowd"), "count_people"),
+            (("fire", "smoke"), "detect_fire"),
+            (("yolo", "object detection", "detect objects"), "detect_objects"),
+            (("vision status", "cv capabilities"), "vision_status"),
         ]
         for keys, op in mapping:
             if any(k in blob for k in keys):

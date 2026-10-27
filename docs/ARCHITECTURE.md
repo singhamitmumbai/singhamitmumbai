@@ -53,6 +53,14 @@ Excluded at runtime: pretrained general-purpose LLMs.
 Perception modules ship **auditable stubs**; production acoustic/OCR checkpoints
 must declare provenance separately.
 
+## v1.2 computer vision (YOLO_Projects)
+
+1. `third_party/YOLO_Projects/` — vendored MIT apps from Nawaf-Rayhan585/YOLO_Projects  
+2. `cognitive_ai/vision/` — VisionSystem, YOLOEngine (Ultralytics or stub), task adapters  
+3. NLU intents + `vision_analyze` operator + response realization  
+4. CLI: `python -m cognitive_ai vision --task vision_status`  
+5. CNN detectors = specialist perception (§5C); **not** a general-purpose LLM  
+
 ## v1.1 SelfBrain agent + symbolic coding
 
 1. `agent/self_brain.py` — autonomous Finderbay task queue with verify/retry  

@@ -20,6 +20,14 @@ REQUIRED_SLOTS: dict[str, list[str]] = {
     "create_purchase_order": ["project_id", "vendor_id", "item", "qty", "unit_price_inr"],
     "create_po": ["project_id", "vendor_id", "item", "qty", "unit_price_inr"],
     "export_report": ["report_kind"],
+    "detect_objects": ["image_path"],
+    "detect_vehicles": ["image_path"],
+    "count_people": ["image_path"],
+    "detect_fire": ["image_path"],
+    "scan_document_vision": ["image_path"],
+    "ppe_compliance": ["image_path"],
+    "estimate_queue": ["image_path"],
+    # vision_status needs no image
 }
 
 
@@ -34,6 +42,7 @@ QUESTIONS = {
     "qty": "What quantity for the purchase order?",
     "unit_price_inr": "What unit price in INR?",
     "report_kind": "Which report? (invoices, payments, alerts, purchase_orders)",
+    "image_path": "Which image/video path should I analyze? (e.g. ./photo.jpg)",
 }
 
 
@@ -103,6 +112,21 @@ class ClarificationManager:
                     val = f"inv_{m.group(1)}"
                     filled[slot] = val
                     conditions.append({"field": slot, "operator": "eq", "value": val})
+                    remaining.remove(slot)
+            elif slot == "image_path":
+                m = re.search(
+                    r"[\"']?((?:/|\./)?[^\s\"']+\.(?:jpg|jpeg|png|bmp|webp|mp4|avi))[\"']?",
+                    text,
+                    flags=re.I,
+                )
+                if m:
+                    filled[slot] = m.group(1)
+                    conditions.append({"field": slot, "operator": "eq", "value": m.group(1)})
+                    remaining.remove(slot)
+                elif text.strip() and not text.strip().endswith("?"):
+                    # Accept bare path reply
+                    filled[slot] = text.strip().strip("\"'")
+                    conditions.append({"field": slot, "operator": "eq", "value": filled[slot]})
                     remaining.remove(slot)
             elif slot in ("payment_amount_inr", "unit_price_inr", "qty", "quantity"):
                 if slots.amounts:

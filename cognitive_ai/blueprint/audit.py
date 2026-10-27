@@ -30,6 +30,7 @@ INVENTORY: list[ComponentStatus] = [
     ComponentStatus("Input gateway", "§2/§5", "perception/gateway.py", "present"),
     ComponentStatus("Speech perception", "§5A", "perception/speech_production.py", "present", "Vosk offline ASR"),
     ComponentStatus("OCR / layout", "§5B", "perception/ocr_layout.py", "present", "Tesseract + layout heuristics"),
+    ComponentStatus("Computer vision (YOLO)", "§5C", "vision/", "present", "Vendored YOLO_Projects + Ultralytics/stub"),
     ComponentStatus("Language understanding", "§6", "nlu/pipeline.py", "present"),
     ComponentStatus("Question understanding", "§6", "nlu/questions.py", "present"),
     ComponentStatus("Dialogue state", "§6", "nlu/dialogue_tracker.py", "present"),

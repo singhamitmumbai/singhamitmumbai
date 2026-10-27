@@ -73,8 +73,21 @@ def build_parser() -> argparse.ArgumentParser:
             "blueprint",
             "agent",
             "code",
+            "vision",
         ],
-        help="Optional subcommand: os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code",
+        help="Optional subcommand: os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
+    )
+    p.add_argument(
+        "--image",
+        type=str,
+        default=None,
+        help="Image/video path for vision subcommand",
+    )
+    p.add_argument(
+        "--task",
+        type=str,
+        default="detect_objects",
+        help="Vision task: detect_objects|detect_vehicles|count_people|detect_fire|scan_document|vision_status|...",
     )
     p.add_argument(
         "--ask",
@@ -568,6 +581,31 @@ def main(argv: Optional[list[str]] = None) -> int:
             print(json.dumps(coding.handle(args.ask), indent=2, default=str))
             return 0
         print(json.dumps(coding.status(), indent=2, default=str))
+        return 0
+
+    if args.command == "vision":
+        from .system import CompleteNonLLMAI
+        from .vision import VisionSystem, list_projects
+
+        if args.task == "vision_status" or (not args.image and not args.ask):
+            vs = VisionSystem()
+            payload = {"status": vs.status(), "projects": list_projects()}
+            print(json.dumps(payload, indent=2, default=str))
+            return 0
+        if args.ask:
+            ai = CompleteNonLLMAI(seed_demo=True)
+            print(json.dumps(ai.handle(args.ask), indent=2, default=str)[:4000])
+            print()
+            print(ai.handle(args.ask)["text"])
+            return 0
+        if not args.image:
+            print("vision: provide --image PATH or --task vision_status", file=sys.stderr)
+            return 2
+        ai = CompleteNonLLMAI(seed_demo=False)
+        ask = f"{args.task.replace('_', ' ')} in image {args.image}"
+        result = ai.handle(ask)
+        print(result["text"])
+        print(json.dumps(result.get("structured") or {}, indent=2, default=str)[:3000])
         return 0
 
     # Chat UI launcher

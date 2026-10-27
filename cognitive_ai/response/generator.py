@@ -132,8 +132,9 @@ class ResponseGenerator:
                 "text": (
                     "I am a complete non-LLM assistant for Finderbay. "
                     "Supported: invoices, deliveries, materials, tasks, documents, payments, "
-                    "contracts, vendors/POs, proactive alerts, CSV reports, auth, and follow-up drafts "
-                    "(without sending). "
+                    "contracts, vendors/POs, proactive alerts, CSV reports, auth, follow-up drafts "
+                    "(without sending), and computer vision (YOLO object/vehicle/people/fire + "
+                    "document scan via vendored YOLO_Projects). "
                     "I keep unknown ≠ false, predicted ≠ observed, attempted ≠ confirmed."
                 ),
                 "structured": state.summary(),
@@ -229,12 +230,34 @@ class ResponseGenerator:
                 f"as {rep.get('format')}."
             )
             structured = {"report_ready": True, **rep}
+        elif op in (
+            "detect_objects",
+            "detect_vehicles",
+            "count_people",
+            "detect_fire",
+            "scan_document_vision",
+            "vision_status",
+            "ppe_compliance",
+            "estimate_queue",
+        ):
+            text, structured = self._realize_vision(executor.last_vision or {}, op)
         else:
             text = reasoning.message if reasoning else "Done."
             structured = {"reasoning": reasoning.to_dict() if reasoning else None}
 
         # Compact numeric / yes-no answers when question analysis requested them
-        text, structured = _reshape_for_question(text, structured, table, ask, frame)
+        # (skip for vision — adapters already realize counts with the right labels)
+        if op not in (
+            "detect_objects",
+            "detect_vehicles",
+            "count_people",
+            "detect_fire",
+            "scan_document_vision",
+            "vision_status",
+            "ppe_compliance",
+            "estimate_queue",
+        ):
+            text, structured = _reshape_for_question(text, structured, table, ask, frame)
 
         # Validation: claims in text must match structure
         faithful = self._validate(text, structured)
@@ -392,6 +415,76 @@ class ResponseGenerator:
             "issues": issues,
             "ok": True,
         }
+
+    @staticmethod
+    def _realize_vision(vision: dict, op: str) -> tuple[str, dict]:
+        if op == "vision_status":
+            projects = vision.get("projects") or {}
+            n = len(projects)
+            eng = vision.get("engine", "stub")
+            text = (
+                f"Computer vision ready via YOLO_Projects (MIT). "
+                f"Engine={eng}; {n} project adapters registered. "
+                f"No LLM used for detection."
+            )
+            return text, {**vision, "count": n, "ok": True}
+
+        if op == "scan_document_vision":
+            text_out = vision.get("text") or ""
+            has_quad = vision.get("has_document_quad")
+            if text_out:
+                preview = text_out[:200].replace("\n", " ")
+                text = f"Document scan extracted text ({len(text_out)} chars): {preview}"
+            elif has_quad:
+                text = "Found a document quadrilateral; OCR text empty (install tesseract for text)."
+            else:
+                err = vision.get("error") or "no_document_quad"
+                text = f"Document scan incomplete ({err})."
+            return text, {**vision, "ok": not vision.get("error"), "count": 1 if has_quad or text_out else 0}
+
+        counts = vision.get("counts_by_label") or {}
+        count = int(vision.get("count") or vision.get("people_count") or vision.get("vehicle_count") or 0)
+        engine = vision.get("engine", "stub")
+        if op == "count_people":
+            pc = int(vision.get("people_count") or count)
+            text = f"Counted {pc} person(s) (engine={engine})."
+            return text, {**vision, "count": pc, "ok": True}
+        if op == "detect_vehicles":
+            vc = int(vision.get("vehicle_count") or count)
+            text = f"Detected {vc} vehicle(s) (engine={engine})."
+            if counts:
+                text += " " + ", ".join(f"{k}={v}" for k, v in counts.items()) + "."
+            return text, {**vision, "count": vc, "ok": True}
+        if op == "detect_fire":
+            alert = bool(vision.get("alert"))
+            text = (
+                f"Fire/smoke alert: {'YES' if alert else 'no'} "
+                f"({count} detection(s), engine={engine})."
+            )
+            return text, {**vision, "count": count, "ok": True}
+        if op == "estimate_queue":
+            wait = vision.get("estimated_wait_minutes")
+            pc = int(vision.get("people_count") or count)
+            text = f"Queue estimate: {pc} people, ~{wait} minutes wait (engine={engine})."
+            return text, {**vision, "count": pc, "ok": True}
+        if op == "ppe_compliance":
+            pc = int(vision.get("people_count") or count)
+            text = (
+                f"PPE check: {pc} person(s) visible. "
+                f"{vision.get('note') or 'Custom PPE weights needed for hat/vest/mask.'}"
+            )
+            return text, {**vision, "count": pc, "ok": True}
+
+        # detect_objects default
+        if counts:
+            detail = ", ".join(f"{k}={v}" for k, v in counts.items())
+            text = f"Detected {count} object(s): {detail} (engine={engine})."
+        else:
+            text = f"Detected {count} object(s) (engine={engine})."
+        note = vision.get("note")
+        if note and engine == "stub":
+            text += f" Note: {note}."
+        return text, {**vision, "count": count, "ok": True}
 
     @staticmethod
     def _num_word(n: int) -> str:
