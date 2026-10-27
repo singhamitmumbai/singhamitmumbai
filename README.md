@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.8.0) + **Finderbay Assistant** + **JARVIS blueprint** — voice, memory, vision, planning, gated computer control, learning, verified tool workflows:
+**Complete AI** (v1.9.0) + **Finderbay Assistant** + **JARVIS full stack** — voice, memory, vision, planning, gated computer control, learning, verified tool workflows:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
@@ -37,23 +37,29 @@ python -m cognitive_ai chat --domain complete
 Product: **Complete AI** / **Finderbay Assistant** / **JARVIS tools**. `human_level_agi=false`.  
 Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.
 
-### What v1.8 adds — JARVIS Tools & System Blueprint
+### What v1.9 adds — complete JARVIS full code
 
 | Piece | Role |
 |------|------|
-| `cognitive_ai/jarvis/` | Non-LLM controller: contracts, jobs, provenance memory, skills, voice, eval |
-| Tool contracts | Input/output schemas, effect, scope, timeout, retry, verification |
-| Job store | ready→running→verifying→completed / needs_input / failed / outcome_unknown / cancelled |
-| Provenance memory | working · episodic · semantic · procedural · source + supersession |
-| Material shortage skill | Blueprint §13 worked example with Decimal arithmetic + report verify |
-| Voice pipeline | Push-to-talk first; VAD/ASR/TTS adapters (stubs until local models) |
-| CLI / API | `python -m cognitive_ai jarvis` · `POST /jarvis` |
+| `JarvisSystem` | Full facade: NLU + SQLite/FTS5 + policy + docs + dialogue + learning + voice |
+| `nlu.py` | TF-IDF intent classifier + Hinglish slot extraction |
+| `sqlite_memory.py` | SQLite facts + FTS5 BM25 document search |
+| `learning.py` | Corrections → offline train → held-out eval → activate / rollback |
+| `policy.py` | Trusted grants; planner cannot self-approve |
+| `documents.py` | Create/verify report artifacts; decimal money |
+| `dialogue.py` | Follow-ups (“other site”, “change the date”) |
+| `adapters.py` | Files, Finderbay inventory, ASR/OCR bridges |
+| Docs | `docs/JARVIS.md` · `FILE_INDEX.md` (full source listing) |
+
+### What v1.8 added — JARVIS Tools & System Blueprint
+
+Tool contracts, job store, provenance memory, material shortage skill, voice PTT, eval suite, CLI/API.
 
 ### Release zip
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.8.0.zip
+# → dist/Complete_Non_LLM_AI_v1.9.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.

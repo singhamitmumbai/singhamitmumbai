@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from ..complete_ai import CompleteAI
-from ..jarvis import JarvisPipeline, run_jarvis_eval
+from ..jarvis import JarvisPipeline, JarvisSystem, run_jarvis_eval
 from ..jarvis.voice import VoicePipeline
 from ..version import __version__
 from .computer import ComputerControl
@@ -43,9 +43,10 @@ class FinderbayAssistant:
         self.learning = LearningBridge(self.finderbay)
         self.speak_replies = speak_replies
         self.last_plan: Optional[dict[str, Any]] = None
-        # JARVIS blueprint stack (non-LLM controller)
-        self.jarvis = JarvisPipeline()
-        self.jarvis_voice = VoicePipeline()
+        # JARVIS blueprint stack (non-LLM controller) — full system + pipeline
+        self.jarvis_system = JarvisSystem(finderbay=self.finderbay)
+        self.jarvis = self.jarvis_system.pipeline  # backward-compatible pipeline handle
+        self.jarvis_voice = self.jarvis_system.voice
         # Expose assistant tools on Complete AI tool router
         self.complete.attach_assistant(self)
 
@@ -194,14 +195,7 @@ class FinderbayAssistant:
             "computer_control": self.computer.status(),
             "learning": self.learning.status(),
             "complete_ai": self.complete.status(),
-            "jarvis": {
-                "controller": "non_llm",
-                "tools": len(self.jarvis.tools.contracts),
-                "skills": self.jarvis.skills.list_skills(),
-                "jobs": self.jarvis.jobs.summary(),
-                "memory": self.jarvis.memory.snapshot(),
-                "voice": self.jarvis_voice.status(),
-            },
+            "jarvis": self.jarvis_system.status(),
         }
 
     def greeting(self) -> str:
@@ -221,34 +215,36 @@ class FinderbayAssistant:
         )
 
     def jarvis_handle(self, text: str, *, speak: Optional[bool] = None) -> dict[str, Any]:
-        """Run the JARVIS capture→…→record pipeline (blueprint control loop)."""
+        """Run the full JARVIS system (blueprint control loop)."""
         raw = text.strip()
         if raw.lower().startswith("jarvis"):
             raw = raw.split(None, 1)[1] if " " in raw else raw
-        result = self.jarvis.run(raw)
+        do_speak = self.speak_replies if speak is None else speak
+        out = self.jarvis_system.handle(raw, speak=bool(do_speak))
+        # Normalize assistant envelope
         out = self._tag(
             {
-                "text": result.response,
-                "structured": result.to_dict(),
-                "job_id": result.job_id,
-                "verified": result.verified,
-                "intent": result.intent,
+                "text": out.get("text") or "",
+                "structured": out.get("structured"),
+                "nlu": out.get("nlu"),
+                "job_id": out.get("job_id"),
+                "verified": out.get("verified"),
+                "intent": out.get("intent"),
+                "dialogue": out.get("dialogue"),
+                "voice": out.get("voice"),
             },
             route="jarvis",
         )
-        out["capabilities_used"] = ["jarvis", "planning", "tools", "verification"]
-        do_speak = self.speak_replies if speak is None else speak
-        if do_speak and out.get("text"):
-            out["voice"] = self.jarvis_voice.speak(str(out["text"])[:500])
+        out["capabilities_used"] = ["jarvis", "planning", "tools", "verification", "memory"]
         self.memory.note_episode(
-            summary=f"jarvis:{result.intent}:{raw[:100]}",
-            tags=["jarvis", result.intent],
-            data={"verified": result.verified, "job_id": result.job_id},
+            summary=f"jarvis:{out.get('intent')}:{raw[:100]}",
+            tags=["jarvis", str(out.get("intent") or "")],
+            data={"verified": out.get("verified"), "job_id": out.get("job_id")},
         )
         return out
 
     def jarvis_eval(self) -> dict[str, Any]:
-        return run_jarvis_eval(self.jarvis)
+        return self.jarvis_system.eval()
 
     def _looks_like_jarvis(self, lower: str) -> bool:
         keys = (

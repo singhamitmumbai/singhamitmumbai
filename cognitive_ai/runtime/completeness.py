@@ -34,6 +34,14 @@ REQUIRED_MODULES = [
     "cognitive_ai.jarvis.provenance",
     "cognitive_ai.jarvis.voice",
     "cognitive_ai.jarvis.eval_suite",
+    "cognitive_ai.jarvis.system",
+    "cognitive_ai.jarvis.nlu",
+    "cognitive_ai.jarvis.sqlite_memory",
+    "cognitive_ai.jarvis.learning",
+    "cognitive_ai.jarvis.policy",
+    "cognitive_ai.jarvis.documents",
+    "cognitive_ai.jarvis.dialogue",
+    "cognitive_ai.jarvis.adapters",
 ]
 
 
@@ -47,6 +55,10 @@ REQUIRED_ATTRS = {
     "cognitive_ai.jarvis.pipeline": ["JarvisPipeline"],
     "cognitive_ai.jarvis.skills": ["MaterialShortageSkill", "SkillRegistry"],
     "cognitive_ai.jarvis.eval_suite": ["run_jarvis_eval"],
+    "cognitive_ai.jarvis.system": ["JarvisSystem"],
+    "cognitive_ai.jarvis.nlu": ["IntentClassifier"],
+    "cognitive_ai.jarvis.sqlite_memory": ["SqliteMemory"],
+    "cognitive_ai.jarvis.learning": ["LearningPipeline"],
 }
 
 
