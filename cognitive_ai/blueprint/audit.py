@@ -66,6 +66,10 @@ INVENTORY: list[ComponentStatus] = [
     ComponentStatus("Finderbay domains", "§18", "domains/finderbay/", "present"),
     ComponentStatus("REST API", "§17", "api/server.py", "present"),
     ComponentStatus("Runtime monitor", "§17", "runtime/monitor.py", "present"),
+    ComponentStatus("SelfBrain autonomous agent", "§10/§11/§19", "agent/self_brain.py", "present", "Queue + verify/retry automation"),
+    ComponentStatus("Agent scheduler", "§17", "agent/scheduler.py", "present"),
+    ComponentStatus("Finderbay→agent bridge", "§18", "agent/finder_bridge.py", "present"),
+    ComponentStatus("CodingSystem (AST/templates/tests)", "§19", "coding/", "present", "Symbolic — not LLM pair-programming"),
 ]
 
 

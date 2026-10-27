@@ -14,3 +14,5 @@ data/finderbay/examples/manifest.json
 data/finderbay/examples/ex_*.json
 # Large offline ASR packs (download via model_registry URLs)
 models/vosk-model-*/
+# CodingSystem scratch output
+generated/

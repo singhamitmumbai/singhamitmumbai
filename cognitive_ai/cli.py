@@ -71,8 +71,10 @@ def build_parser() -> argparse.ArgumentParser:
             "bench",
             "api",
             "blueprint",
+            "agent",
+            "code",
         ],
-        help="Optional subcommand: os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint",
+        help="Optional subcommand: os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code",
     )
     p.add_argument(
         "--ask",
@@ -532,6 +534,40 @@ def main(argv: Optional[list[str]] = None) -> int:
         from .blueprint.audit import run_blueprint_audit
 
         print(json.dumps(run_blueprint_audit(), indent=2, default=str))
+        return 0
+
+    if args.command == "agent":
+        from .agent import FinderbayAgentSystem
+
+        system = FinderbayAgentSystem(seed_demo=True)
+        if args.ask:
+            # Treat --ask as a batch of tasks separated by ' || '
+            tasks = [t.strip() for t in args.ask.split("||") if t.strip()]
+            report = system.auto(tasks)
+            print(json.dumps(report, indent=2, default=str))
+            return 0 if report.get("failed", 0) == 0 else 1
+        if args.demo:
+            report = system.auto(
+                [
+                    "Show unpaid invoices for Project A",
+                    "Show alerts for Project A",
+                    "Show purchase orders for Project A",
+                    "generate function add(a, b)",
+                ]
+            )
+            print(json.dumps({"status": system.status(), "report": report}, indent=2, default=str))
+            return 0
+        print(json.dumps(system.status(), indent=2, default=str))
+        return 0
+
+    if args.command == "code":
+        from .coding import CodingSystem
+
+        coding = CodingSystem()
+        if args.ask:
+            print(json.dumps(coding.handle(args.ask), indent=2, default=str))
+            return 0
+        print(json.dumps(coding.status(), indent=2, default=str))
         return 0
 
     # Chat UI launcher

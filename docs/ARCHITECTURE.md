@@ -53,13 +53,21 @@ Excluded at runtime: pretrained general-purpose LLMs.
 Perception modules ship **auditable stubs**; production acoustic/OCR checkpoints
 must declare provenance separately.
 
+## v1.1 SelfBrain agent + symbolic coding
+
+1. `agent/self_brain.py` — autonomous Finderbay task queue with verify/retry  
+2. `agent/scheduler.py` + `finder_bridge.py` — daemon ticks + Finderbay→agent bridge  
+3. `coding/` — AST analysis, search, template generation, structured edit, pytest runner  
+4. Honest limits: not LLM pair-programming; not human-level AGI  
+
 ## v1.0 blueprint completion
 
-1.  — inspectable operating-cycle stage traces  
-2.  +  — conflict & uncertainty routing  
-3.  — case-based reuse of verified episodes  
-4.  +  — improvement loop & program induction  
-5.  — component inventory ()  
+1. `runtime/cycle.py` — inspectable operating-cycle stage traces  
+2. `reasoning/conflicts.py` + `uncertainty/router.py` — conflict & uncertainty routing  
+3. `reasoning/cases.py` — case-based reuse of verified episodes  
+4. `learning_sys/improvement.py` + `induction.py` — improvement loop & program induction  
+5. `blueprint/audit.py` — component inventory (`cognitive_ai blueprint`)  
+
 
 ## v0.9 advanced question understanding
 

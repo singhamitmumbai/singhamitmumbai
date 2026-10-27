@@ -1,10 +1,19 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-A runnable **complete non-LLM AI** (v1.0) built from the engineering blueprint:
+A runnable **complete non-LLM AI** (v1.1) built from the engineering blueprint:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
 pretrained general-purpose LLM at runtime**.
+
+### What v1.1 adds — SelfBrain agent + coding system
+
+| Piece | Role |
+|------|------|
+| `SelfBrainAgent` | Autonomous queue: take Finderbay tasks → plan → act → verify → retry |
+| `FinderbayAgentSystem` | Bridge so Finderbay AI assigns work the SelfBrain executes |
+| `CodingSystem` | Advanced **non-LLM** coding: AST analysis, symbol index, templates, edits, pytest |
+| CLI | `python -m cognitive_ai agent --demo` · `python -m cognitive_ai code --ask "..."` |
 
 ### What v1.0 completes (blueprint alignment)
 
@@ -41,6 +50,7 @@ python -m cognitive_ai chat --domain general
 
 python -m cognitive_ai eval
 python -m cognitive_ai bench
+python -m cognitive_ai blueprint
 python -m cognitive_ai api --port 8787
 # GET /health /status /alerts /reports?kind=invoices  POST /ask
 pytest -q
