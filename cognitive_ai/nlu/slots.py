@@ -142,6 +142,7 @@ def extract_slots(text: str, project_id: Optional[str] = None) -> SlotBundle:
     # Vision task override hints stored for planner
     for task_name in (
         "understand_scene",
+        "thermal_analyze",
         "detect_objects",
         "detect_vehicles",
         "count_people",
@@ -157,6 +158,7 @@ def extract_slots(text: str, project_id: Optional[str] = None) -> SlotBundle:
         "detect_intrusion",
         "see",
         "analyze_scene",
+        "detect_modality",
     ):
         cue = task_name.replace("_", " ")
         if cue in lower or task_name in lower:

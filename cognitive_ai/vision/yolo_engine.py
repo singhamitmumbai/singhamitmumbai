@@ -179,6 +179,41 @@ class YOLOEngine:
                     "stub": True,
                 }
             )
+        if any(k in hint for k in ("thermal", "flir", "heatcam", "infrared", "_ir_")):
+            synthetic.append(
+                {
+                    "label": "thermal_hotspot",
+                    "confidence": 0.83,
+                    "bbox_xyxy": [90.0, 70.0, 170.0, 150.0],
+                    "class_id": -10,
+                    "stub": True,
+                    "relative_heat": 87.0,
+                    "modality": "thermal",
+                }
+            )
+            if any(k in hint for k in ("person", "human", "worker", "people")):
+                synthetic.append(
+                    {
+                        "label": "person_thermal",
+                        "confidence": 0.78,
+                        "bbox_xyxy": [40.0, 100.0, 110.0, 220.0],
+                        "class_id": -11,
+                        "stub": True,
+                        "relative_heat": 70.0,
+                        "modality": "thermal",
+                    }
+                )
+        if any(k in hint for k in ("night", "nvg", "lowlight", "low_light")):
+            synthetic.append(
+                {
+                    "label": "person",
+                    "confidence": 0.7,
+                    "bbox_xyxy": [60.0, 50.0, 140.0, 210.0],
+                    "class_id": 0,
+                    "stub": True,
+                    "modality": "night_vision",
+                }
+            )
         if not synthetic and hint:
             # Generic object stub for any named image
             synthetic.append(

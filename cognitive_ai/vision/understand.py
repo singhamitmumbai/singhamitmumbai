@@ -10,16 +10,21 @@ from typing import Any, Optional
 
 from .adapters import VisionAdapters
 from .knowledge import ObjectKnowledge
+from .modalities import detect_modality
 from .search import ObjectSearch
+from .smart import SmartVisionReasoner
+from .thermal import ThermalAnalyzer
 from .yolo_engine import YOLOEngine
 
 
 class VisionUnderstanding:
     """
-    1. SEE      — detect objects in the image
-    2. ANALYZE  — size, position, confidence, counts, simple relations, optional OCR
+    0. MODALITY — rgb / thermal / IR / night / xray / depth / document / …
+    1. SEE      — detect objects (modality-aware; thermal hotspots when IR)
+    2. ANALYZE  — size, position, confidence, relations, OCR, thermal stats
     3. UNDERSTAND — map each object to knowledge
     4. If not understood — SEARCH, then re-understand with new facts
+    5. SMART    — scene type, risks, recommendations
     """
 
     def __init__(
@@ -31,18 +36,79 @@ class VisionUnderstanding:
         self.adapters = VisionAdapters(self.engine)
         self.knowledge = knowledge or ObjectKnowledge()
         self.search = ObjectSearch(self.knowledge)
+        self.thermal = ThermalAnalyzer()
+        self.smart = SmartVisionReasoner()
 
     # --- stages ---------------------------------------------------------------
 
-    def see(self, image: Any, *, conf: float = 0.35) -> dict[str, Any]:
+    def detect_modality(self, image: Any, *, force: Optional[str] = None) -> dict[str, Any]:
+        return detect_modality(image, force=force)
+
+    def see(
+        self,
+        image: Any,
+        *,
+        conf: float = 0.35,
+        modality: Optional[dict[str, Any]] = None,
+        thermal: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        mod = modality or detect_modality(image)
+        mod_name = mod.get("modality") or "rgb"
+
+        # Document modality prefers scanner path
+        if mod_name == "document":
+            scanned = self.adapters.scan_document(image)
+            detections = []
+            if scanned.get("has_document_quad") or scanned.get("text"):
+                detections.append(
+                    {
+                        "label": "document",
+                        "confidence": 0.8,
+                        "bbox_xyxy": [0.0, 0.0, 100.0, 100.0],
+                        "class_id": -20,
+                        "modality": "document",
+                    }
+                )
+            return {
+                "stage": "see",
+                "image": str(image) if isinstance(image, (str, Path)) else "<buffer>",
+                "engine": scanned.get("engine") or "document",
+                "detections": detections,
+                "count": len(detections),
+                "counts_by_label": {"document": len(detections)} if detections else {},
+                "document": scanned,
+                "modality": mod_name,
+                "error": scanned.get("error"),
+                "note": "Document modality — OCR/scan prioritized",
+            }
+
         detected = self.adapters.detect_objects(image, conf=conf)
+        detections = list(detected.get("detections") or [])
+
+        # Merge thermal detections for thermal/IR
+        if mod_name in ("thermal", "infrared") and thermal:
+            for d in thermal.get("detections") or []:
+                detections.append(d)
+        elif mod_name in ("thermal", "infrared") and thermal is None:
+            th = self.thermal.analyze(image, modality=mod_name)
+            for d in th.get("detections") or []:
+                detections.append(d)
+            thermal = th
+
+        counts: dict[str, int] = {}
+        for d in detections:
+            lab = str(d.get("label") or "?")
+            counts[lab] = counts.get(lab, 0) + 1
+
         return {
             "stage": "see",
             "image": str(image) if isinstance(image, (str, Path)) else "<buffer>",
             "engine": detected.get("engine"),
-            "detections": detected.get("detections") or [],
-            "count": detected.get("count") or 0,
-            "counts_by_label": detected.get("counts_by_label") or {},
+            "detections": detections,
+            "count": len(detections),
+            "counts_by_label": counts,
+            "modality": mod_name,
+            "thermal": thermal,
             "error": detected.get("error"),
             "note": detected.get("note"),
         }
@@ -165,23 +231,61 @@ class VisionUnderstanding:
         *,
         conf: float = 0.35,
         search_unknown: bool = True,
+        modality_force: Optional[str] = None,
     ) -> dict[str, Any]:
-        """Full pipeline: see → analyze → understand (+ search)."""
-        seen = self.see(image, conf=conf)
+        """Smart pipeline: modality → (thermal) → see → analyze → understand → smart."""
+        modality = detect_modality(image, force=modality_force)
+        mod_name = modality.get("modality") or "rgb"
+        pipeline = list(modality.get("supported_pipeline") or ["see", "analyze", "understand"])
+
+        thermal_result = None
+        if mod_name in ("thermal", "infrared"):
+            thermal_result = self.thermal.analyze(image, modality=mod_name)
+
+        seen = self.see(image, conf=conf, modality=modality, thermal=thermal_result)
         analysis = self.analyze(seen, image=image)
+        # Attach relative heat onto analyzed thermal objects
+        if thermal_result:
+            heat_by_box = {
+                tuple(d.get("bbox_xyxy") or []): d.get("relative_heat")
+                for d in (thermal_result.get("detections") or [])
+            }
+            for obj in analysis.get("objects") or []:
+                key = tuple(obj.get("bbox_xyxy") or [])
+                if key in heat_by_box:
+                    obj["relative_heat"] = heat_by_box[key]
+
         understanding = self.understand_objects(
             analysis, image=image, search_unknown=search_unknown
         )
+        smart = self.smart.reason(
+            detections=seen.get("detections") or [],
+            understood=understanding.get("understood") or [],
+            unknown=understanding.get("unknown") or [],
+            modality=modality,
+            thermal=thermal_result,
+            analysis=analysis,
+        )
+
+        text_parts = [understanding["summary"], smart.get("smart_summary") or ""]
+        if thermal_result and thermal_result.get("summary"):
+            text_parts.append(thermal_result["summary"])
+        text = " ".join(p for p in text_parts if p).strip()
+
         return {
             "task": "understand_scene",
-            "pipeline": ["see", "analyze", "understand", "search_if_needed"],
+            "pipeline": pipeline,
+            "modality": modality,
+            "thermal": thermal_result,
             "see": seen,
             "analyze": analysis,
             "understand": understanding,
-            "text": understanding["summary"],
+            "smart": smart,
+            "text": text,
             "count": seen.get("count") or 0,
             "counts_by_label": seen.get("counts_by_label") or {},
             "detections": seen.get("detections") or [],
+            "alert": bool((thermal_result or {}).get("alert") or smart.get("max_risk") in ("critical", "high")),
             "engine": seen.get("engine"),
             "llm": False,
             "human_level_agi": False,

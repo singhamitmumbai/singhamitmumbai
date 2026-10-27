@@ -121,6 +121,38 @@ OBJECT_KB: dict[str, dict[str, Any]] = {
         "uses": [],
         "note": "Generic detection — needs analysis and search",
     },
+    "thermal_hotspot": {
+        "category": "thermal_anomaly",
+        "aliases": ["hotspot", "hot_region", "heat_spot"],
+        "attributes": ["relative_heat"],
+        "uses": ["inspection", "predictive_maintenance"],
+        "safety": "Elevated heat — inspect equipment for overload/friction/electrical faults",
+        "site_note": "Not absolute °C unless the thermal camera is calibrated",
+        "related": ["person_thermal", "fire"],
+    },
+    "person_thermal": {
+        "category": "human",
+        "aliases": ["thermal_person", "warm_body"],
+        "attributes": ["relative_heat", "pose"],
+        "uses": ["search_rescue", "security", "occupancy"],
+        "safety": "Warm human-shaped region on thermal/IR",
+        "related": ["person", "thermal_hotspot"],
+    },
+    "cold_region": {
+        "category": "thermal_anomaly",
+        "aliases": ["coldspot", "cold_spot"],
+        "attributes": ["relative_heat"],
+        "uses": ["insulation_check", "leak_detection"],
+        "site_note": "Cold spots may indicate insulation gaps or fluid leaks",
+        "related": ["thermal_hotspot"],
+    },
+    "document": {
+        "category": "document",
+        "aliases": ["page", "scan", "paper"],
+        "uses": ["records", "ocr", "reporting"],
+        "site_note": "Prefer OCR and field extraction for documents",
+        "related": ["book"],
+    },
 }
 
 

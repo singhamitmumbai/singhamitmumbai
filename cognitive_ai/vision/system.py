@@ -1,4 +1,4 @@
-"""VisionSystem — AI-facing computer vision gateway with understand loop."""
+"""VisionSystem — smart multi-modality gateway (RGB, thermal, IR, night, …)."""
 
 from __future__ import annotations
 
@@ -9,18 +9,21 @@ from ..core.working_state import WorkingState
 from .adapters import VisionAdapters
 from .catalog import list_projects
 from .knowledge import ObjectKnowledge
+from .modalities import MODALITIES, detect_modality
+from .thermal import ThermalAnalyzer
 from .understand import VisionUnderstanding
 from .yolo_engine import YOLOEngine
 
 
 class VisionSystem:
-    """Specialist perception: see → analyze → understand (+ search if unknown)."""
+    """See → analyze → understand (+ search); thermal and other modalities supported."""
 
     def __init__(self, engine: Optional[YOLOEngine] = None) -> None:
         self.engine = engine or YOLOEngine()
         self.adapters = VisionAdapters(self.engine)
         self.knowledge = ObjectKnowledge()
         self.understanding = VisionUnderstanding(self.engine, self.knowledge)
+        self.thermal = ThermalAnalyzer()
 
     def analyze(
         self,
@@ -31,17 +34,25 @@ class VisionSystem:
         conf: float = 0.35,
         source: str = "user",
         search_unknown: bool = True,
+        modality: Optional[str] = None,
     ) -> dict[str, Any]:
-        # Understanding pipeline tasks
-        if task in ("understand_scene", "see_analyze_understand", "perceive", "understand"):
-            result = self.understanding.perceive(image, conf=conf, search_unknown=search_unknown)
+        if task in ("understand_scene", "see_analyze_understand", "perceive", "understand", "smart_understand"):
+            result = self.understanding.perceive(
+                image, conf=conf, search_unknown=search_unknown, modality_force=modality
+            )
         elif task in ("see", "vision_see"):
-            result = {**self.understanding.see(image, conf=conf), "task": "see", "llm": False}
+            mod = detect_modality(image, force=modality)
+            result = {**self.understanding.see(image, conf=conf, modality=mod), "task": "see", "llm": False}
         elif task in ("analyze_scene", "vision_analyze"):
-            seen = self.understanding.see(image, conf=conf)
+            mod = detect_modality(image, force=modality)
+            seen = self.understanding.see(image, conf=conf, modality=mod)
             result = {**self.understanding.analyze(seen, image=image), "task": "analyze_scene", "llm": False}
+        elif task in ("thermal_analyze", "thermal", "analyze_thermal"):
+            result = self.thermal.analyze(image, modality=modality or "thermal")
+            result.setdefault("task", "thermal_analyze")
+        elif task in ("detect_modality", "modality"):
+            result = {"task": "detect_modality", **detect_modality(image, force=modality), "llm": False}
         elif task in ("explain_object", "understand_object"):
-            # image may be unused; label expected as string image? prefer kwargs via adapters
             label = str(image) if not _looks_like_path(image) else "object"
             result = self.understanding.explain_object(label)
         else:
@@ -62,8 +73,12 @@ class VisionSystem:
                 "vehicle_count": result.get("vehicle_count"),
                 "alert": result.get("alert"),
                 "text": result.get("text"),
+                "image_modality": (result.get("modality") or {}).get("modality")
+                if isinstance(result.get("modality"), dict)
+                else result.get("modality"),
                 "understood_count": (result.get("understand") or {}).get("understood_count"),
                 "unknown_count": (result.get("understand") or {}).get("unknown_count"),
+                "scene_type": (result.get("smart") or {}).get("scene_type"),
                 "summary": result.get("text") or (result.get("understand") or {}).get("summary"),
             },
             recognition_version=f"vision_{result.get('engine', result.get('task', 'unknown'))}",
@@ -71,7 +86,7 @@ class VisionSystem:
             context={
                 "vision_meta": {
                     k: result.get(k)
-                    for k in ("engine", "error", "project", "note", "weights", "pipeline")
+                    for k in ("engine", "error", "project", "note", "weights", "pipeline", "smart")
                 }
             },
             alternatives=[],
@@ -81,8 +96,8 @@ class VisionSystem:
         result["observation_id"] = obs.observation_id
         return result
 
-    def see(self, image: Any, *, conf: float = 0.35) -> dict[str, Any]:
-        return self.analyze(image, task="see", conf=conf)
+    def see(self, image: Any, *, conf: float = 0.35, modality: Optional[str] = None) -> dict[str, Any]:
+        return self.analyze(image, task="see", conf=conf, modality=modality)
 
     def analyze_scene(self, image: Any, *, conf: float = 0.35) -> dict[str, Any]:
         return self.analyze(image, task="analyze_scene", conf=conf)
@@ -94,15 +109,20 @@ class VisionSystem:
         conf: float = 0.35,
         search_unknown: bool = True,
         state: Optional[WorkingState] = None,
+        modality: Optional[str] = None,
     ) -> dict[str, Any]:
-        """See → analyze → understand; search objects that are not understood."""
+        """Smart see→analyze→understand; auto-detects thermal and other modalities."""
         return self.analyze(
             image,
             task="understand_scene",
             conf=conf,
             search_unknown=search_unknown,
             state=state,
+            modality=modality,
         )
+
+    def analyze_thermal(self, image: Any, *, modality: str = "thermal") -> dict[str, Any]:
+        return self.analyze(image, task="thermal_analyze", modality=modality)
 
     def explain_object(self, label: str, *, image: Any = None) -> dict[str, Any]:
         return self.understanding.explain_object(label, image=image)
@@ -110,9 +130,12 @@ class VisionSystem:
     def status(self) -> dict[str, Any]:
         st = self.adapters.status()
         st["understanding"] = {
-            "pipeline": ["see", "analyze", "understand", "search_if_needed"],
+            "pipeline": ["modality_detect", "see", "analyze", "understand", "search_if_needed", "smart"],
             "knowledge": self.knowledge.stats(),
             "search_history": len(self.understanding.search.history),
+            "modalities": list(MODALITIES),
+            "thermal": True,
+            "smart_reasoner": True,
         }
         return st
 
@@ -125,5 +148,5 @@ def _looks_like_path(value: Any) -> bool:
         return isinstance(value, (bytes, bytearray)) or hasattr(value, "__fspath__")
     s = value.lower()
     return "/" in value or "\\" in value or s.endswith(
-        (".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff")
+        (".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff", ".dcm")
     )

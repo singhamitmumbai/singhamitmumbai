@@ -98,7 +98,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--task",
         type=str,
         default="detect_objects",
-        help="Vision task: understand_scene|detect_objects|detect_vehicles|count_people|detect_fire|scan_document|vision_status|...",
+        help="Vision task: understand_scene|thermal_analyze|detect_objects|detect_vehicles|count_people|detect_fire|scan_document|vision_status|...",
     )
     p.add_argument(
         "--ask",
@@ -624,11 +624,22 @@ def main(argv: Optional[list[str]] = None) -> int:
         if not args.image:
             print("vision: provide --image PATH or --task vision_status", file=sys.stderr)
             return 2
-        if args.task in ("understand_scene", "understand", "perceive", "see_analyze_understand"):
+        if args.task in ("understand_scene", "understand", "perceive", "see_analyze_understand", "smart_understand"):
             vs = VisionSystem()
             out = vs.understand(args.image)
             print(out.get("text") or "")
-            print(json.dumps(out, indent=2, default=str)[:4000])
+            print(json.dumps(out, indent=2, default=str)[:5000])
+            return 0
+        if args.task in ("thermal_analyze", "thermal", "analyze_thermal"):
+            vs = VisionSystem()
+            out = vs.analyze_thermal(args.image)
+            print(out.get("text") or out.get("summary") or "")
+            print(json.dumps(out, indent=2, default=str)[:5000])
+            return 0
+        if args.task in ("detect_modality", "modality"):
+            from .vision.modalities import detect_modality
+
+            print(json.dumps(detect_modality(args.image), indent=2, default=str))
             return 0
         ai = CompleteNonLLMAI(seed_demo=False)
         ask = f"{args.task.replace('_', ' ')} in image {args.image}"

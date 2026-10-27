@@ -418,6 +418,7 @@ class OperatorPlanner:
 
         vision_ops = {
             "understand_scene",
+            "thermal_analyze",
             "detect_objects",
             "detect_vehicles",
             "count_people",
@@ -441,6 +442,8 @@ class OperatorPlanner:
                 vision_task = "vision_status"
             elif op_name == "understand_scene":
                 vision_task = "understand_scene"
+            elif op_name == "thermal_analyze":
+                vision_task = "thermal_analyze"
             steps = [
                 PlanStepRecord(
                     operator="vision_analyze",

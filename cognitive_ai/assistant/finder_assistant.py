@@ -104,13 +104,17 @@ class FinderbayAssistant:
         if self._looks_like_jarvis(lower):
             return self.jarvis_handle(text, speak=speak)
 
-        # Vision understand shorthand: "understand image ./x.jpg"
+        # Vision understand / thermal shorthand
         if lower.startswith("understand image ") or lower.startswith("understand scene "):
             path = text.split(None, 2)[-1].strip().strip("\"'")
             return self.understand_image(path)
         if lower.startswith("see image ") or lower.startswith("look at image "):
             path = text.split(None, 2)[-1].strip().strip("\"'")
             return self.understand_image(path)
+        if lower.startswith("thermal ") or lower.startswith("analyze thermal "):
+            path = text.split(None, 2)[-1].strip().strip("\"'") if " " in text.strip() else ""
+            if path:
+                return self.analyze_thermal(path)
 
         # Default → Complete AI (vision/coding/finderbay/llm/tools)
         out = self.complete.handle(text, mode=mode)
@@ -183,16 +187,38 @@ class FinderbayAssistant:
             route="vision",
         )
 
-    def understand_image(self, image: str, *, search_unknown: bool = True) -> dict[str, Any]:
-        """See → analyze → understand; search objects that are not understood."""
-        result = self.vision.understand(image, search_unknown=search_unknown)
+    def understand_image(
+        self,
+        image: str,
+        *,
+        search_unknown: bool = True,
+        modality: str | None = None,
+    ) -> dict[str, Any]:
+        """Smart see→analyze→understand; auto thermal/IR/night/other modalities."""
+        result = self.vision.understand(image, search_unknown=search_unknown, modality=modality)
         return self._tag(
             {
                 "text": result.get("text") or "Vision understanding complete.",
                 "structured": result,
                 "verified": bool((result.get("understand") or {}).get("all_understood")),
+                "modality": (result.get("modality") or {}).get("modality")
+                if isinstance(result.get("modality"), dict)
+                else result.get("modality"),
+                "alert": result.get("alert"),
             },
             route="vision_understand",
+        )
+
+    def analyze_thermal(self, image: str) -> dict[str, Any]:
+        result = self.vision.analyze_thermal(image)
+        return self._tag(
+            {
+                "text": result.get("text") or result.get("summary") or "Thermal analysis done.",
+                "structured": result,
+                "alert": result.get("alert"),
+                "modality": "thermal",
+            },
+            route="vision_thermal",
         )
 
     def speak(self, text: str) -> dict[str, Any]:

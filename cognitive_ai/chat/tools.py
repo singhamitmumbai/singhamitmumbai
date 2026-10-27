@@ -92,9 +92,15 @@ class ToolRouter:
         if not image:
             return {"ok": False, "error": "image_path_required"}
         search_unknown = args.get("search_unknown", True)
+        modality = args.get("modality")
         return {
             "ok": True,
-            **self.ai.vision.analyze(image, task=task, search_unknown=bool(search_unknown)),
+            **self.ai.vision.analyze(
+                image,
+                task=task,
+                search_unknown=bool(search_unknown),
+                modality=modality,
+            ),
         }
 
     def _coding(self, args: dict[str, Any]) -> dict[str, Any]:

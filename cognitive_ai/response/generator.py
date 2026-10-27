@@ -257,6 +257,7 @@ class ResponseGenerator:
             structured = {"report_ready": True, **rep}
         elif op in (
             "understand_scene",
+            "thermal_analyze",
             "detect_objects",
             "detect_vehicles",
             "count_people",
@@ -277,6 +278,7 @@ class ResponseGenerator:
         # (skip for vision — adapters already realize counts with the right labels)
         if op not in (
             "understand_scene",
+            "thermal_analyze",
             "detect_objects",
             "detect_vehicles",
             "count_people",
@@ -508,11 +510,22 @@ class ResponseGenerator:
             und = (vision.get("understand") or {}).get("understood_count", 0)
             unk = (vision.get("understand") or {}).get("unknown_count", 0)
             searches = (vision.get("understand") or {}).get("search_count", 0)
+            mod = vision.get("modality") or {}
+            mod_name = mod.get("modality") if isinstance(mod, dict) else mod
+            scene = (vision.get("smart") or {}).get("scene_type")
             if not summary:
                 summary = f"Saw {count} object(s); understood={und}, unknown={unk}, searches={searches}."
             else:
                 summary = f"{summary} (understood={und}, unknown={unk}, searches={searches}, engine={engine})."
+            if mod_name:
+                summary = f"[{mod_name}] {summary}"
+            if scene:
+                summary += f" Scene={scene}."
             return summary, {**vision, "count": count, "ok": True}
+        if op == "thermal_analyze":
+            summary = vision.get("text") or vision.get("summary") or "Thermal analysis complete."
+            alert = " ALERT." if vision.get("alert") else ""
+            return f"{summary}{alert}", {**vision, "count": count, "ok": True}
 
         # detect_objects default
         if counts:

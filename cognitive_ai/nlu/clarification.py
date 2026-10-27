@@ -21,6 +21,7 @@ REQUIRED_SLOTS: dict[str, list[str]] = {
     "create_po": ["project_id", "vendor_id", "item", "qty", "unit_price_inr"],
     "export_report": ["report_kind"],
     "understand_scene": ["image_path"],
+    "thermal_analyze": ["image_path"],
     "detect_objects": ["image_path"],
     "detect_vehicles": ["image_path"],
     "count_people": ["image_path"],

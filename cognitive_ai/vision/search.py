@@ -96,6 +96,24 @@ ENCYCLOPEDIA: dict[str, dict[str, Any]] = {
         "uses": ["head_protection"],
         "safety": "Required PPE on many sites",
     },
+    "thermal hotspot": {
+        "category": "thermal_anomaly",
+        "summary": "Region of elevated heat on a thermal/IR image; may indicate overload or friction.",
+        "aliases": ["hotspot", "hot region"],
+        "uses": ["inspection", "predictive_maintenance"],
+        "safety": "Inspect equipment before continuing operation",
+    },
+    "flir": {
+        "category": "sensor",
+        "summary": "Thermal imaging camera brand/type commonly used for heat inspection.",
+        "uses": ["thermography"],
+    },
+    "night vision": {
+        "category": "sensor",
+        "summary": "Low-light imaging modality amplifying residual light.",
+        "uses": ["security", "navigation"],
+    },
+
     "crane": {
         "category": "equipment",
         "summary": "Lifting machine for heavy loads on construction sites.",

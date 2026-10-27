@@ -41,7 +41,8 @@ def test_see_analyze_understand_pipeline():
     # stub path hints vehicles + people
     out = vu.perceive("traffic_cars_and_crowd_people.jpg")
     assert out["task"] == "understand_scene"
-    assert out["pipeline"] == ["see", "analyze", "understand", "search_if_needed"]
+    assert out["pipeline"][0] == "modality_detect"
+    assert "see" in out["pipeline"] and "understand" in out["pipeline"]
     assert out["count"] >= 1
     assert out["see"]["stage"] == "see"
     assert out["analyze"]["stage"] == "analyze"
@@ -66,7 +67,8 @@ def test_vision_system_understand_api():
     vs = VisionSystem()
     st = vs.status()
     assert "understanding" in st
-    assert st["understanding"]["pipeline"][0] == "see"
+    assert st["understanding"]["pipeline"][0] == "modality_detect"
+    assert "thermal" in st["understanding"]["modalities"]
     result = vs.understand("crowd_people.jpg")
     assert result["task"] == "understand_scene"
     assert (result.get("understand") or {}).get("understood_count", 0) >= 1

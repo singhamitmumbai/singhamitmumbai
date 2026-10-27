@@ -393,6 +393,7 @@ class CompleteNonLLMAI:
         # Surface conflict note in text when present (skip unrelated alias noise for vision)
         vision_ops = {
             "understand_scene",
+            "thermal_analyze",
             "detect_objects",
             "detect_vehicles",
             "count_people",

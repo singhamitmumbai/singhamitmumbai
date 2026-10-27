@@ -79,6 +79,7 @@ class LanguageUnderstanding:
         "query_vendors",
         "export_report",
         "understand_scene",
+        "thermal_analyze",
         "detect_objects",
         "detect_vehicles",
         "count_people",
@@ -176,6 +177,7 @@ class LanguageUnderstanding:
         # (but not when document_qa / OCR field extraction is clearly intended)
         vision_ops = {
             "understand_scene",
+            "thermal_analyze",
             "detect_objects",
             "detect_vehicles",
             "count_people",
@@ -195,6 +197,7 @@ class LanguageUnderstanding:
         ):
             for v in (
                 "vision_status",
+                "thermal_analyze",
                 "understand_scene",
                 "detect_fire",
                 "detect_vehicles",

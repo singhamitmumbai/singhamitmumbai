@@ -34,6 +34,7 @@ FINDERBAY_HINTS = {
     "query_vendors",
     "export_report",
     "understand_scene",
+    "thermal_analyze",
     "detect_objects",
     "detect_vehicles",
     "count_people",
