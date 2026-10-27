@@ -3,6 +3,7 @@
 from .pipeline import LanguageUnderstanding, SemanticFrame
 from .dialogue_tracker import DialogueTracker
 from .questions import QuestionAnalyzer, QuestionAnalysis, analyze_question
+from .smart_questions import SmartQuestionUnderstanding, SmartQuestionFrame
 
 __all__ = [
     "LanguageUnderstanding",
@@ -11,4 +12,6 @@ __all__ = [
     "QuestionAnalyzer",
     "QuestionAnalysis",
     "analyze_question",
+    "SmartQuestionUnderstanding",
+    "SmartQuestionFrame",
 ]

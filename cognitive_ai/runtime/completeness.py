@@ -53,6 +53,7 @@ REQUIRED_MODULES = [
     "cognitive_ai.intelligence.hardening",
     "cognitive_ai.nlu.smart_questions",
     "cognitive_ai.search.web_intel",
+    "cognitive_ai.response.chatgpt_style",
 ]
 
 
@@ -80,6 +81,7 @@ REQUIRED_ATTRS = {
     "cognitive_ai.intelligence.hardening": ["SelfCheck", "harden_text"],
     "cognitive_ai.nlu.smart_questions": ["SmartQuestionUnderstanding"],
     "cognitive_ai.search.web_intel": ["IntelligentWebSearch", "SearchResult"],
+    "cognitive_ai.response.chatgpt_style": ["ChatGPTStyleComposer", "ChatGPTStyleAnswer"],
 }
 
 

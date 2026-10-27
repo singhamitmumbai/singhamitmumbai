@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.13.0) — smarter non-LLM brain: question understanding, intelligent web search, SmartRouter, thermal vision, JARVIS tools:
+**Complete AI** (v1.14.0) — ChatGPT-level non-LLM brain: natural answers, smarter questions, intelligent web search, SmartRouter, thermal vision, JARVIS tools:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
@@ -36,6 +36,26 @@ python -m cognitive_ai chat --domain complete
 
 Product: **Complete AI** / **Finderbay Assistant** / **JARVIS tools**. `human_level_agi=false`.  
 Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.
+
+### What v1.14 adds — ChatGPT-level non-LLM chat
+
+| Piece | Role |
+|------|------|
+| `response/chatgpt_style.py` | Natural prose: overview, bullets, steps, yes/no, follow-ups |
+| `nlu/smart_questions.py` | Dialogue acts, style (eli5/detailed), creative + math intents |
+| `search/web_intel.py` | Query expansion, richer local KB, ChatGPT-style cited answers |
+| `OpenDomainChat` | Poem/email/outline/brainstorm/math + smarter search escalation |
+| Tests | Broad ChatGPT-style question battery (`test_chatgpt_level.py`) |
+
+```bash
+python -m cognitive_ai assistant --ask "Explain gravity in simple terms"
+python -m cognitive_ai assistant --ask "Write a poem about Mars"
+python -m cognitive_ai assistant --ask "Calculate 15% of 240"
+python -m cognitive_ai assistant --ask "Search the web for photosynthesis"
+pytest tests/test_chatgpt_level.py tests/test_smart_questions_and_search.py -q
+```
+
+> Still `human_level_agi=false`. For unrestricted cloud ChatGPT models, set `OPENAI_API_KEY` (auto-enables the LLM bridge). Offline, the non-LLM brain now answers in a ChatGPT-like helpful style.
 
 ### What v1.13 adds — Smarter questions + intelligent internet search
 
@@ -111,7 +131,7 @@ Tool contracts, job store, provenance memory, material shortage skill, voice PTT
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.13.0.zip
+# → dist/Complete_Non_LLM_AI_v1.14.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.

@@ -26,7 +26,7 @@ QUESTION_BATTERY = [
     ("Search the web for speed of light", ["light", "299", "km", "speed"]),
     ("Look up thermal imaging", ["thermal", "infrared", "heat"]),
     # Howto
-    ("How do I reserve cement?", ["steps", "goal", "check"]),
+    ("How do I reserve cement?", ["goal", "1.", "check"]),
     # Compare
     ("Compare dog and cat", ["dog", "cat"]),
     # Finderbay
