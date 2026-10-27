@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.5.0) — ChatGPT-class chat with local tools + full specialist stack:
+**Complete AI** (v1.6.0) — full code release: ChatGPT-class chat + tools + persist + Hindi + vision/coding/agent:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
@@ -13,24 +13,26 @@ pretrained general-purpose LLM at runtime**.
 export OPENAI_API_KEY=sk-...
 python -m cognitive_ai complete-ai --ask "Write a short poem about Mars"
 python -m cognitive_ai diagnostics
+python -m cognitive_ai completeness
 
 # Full demo (tasks + vision + coding + chat)
 python -m cognitive_ai complete-ai --demo
 python -m cognitive_ai complete-ai --ask "Who are you?"
 
-# API (Complete AI default)
+# API + Chat UI (Complete AI default)
 python -m cognitive_ai api --port 8787
-# POST /complete  GET /diagnostics  GET /session  POST /tool
+python -m cognitive_ai chat --domain complete
+# POST /complete  GET /diagnostics  GET /completeness  GET /session  POST /tool
 ```
 
 Product name: **Complete AI**. Status keeps `human_level_agi=false`.  
-v1.5 adds session memory, diagnostics, and TOOL finderbay/vision/coding loops.
+v1.6 completes persistence, session export, Hindi realization, UI, and a completeness checker.
 
 ### Release zip
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.5.0.zip
+# → dist/Complete_Non_LLM_AI_v1.6.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.

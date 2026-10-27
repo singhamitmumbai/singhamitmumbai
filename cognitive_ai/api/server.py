@@ -94,6 +94,10 @@ def serve_api(host: str = "127.0.0.1", port: int = 8787, *, mode: str = "complet
                     if state.complete is None:
                         return self._json(503, {"error": "complete_ai_required"})
                     return self._json(200, state.complete.diagnostics())
+                if path == "/completeness":
+                    if state.complete is None:
+                        return self._json(503, {"error": "complete_ai_required"})
+                    return self._json(200, state.complete.completeness())
                 if path == "/session":
                     if state.complete is None:
                         return self._json(503, {"error": "complete_ai_required"})
@@ -164,6 +168,21 @@ def serve_api(host: str = "127.0.0.1", port: int = 8787, *, mode: str = "complet
                         return self._json(503, {"error": "complete_ai_required"})
                     state.complete.reset_session()
                     return self._json(200, {"ok": True, "reset": True})
+                if path == "/session/export":
+                    if state.complete is None:
+                        return self._json(503, {"error": "complete_ai_required"})
+                    fmt = data.get("format") or "markdown"
+                    return self._json(
+                        200,
+                        {
+                            "format": fmt,
+                            "content": state.complete.export_session(fmt=fmt),
+                        },
+                    )
+                if path == "/completeness":
+                    if state.complete is None:
+                        return self._json(503, {"error": "complete_ai_required"})
+                    return self._json(200, state.complete.completeness())
                 if path == "/memory":
                     if state.complete is None:
                         return self._json(503, {"error": "complete_ai_required"})

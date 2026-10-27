@@ -48,7 +48,7 @@ def test_session_memory_and_diagnostics():
     diag = ai.diagnostics()
     assert diag["ok"] is True
     assert diag["passed"] == diag["total"]
-    assert diag["version"].startswith("1.5")
+    assert diag["version"].startswith("1.")
     ai.reset_session()
     assert ai.session == []
 

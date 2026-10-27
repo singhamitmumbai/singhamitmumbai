@@ -23,6 +23,7 @@ from .chat.llm_bridge import DEFAULT_SYSTEM, LLMChatBridge, llm_bridge_from_env
 from .chat.tools import ToolRouter, extract_tool_calls, strip_tool_lines
 from .config import SystemConfig
 from .general.agent import GeneralNonLLMAI
+from .runtime.persist import StateStore, default_store
 from .version import __version__
 from .vision import VisionSystem
 
@@ -67,6 +68,8 @@ class CompleteAI:
         llm: Optional[LLMChatBridge] = None,
         max_tool_rounds: int = 3,
         session_limit: int = 100,
+        persist_path: Optional[str] = None,
+        autosave: bool = True,
     ) -> None:
         self.version = __version__
         self.general = GeneralNonLLMAI(config=config, seed_demo=seed_demo)
@@ -78,6 +81,8 @@ class CompleteAI:
         self.session_limit = session_limit
         self.session: list[SessionTurn] = []
         self.user_memory: dict[str, str] = {}
+        self.autosave = autosave
+        self.store: StateStore = default_store(persist_path)
         if llm is not None:
             self.llm = llm
             if enable_llm is not None:
@@ -91,6 +96,7 @@ class CompleteAI:
             self.llm.system_prompt = TOOL_AWARE_SYSTEM
             self.llm._complete_ai_tools = True  # type: ignore[attr-defined]
         self.tools = ToolRouter(self)
+        self._restore()
 
     # --- primary API ----------------------------------------------------------
 
@@ -221,6 +227,7 @@ class CompleteAI:
 
     def remember(self, key: str, value: str) -> None:
         self.user_memory[str(key)] = str(value)
+        self._save()
 
     def recall(self, key: str) -> Optional[str]:
         return self.user_memory.get(str(key))
@@ -232,14 +239,81 @@ class CompleteAI:
         self.session.clear()
         if hasattr(self.llm, "history"):
             self.llm.history.clear()
+        self._save()
 
     def session_transcript(self) -> list[dict[str, Any]]:
         return [t.to_dict() for t in self.session]
 
+    def export_session(self, *, fmt: str = "markdown") -> str:
+        if fmt == "json":
+            return json.dumps(
+                {
+                    "product": self.PRODUCT_NAME,
+                    "version": self.version,
+                    "memory": self.user_memory,
+                    "session": self.session_transcript(),
+                },
+                indent=2,
+                default=str,
+            )
+        lines = [f"# {self.PRODUCT_NAME} session (v{self.version})", ""]
+        if self.user_memory:
+            lines.append("## Memory")
+            for k, v in self.user_memory.items():
+                lines.append(f"- **{k}**: {v}")
+            lines.append("")
+        lines.append("## Transcript")
+        for t in self.session:
+            lines.append(f"**{t.role}** ({t.route}): {t.text}")
+            lines.append("")
+        return "\n".join(lines).rstrip() + "\n"
+
+    def completeness(self) -> dict[str, Any]:
+        from .runtime.completeness import run_completeness_check
+
+        return run_completeness_check()
+
+    def _restore(self) -> None:
+        data = self.store.load()
+        self.user_memory = dict(data.get("user_memory") or {})
+        # Do not auto-replay full session into LLM history; keep transcript only
+        restored: list[SessionTurn] = []
+        for row in data.get("session") or []:
+            try:
+                restored.append(
+                    SessionTurn(
+                        role=str(row.get("role") or "user"),
+                        text=str(row.get("text") or ""),
+                        route=str(row.get("route") or ""),
+                        meta=dict(row.get("meta") or {}),
+                        ts=float(row.get("ts") or time.time()),
+                    )
+                )
+            except Exception:  # noqa: BLE001
+                continue
+        self.session = restored[-self.session_limit :]
+
+    def _save(self) -> None:
+        if not self.autosave:
+            return
+        self.store.save(
+            user_memory=self.user_memory,
+            session=self.session_transcript(),
+        )
+
     def _push(self, role: str, text: str, *, route: str = "", meta: Optional[dict] = None) -> None:
-        self.session.append(SessionTurn(role=role, text=text, route=route, meta=meta or {}))
+        # Avoid persisting huge nested action payloads
+        slim_meta = {}
+        if meta:
+            for k in ("route", "llm_at_runtime", "faithful", "method"):
+                if k in meta:
+                    slim_meta[k] = meta[k]
+            if meta.get("tools"):
+                slim_meta["tools_count"] = len(meta["tools"])
+        self.session.append(SessionTurn(role=role, text=text, route=route, meta=slim_meta))
         if len(self.session) > self.session_limit:
             self.session = self.session[-self.session_limit :]
+        self._save()
 
     # --- diagnostics ----------------------------------------------------------
 
@@ -281,6 +355,8 @@ class CompleteAI:
             "tool_finderbay",
             lambda: self.tools.run("finderbay", {"text": "status"}).get("ok"),
         )
+        check("persist_store", lambda: str(self.store.path))
+        check("export_markdown", lambda: "Complete AI" in self.export_session())
         passed = sum(1 for c in checks if c["ok"])
         return {
             "product": self.PRODUCT_NAME,
@@ -289,6 +365,7 @@ class CompleteAI:
             "passed": passed,
             "total": len(checks),
             "checks": checks,
+            "completeness": self.completeness(),
             "llm_at_runtime": bool(self.llm.available),
             "human_level_agi": False,
         }

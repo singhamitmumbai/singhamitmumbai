@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Cognitive OS — Chat</title>
+  <title>Complete AI — Chat</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
@@ -15,8 +15,8 @@
     <header class="brand">
       <div class="brand-mark" aria-hidden="true"></div>
       <div class="brand-text">
-        <h1>Cognitive OS</h1>
-        <p class="tagline">Symbolic brain · offline · no LLM</p>
+        <h1>Complete AI</h1>
+        <p class="tagline">Chat · tasks · vision · coding · agent</p>
       </div>
       <div class="status-pill" id="statusPill">booting…</div>
     </header>
@@ -24,26 +24,26 @@
     <main class="layout">
       <aside class="rail" id="rail">
         <section>
-          <h2>Mind</h2>
+          <h2>Status</h2>
           <dl id="mindStats"></dl>
         </section>
         <section>
           <h2>Quick</h2>
           <div class="chips">
             <button type="button" data-prompt="Who are you?">Who are you?</button>
-            <button type="button" data-prompt="What do you know?">What do you know?</button>
-            <button type="button" data-prompt="What are you trying to do?">Goals</button>
-            <button type="button" data-prompt="How do you think?">How think?</button>
-            <button type="button" data-cmd="think">Think ×3</button>
-            <button type="button" data-cmd="reason">Reason</button>
+            <button type="button" data-prompt="Show unpaid invoices for Project A">Invoices</button>
+            <button type="button" data-prompt="Can penguins fly?">Penguins</button>
+            <button type="button" data-prompt="Count people in image ./crowd_people.jpg">Vision</button>
+            <button type="button" data-prompt="generate function add(a, b)">Code</button>
+            <button type="button" data-prompt="Show alerts for Project A">Alerts</button>
           </div>
         </section>
         <section>
-          <h2>Domains</h2>
+          <h2>System</h2>
           <div class="chips">
-            <button type="button" data-domain="animals">animals</button>
-            <button type="button" data-domain="blocks">blocks</button>
-            <button type="button" data-domain="kitchen">kitchen</button>
+            <button type="button" data-cmd="/status">Status</button>
+            <button type="button" data-cmd="/diag">Diagnostics</button>
+            <button type="button" data-cmd="/reset">Reset session</button>
           </div>
         </section>
       </aside>
@@ -52,10 +52,10 @@
         <div class="messages" id="messages" role="log" aria-live="polite"></div>
         <form class="composer" id="composer">
           <label class="sr-only" for="input">Message</label>
-          <textarea id="input" rows="1" placeholder="Ask the brain, or: assert s p o · goal desc | s p o · why s p o · think"></textarea>
+          <textarea id="input" rows="1" placeholder="Ask Complete AI anything — chat, invoices, vision, code…"></textarea>
           <button type="submit" id="send">Send</button>
         </form>
-        <p class="hint">Try <code>assert rover is_a dog</code> · <code>goal Feed tweety | tweety fed true</code> · <code>why tweety can fly</code></p>
+        <p class="hint">Set <code>OPENAI_API_KEY</code> for ChatGPT-class chat. <code>human_level_agi=false</code></p>
       </section>
     </main>
   </div>

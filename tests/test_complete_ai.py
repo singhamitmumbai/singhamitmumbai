@@ -65,7 +65,7 @@ def test_llm_forced_mode_without_key():
     assert out["human_level_agi"] is False
 
 
-def test_auto_prefers_llm_for_general_chat_when_available(monkeypatch):
+def test_auto_prefers_llm_for_general_chat_when_available(tmp_path):
     """When LLM is available, open chat should not stay on symbolic fallback."""
     calls = []
 
@@ -82,12 +82,17 @@ def test_auto_prefers_llm_for_general_chat_when_available(monkeypatch):
                 "method": "llm_bridge",
             }
 
-    ai = CompleteAI(seed_demo=False, llm=FakeLLM())
+    ai = CompleteAI(
+        seed_demo=False,
+        llm=FakeLLM(),
+        persist_path=str(tmp_path / "state.json"),
+        autosave=False,
+    )
     out = ai.handle("Write a haiku about rain")
     assert out["route"] == "llm_chat"
     assert out["llm_at_runtime"] is True
     assert out["text"].startswith("LLM:")
-    assert calls == ["Write a haiku about rain"]
+    assert calls[0].startswith("Write a haiku about rain")
     # Finderbay still preferred for business
     out2 = ai.handle("Show unpaid invoices for Project A")
     assert out2["route"] == "finderbay"

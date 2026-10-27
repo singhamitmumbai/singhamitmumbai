@@ -89,15 +89,26 @@ class ChatSession:
                 "I am symbolic — no language model behind this chat."
             )
 
-    def handle_message(self, message: str) -> str:
+    def handle_message(self, message: str) -> dict[str, Any]:
         with self.lock:
             if self.complete is not None:
                 result = self.complete.handle(message.strip())
-                return str(result.get("text") or "")
+                return {
+                    "reply": str(result.get("text") or ""),
+                    "route": result.get("route"),
+                    "llm_at_runtime": result.get("llm_at_runtime"),
+                    "human_level_agi": False,
+                    "product": result.get("product") or "Complete AI",
+                }
             if self.general is not None:
                 result = self.general.handle(message.strip())
-                return str(result.get("text") or "")
-            return self._dispatch(message.strip())
+                return {
+                    "reply": str(result.get("text") or ""),
+                    "route": result.get("route"),
+                    "llm_at_runtime": False,
+                    "human_level_agi": False,
+                }
+            return {"reply": self._dispatch(message.strip()), "route": "symbolic"}
 
     def _dispatch(self, msg: str) -> str:
         if not msg:
@@ -248,6 +259,12 @@ def make_handler(session: ChatSession):
             if path == "/api/hello":
                 self._json(200, {"greeting": session.greeting(), "version": __version__})
                 return
+            if path == "/api/diagnostics":
+                if session.complete is not None:
+                    self._json(200, session.complete.diagnostics())
+                else:
+                    self._json(200, {"ok": True, "note": "symbolic_mode"})
+                return
             self._json(404, {"error": "not found"})
 
         def do_POST(self) -> None:  # noqa: N802
@@ -263,10 +280,18 @@ def make_handler(session: ChatSession):
             if path == "/api/chat":
                 message = str(payload.get("message", ""))
                 try:
-                    reply = session.handle_message(message)
-                    self._json(200, {"reply": reply, "status": session.status()})
+                    out = session.handle_message(message)
+                    if isinstance(out, str):
+                        out = {"reply": out}
+                    out["status"] = session.status()
+                    self._json(200, out)
                 except Exception as exc:  # noqa: BLE001
                     self._json(500, {"error": str(exc)})
+                return
+            if path == "/api/reset":
+                if session.complete is not None:
+                    session.complete.reset_session()
+                self._json(200, {"ok": True, "reset": True})
                 return
             self._json(404, {"error": "not found"})
 
@@ -296,8 +321,8 @@ def serve_chat(
     handler = make_handler(session)
     httpd = ThreadingHTTPServer((host, port), handler)
     mode = session.mode
-    print(f"Non-LLM chat UI → http://127.0.0.1:{port}/  (domain={domain}, mode={mode})")
-    print("No LLM. Ctrl+C to stop.")
+    print(f"Complete AI chat UI → http://127.0.0.1:{port}/  (domain={domain}, mode={mode})")
+    print("Ctrl+C to stop. Set OPENAI_API_KEY for ChatGPT-class chat.")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

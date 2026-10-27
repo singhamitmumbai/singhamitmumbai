@@ -76,8 +76,9 @@ def build_parser() -> argparse.ArgumentParser:
             "vision",
             "complete-ai",
             "diagnostics",
+            "completeness",
         ],
-        help="Optional subcommand: complete-ai, diagnostics, os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
+        help="Optional subcommand: complete-ai, diagnostics, completeness, os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
     )
     p.add_argument(
         "--mode",
@@ -623,13 +624,17 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(json.dumps(result.get("structured") or {}, indent=2, default=str)[:3000])
         return 0
 
-    if args.command in ("complete-ai", "diagnostics"):
+    if args.command in ("complete-ai", "diagnostics", "completeness"):
         from .complete_ai import CompleteAI
 
-        ai = CompleteAI(seed_demo=True)
+        ai = CompleteAI(seed_demo=True, persist_path="data/complete_ai/state.json")
         if args.command == "diagnostics":
             print(json.dumps(ai.diagnostics(), indent=2, default=str))
             return 0 if ai.diagnostics()["ok"] else 1
+        if args.command == "completeness":
+            report = ai.completeness()
+            print(json.dumps(report, indent=2, default=str))
+            return 0 if report.get("ok") else 1
         if args.ask:
             out = ai.handle(args.ask, mode=args.mode or "auto")
             print(out["text"])

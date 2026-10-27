@@ -7,7 +7,18 @@ from typing import Any, Optional
 from ..core.working_state import WorkingState
 from ..execution.executor import Executor
 from ..reasoning.engine import ReasoningResult
-from .hindi import prefer_hindi, realize_invoice_hi, realize_pending_hi
+from .hindi import (
+    prefer_hindi,
+    realize_alerts_hi,
+    realize_invoice_hi,
+    realize_materials_hi,
+    realize_payment_hi,
+    realize_pending_hi,
+    realize_reserve_hi,
+    realize_status_hi,
+    realize_task_hi,
+    realize_vision_hi,
+)
 
 
 def _ask_meta(frame: dict) -> dict:
@@ -127,17 +138,21 @@ class ResponseGenerator:
             state.last_answer = answer
             return answer
 
+        lang = frame.get("language") or "en"
         if op == "status":
+            text = (
+                "I am Complete AI — a complete non-LLM task engine for Finderbay "
+                "(optional ChatGPT-class LLM chat can be enabled separately). "
+                "Supported: invoices, deliveries, materials, tasks, documents, payments, "
+                "contracts, vendors/POs, proactive alerts, CSV reports, auth, follow-up drafts "
+                "(without sending), and computer vision (YOLO object/vehicle/people/fire + "
+                "document scan via vendored YOLO_Projects). "
+                "human_level_agi=false. I keep unknown ≠ false, predicted ≠ observed, attempted ≠ confirmed."
+            )
+            if prefer_hindi(lang):
+                text = realize_status_hi()
             answer = {
-                "text": (
-                    "I am Complete AI — a complete non-LLM task engine for Finderbay "
-                    "(optional ChatGPT-class LLM chat can be enabled separately). "
-                    "Supported: invoices, deliveries, materials, tasks, documents, payments, "
-                    "contracts, vendors/POs, proactive alerts, CSV reports, auth, follow-up drafts "
-                    "(without sending), and computer vision (YOLO object/vehicle/people/fire + "
-                    "document scan via vendored YOLO_Projects). "
-                    "human_level_agi=false. I keep unknown ≠ false, predicted ≠ observed, attempted ≠ confirmed."
-                ),
+                "text": text,
                 "structured": state.summary(),
                 "faithful": True,
             }
@@ -155,7 +170,6 @@ class ResponseGenerator:
             if draft:
                 break
 
-        lang = frame.get("language") or "en"
         ask = _ask_meta(frame)
         if op == "query_invoices":
             text, structured = self._realize_invoices(reasoning, table)
@@ -167,10 +181,16 @@ class ResponseGenerator:
                 text = realize_pending_hi(structured, draft)
         elif op == "query_materials":
             text, structured = self._realize_materials(table)
+            if prefer_hindi(lang):
+                text = realize_materials_hi(structured)
         elif op == "reserve_stock":
             text, structured = self._realize_reserve(executor.last_reservation)
+            if prefer_hindi(lang):
+                text = realize_reserve_hi(structured)
         elif op == "manage_task":
             text, structured = self._realize_task(executor, table)
+            if prefer_hindi(lang):
+                text = realize_task_hi(structured)
         elif op == "document_qa":
             text, structured = self._realize_document(executor.last_document)
         elif op == "learn_alias":
@@ -191,6 +211,8 @@ class ResponseGenerator:
                 f"for {p.get('invoice_id')}. Invoice paid total ₹{pay.get('invoice_paid_total')}."
             )
             structured = {"payment_posted": True, **pay}
+            if prefer_hindi(lang):
+                text = realize_payment_hi(structured)
         elif op in ("query_payments", "query_contracts", "query_purchase_orders", "query_vendors"):
             n = table.get("row_count", 0) if table else 0
             kind = {
@@ -216,6 +238,8 @@ class ResponseGenerator:
                 f"{by.get('critical', 0)} critical, {by.get('warn', 0)} warn, {by.get('info', 0)} info."
             )
             structured = {"count": n, "alerts": alerts.get("alerts") or [], "by_severity": by}
+            if prefer_hindi(lang):
+                text = realize_alerts_hi(structured)
         elif op == "create_purchase_order":
             po = (executor.last_po or {}).get("purchase_order") or {}
             text = (
@@ -242,6 +266,8 @@ class ResponseGenerator:
             "estimate_queue",
         ):
             text, structured = self._realize_vision(executor.last_vision or {}, op)
+            if prefer_hindi(lang):
+                text = realize_vision_hi(structured, op)
         else:
             text = reasoning.message if reasoning else "Done."
             structured = {"reasoning": reasoning.to_dict() if reasoning else None}

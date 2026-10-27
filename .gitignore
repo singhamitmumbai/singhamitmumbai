@@ -22,3 +22,5 @@ runs/
 wandb/
 # Release zips are generated into dist/; keep folder local
 dist/*.zip
+# Complete AI local session persistence
+data/complete_ai/state.json

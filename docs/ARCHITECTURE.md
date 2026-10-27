@@ -1,9 +1,11 @@
-# Complete Non-LLM AI — Architecture
+# Complete AI — Architecture
 
-This repository implements the engineering blueprint for a **complete non-LLM AI**:
-an assistant that understands supported requests, maintains explicit knowledge,
-reasons, plans, acts, verifies, and learns **without a pretrained general-purpose
-LLM at runtime**.
+This repository implements **Complete AI**: Finderbay tasks, vision, coding, agent,
+open-domain chat, plus optional ChatGPT-class general chat (when an API key is set).
+
+Core specialist engines follow the non-LLM blueprint (explicit knowledge, rules,
+planning, verification). General open chat may use an LLM bridge (`llm_at_runtime`
+reflects that). `human_level_agi` is always false.
 
 ## Operating process
 
@@ -35,6 +37,12 @@ Input → Perception → Language understanding → Working state
 | `cognitive_ai/benchmarks` | SCAN-style composition + skill-transfer holdouts |
 | `cognitive_ai/general` | `GeneralNonLLMAI` router (Finderbay ↔ open-domain) |
 | `cognitive_ai/system.py` | `CompleteNonLLMAI` orchestration |
+| `cognitive_ai/complete_ai.py` | **Complete AI** facade: session, tools, LLM chat, diagnostics |
+| `cognitive_ai/chat/` | LLM bridge + tool router |
+| `cognitive_ai/vision/` | YOLO / classical CV perception |
+| `cognitive_ai/coding/` | Symbolic coding system |
+| `cognitive_ai/runtime/persist.py` | Session + memory persistence |
+| `cognitive_ai/runtime/completeness.py` | Full-code wiring checker |
 | `cognitive_ai/brain.py` | Earlier symbolic cognitive brain (still available) |
 
 ## Distinctions preserved everywhere

@@ -6,14 +6,20 @@
   const statusPill = document.getElementById("statusPill");
   const mindStats = document.getElementById("mindStats");
 
-  function addMsg(role, text) {
+  function addMsg(role, text, meta) {
     const el = document.createElement("div");
     el.className = `msg ${role}`;
     const who = document.createElement("span");
     who.className = "who";
-    who.textContent = role === "user" ? "You" : "Brain";
+    who.textContent = role === "user" ? "You" : "Complete AI";
     el.appendChild(who);
     el.appendChild(document.createTextNode(text));
+    if (meta && meta.route) {
+      const tag = document.createElement("div");
+      tag.className = "hint";
+      tag.textContent = `route=${meta.route}` + (meta.llm ? " · llm" : "");
+      el.appendChild(tag);
+    }
     messages.appendChild(el);
     messages.scrollTop = messages.scrollHeight;
   }
@@ -34,14 +40,18 @@
   async function refreshStatus() {
     try {
       const st = await api("/api/status");
-      statusPill.textContent = `${st.domain} · ${st.facts} facts · goals ${st.open_goals}`;
+      const name = st.name || "Complete AI";
+      const ver = st.version || "";
+      const llm = (st.llm_at_runtime || st.chatgpt_class_general_chat) ? "llm:on" : "llm:off";
+      statusPill.textContent = `${name} ${ver} · ${llm}`;
+      const modes = st.modes || {};
       mindStats.innerHTML = `
-        <dt>domain</dt><dd>${st.domain}</dd>
-        <dt>facts</dt><dd>${st.facts}</dd>
-        <dt>beliefs</dt><dd>${st.beliefs}</dd>
-        <dt>rules</dt><dd>${st.rules}</dd>
-        <dt>open goals</dt><dd>${st.open_goals}</dd>
-        <dt>cycles</dt><dd>${st.think_cycles}</dd>
+        <dt>product</dt><dd>${name}</dd>
+        <dt>version</dt><dd>${ver}</dd>
+        <dt>chat</dt><dd>${modes.general_chat || "?"}</dd>
+        <dt>session</dt><dd>${st.session_turns ?? "—"}</dd>
+        <dt>tools</dt><dd>${(st.tools || []).join(", ") || "—"}</dd>
+        <dt>agi</dt><dd>${st.human_level_agi === false ? "false" : st.human_level_agi}</dd>
       `;
     } catch (e) {
       statusPill.textContent = "offline";
@@ -55,8 +65,22 @@
     input.value = "";
     sendBtn.disabled = true;
     try {
-      const data = await api("/api/chat", { message: trimmed });
-      addMsg("bot", data.reply || "(empty)");
+      if (trimmed === "/status") {
+        const st = await api("/api/status");
+        addMsg("bot", JSON.stringify(st, null, 2).slice(0, 2000));
+      } else if (trimmed === "/diag" || trimmed === "/diagnostics") {
+        const d = await api("/api/diagnostics");
+        addMsg("bot", `diagnostics ok=${d.ok} passed=${d.passed}/${d.total}`);
+      } else if (trimmed === "/reset") {
+        await api("/api/reset", {});
+        addMsg("bot", "Session reset.");
+      } else {
+        const data = await api("/api/chat", { message: trimmed });
+        addMsg("bot", data.reply || "(empty)", {
+          route: data.route,
+          llm: data.llm_at_runtime,
+        });
+      }
       await refreshStatus();
     } catch (e) {
       addMsg("bot", `Error: ${e.message}`);
@@ -84,9 +108,6 @@
   document.querySelectorAll("[data-cmd]").forEach((btn) => {
     btn.addEventListener("click", () => sendText(btn.dataset.cmd));
   });
-  document.querySelectorAll("[data-domain]").forEach((btn) => {
-    btn.addEventListener("click", () => sendText(`domain ${btn.dataset.domain}`));
-  });
 
   (async () => {
     try {
@@ -94,7 +115,7 @@
       addMsg("bot", hello.greeting);
       await refreshStatus();
     } catch (e) {
-      addMsg("bot", `Could not reach brain: ${e.message}`);
+      addMsg("bot", `Could not reach Complete AI: ${e.message}`);
     }
   })();
 })();
