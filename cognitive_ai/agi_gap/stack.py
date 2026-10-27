@@ -32,6 +32,80 @@ class ProtoAGIStack:
         self.lifelong = LifelongMemory(self.memory)
         self.meta = MetaCognition()
         self.align = AlignmentGuard()
+        self._backends: dict[str, Any] = {}
+
+    def bind_backends(self, *, complete_ai: Any = None, chat: Any = None, web: Any = None) -> None:
+        """Attach product backends so long-horizon / research steps can call real tools."""
+        if complete_ai is not None:
+            self._backends["complete_ai"] = complete_ai
+            # Prefer Complete AI general chat + search for research intentions
+            chat = chat or getattr(getattr(complete_ai, "general", None), "chat", None)
+            web = web or getattr(chat, "web", None)
+        if chat is not None:
+            self._backends["chat"] = chat
+        if web is not None:
+            self._backends["web"] = web
+        if chat is not None or web is not None:
+            self.horizon.actuator = self._bound_actuator
+            self.horizon.verifier = self._bound_verifier
+
+    def _bound_actuator(self, intention: str, payload: dict[str, Any]) -> dict[str, Any]:
+        goal = str(payload.get("goal") or "")
+        chat = self._backends.get("chat")
+        web = self._backends.get("web")
+        lower_i = intention.lower()
+        try:
+            if web is not None and any(
+                k in lower_i for k in ("search", "lookup", "local_knowledge", "synthesize", "rewrite_query")
+            ):
+                topic = goal
+                for prefix in ("research ", "learn about "):
+                    if topic.lower().startswith(prefix):
+                        topic = topic[len(prefix) :]
+                topic = topic.replace(" and verify", "").replace(" then verify", "").strip()
+                result = web.search(topic or goal, allow_live=False)
+                return {
+                    "ok": bool(result.ok),
+                    "action": f"web:{intention}",
+                    "observation": (result.answer or "")[:500],
+                    "notes": result.method,
+                }
+            if chat is not None and any(
+                k in lower_i for k in ("synthesize", "finalize", "compose", "respond", "clarify")
+            ):
+                out = chat.respond(goal, allow_live_search=False)
+                return {
+                    "ok": bool(out.get("supported", True)),
+                    "action": f"chat:{intention}",
+                    "observation": str(out.get("text") or "")[:500],
+                    "notes": out.get("method"),
+                }
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "ok": False,
+                "action": f"error:{intention}",
+                "observation": f"actuator_error:{exc}",
+                "fatal": False,
+                "notes": "bound_actuator_error",
+            }
+        # Fallback simulated progress
+        return {
+            "ok": True,
+            "action": f"do:{intention}",
+            "observation": f"Progress on '{intention}' for '{goal}'.",
+            "notes": "bound_default",
+        }
+
+    def _bound_verifier(self, intention: str, result: dict[str, Any]) -> bool:
+        if result.get("ok") is False:
+            return False
+        obs = str(result.get("observation") or "")
+        if not obs or "actuator_error" in obs or obs.lower().startswith("fail"):
+            return False
+        # Research-like steps need a minimally informative observation
+        if any(k in intention.lower() for k in ("search", "synthesize", "lookup", "knowledge")):
+            return len(obs) >= 20
+        return True
 
     def status(self) -> dict[str, Any]:
         return {
@@ -229,6 +303,7 @@ class ProtoAGIStack:
     ) -> dict[str, Any]:
         critique = self.meta.critique(ow.text if hasattr(ow, "text") else "", text, decision=decision)
         constitution = self.align.constitutional_check(text)
+        reflection = self.meta.reflect(decision, {"ok": ok})
         if not constitution.get("ok"):
             text = (
                 text
@@ -242,6 +317,7 @@ class ProtoAGIStack:
             "meta": decision.to_dict(),
             "debate": debate,
             "critique": critique,
+            "reflection": reflection,
             "constitution": constitution,
             "open_world": ow.to_dict(),
             "alignment": verdict.to_dict(),

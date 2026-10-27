@@ -142,6 +142,29 @@ class FinderbayAssistant:
             return self.plan(text)
         if route == "web_search" or lower.startswith("search the web") or lower.startswith("look up "):
             return self.web_search(text, speak=speak)
+        if route == "proto_agi" or any(
+            k in lower
+            for k in (
+                "multi-step",
+                "then verify",
+                "proto-agi",
+                "agi-gap",
+                "compose transfer",
+                "long-horizon",
+                "long horizon",
+            )
+        ):
+            raw = self.complete.proto_stack.handle(text)
+            out = dict(raw)
+            out["product"] = self.PRODUCT_NAME
+            out["assistant"] = True
+            out["route"] = raw.get("route") or "proto_agi"
+            out["router"] = decision.to_dict()
+            out["human_level_agi"] = False
+            do_speak = self.speak_replies if speak is None else speak
+            if do_speak and out.get("text"):
+                out["voice"] = self.voice.speak(str(out["text"])[:500])
+            return out
 
         # Vision shorthand prefixes
         if lower.startswith("understand image ") or lower.startswith("understand scene "):

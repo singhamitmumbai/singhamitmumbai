@@ -553,6 +553,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if args.command in ("agi-gap", "proto-agi"):
         from .agi_gap import ProtoAGIStack, run_agi_gap_demo
+        from .agi_gap.eval_suite import run_agi_grade_eval
 
         stack = ProtoAGIStack()
         if args.ask:
@@ -560,7 +561,9 @@ def main(argv: Optional[list[str]] = None) -> int:
             print(out.get("text") or json.dumps(out, indent=2, default=str))
             return 0 if out.get("ok", True) or out.get("route") == "abstain" else 1
         if args.eval:
-            report = stack.run_self_eval()
+            report = run_agi_grade_eval(allow_live_search=False)
+            # Also include stack self-eval summary
+            report["stack_self_eval"] = stack.run_self_eval()
             print(json.dumps(report, indent=2, default=str))
             return 0 if report.get("ok") else 1
         demo = run_agi_gap_demo()

@@ -34,6 +34,7 @@ class SmartRouter:
         "learning",
         "planning",
         "web_search",
+        "proto_agi",
         "general",
     )
 
@@ -133,6 +134,19 @@ class SmartRouter:
         # Mild prior for general chat questions
         if re.search(r"\b(who are you|what can you do|explain|why|how does)\b", lower):
             scores["general"] += 1.2
+
+        # Proto-AGI gap stack (long-horizon / transfer / open-world / metacognition)
+        if re.search(
+            r"\b(multi-?step|long(?:-|\s)?horizon|then verify|replan|transfer (?:skill|procedure)|"
+            r"open[- ]world|proto[- ]?agi|agi[- ]?gap|metacognit|lifelong memory|"
+            r"compose transfer|research .+(?:then|and) verify)\b",
+            lower,
+        ):
+            scores["proto_agi"] += 4.6
+            reasons.append("proto_agi_cue")
+        if re.search(r"\b(hypothesize|schema overlap|dream consolidat)\b", lower):
+            scores["proto_agi"] += 2.5
+            reasons.append("proto_agi_meta_cue")
 
         # Pick best
         best_route = max(scores.items(), key=lambda kv: kv[1])

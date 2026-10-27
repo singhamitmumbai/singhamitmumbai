@@ -16,7 +16,8 @@ from cognitive_ai.version import __version__
 
 
 def test_version_116():
-    assert __version__.startswith("1.16")
+    major_minor = tuple(int(x) for x in __version__.split(".")[:2])
+    assert major_minor >= (1, 16)
 
 
 def test_general_learning_verified_only():

@@ -105,7 +105,20 @@ class CompleteAI:
             self.llm._complete_ai_tools = True  # type: ignore[attr-defined]
         self.tools = ToolRouter(self)
         self.assistant = None  # optional FinderbayAssistant attached later
+        self._proto_stack = None  # lazy ProtoAGIStack
         self._restore()
+
+    @property
+    def proto_stack(self):
+        """Lazy proto-AGI gap stack (learning/open-world/transfer/horizon/…)."""
+        if self._proto_stack is None:
+            from .agi_gap import ProtoAGIStack
+
+            self._proto_stack = ProtoAGIStack()
+            # Bind richer actuators when available
+            if hasattr(self._proto_stack, "bind_backends"):
+                self._proto_stack.bind_backends(complete_ai=self)
+        return self._proto_stack
 
     def attach_assistant(self, assistant) -> None:
         """Wire Finderbay Assistant tools (voice/memory/computer/learn/plan)."""
@@ -134,6 +147,15 @@ class CompleteAI:
         if mode == "llm":
             out = self._llm_with_tools(text, default_route="llm")
             self._push("assistant", out.get("text") or "", route=out.get("route") or "llm", meta=out)
+            return out
+
+        if mode in ("proto", "proto_agi", "agi-gap") or (
+            mode == "auto" and self._looks_proto_agi(text)
+        ):
+            raw = self.proto_stack.handle(text, context=context)
+            out = self._tag(raw, route=raw.get("route") or "proto_agi", llm=False)
+            out["proto_agi"] = True
+            self._push("assistant", out.get("text") or "", route=out["route"], meta=out)
             return out
 
         if mode in ("auto", "coding") and (mode == "coding" or self._looks_coding(text)):
@@ -516,6 +538,30 @@ class CompleteAI:
             return True
         text = (out.get("text") or "").lower()
         return "could not map that" in text
+
+    @staticmethod
+    def _looks_proto_agi(text: str) -> bool:
+        lower = text.lower()
+        return any(
+            h in lower
+            for h in (
+                "multi-step",
+                "multistep",
+                "long-horizon",
+                "long horizon",
+                "then verify",
+                "and verify",
+                "proto-agi",
+                "proto agi",
+                "agi-gap",
+                "agi gap",
+                "compose transfer",
+                "open-world",
+                "open world",
+                "lifelong memory",
+                "metacognit",
+            )
+        )
 
     @staticmethod
     def _looks_coding(text: str) -> bool:

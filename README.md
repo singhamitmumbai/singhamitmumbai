@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.16.0) — ChatGPT-level chat + **deepened proto-AGI gap stack** (general learning, open-world, deep transfer, long-horizon replanning, multimodal fusion, lifelong dream/consolidation, metacognition critique, alignment red-team). Still `human_level_agi=false`:
+**Complete AI** (v1.17.0) — ChatGPT-level chat + **integrated proto-AGI gap stack** (learning, open-world, transfer, long-horizon, multimodal, lifelong memory, metacognition, AGI-grade eval/alignment) wired into Complete AI + Assistant routing. Still `human_level_agi=false`:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
@@ -36,6 +36,23 @@ python -m cognitive_ai chat --domain complete
 
 Product: **Complete AI** / **Finderbay Assistant** / **JARVIS tools**. `human_level_agi=false`.  
 Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.
+
+### What v1.17 adds — Product integration + AGI-grade eval suite
+
+| Piece | Role |
+|------|------|
+| `agi_gap/eval_suite.py` | Cross-pillar AGI-grade-flavored eval (`run_agi_grade_eval`) |
+| SmartRouter `proto_agi` | Routes multi-step / transfer / open-world asks to gap stack |
+| CompleteAI `proto_stack` | Lazy stack + `bind_backends` for real chat/web actuators |
+| Assistant route | `proto_agi` handled before general Complete AI |
+| Metacognition | Outcome calibration rates per strategy |
+
+```bash
+python -m cognitive_ai agi-gap --eval
+python -m cognitive_ai complete-ai --ask "multi-step research photosynthesis then verify"
+python -m cognitive_ai assistant --ask "multi-step research DNA then verify"
+pytest tests/test_agi_gap_v117.py -q
+```
 
 ### What v1.16 adds — Deepened proto-AGI gap stack (still not AGI)
 
@@ -174,7 +191,7 @@ Tool contracts, job store, provenance memory, material shortage skill, voice PTT
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.16.0.zip
+# → dist/Complete_Non_LLM_AI_v1.17.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.

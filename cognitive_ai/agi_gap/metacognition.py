@@ -25,6 +25,10 @@ class MetaDecision:
 class MetaCognition:
     """Strategy selection + honesty about capability gaps."""
 
+    def __init__(self) -> None:
+        # strategy -> [successes, trials]
+        self.calibration: dict[str, list[int]] = {}
+
     STRATEGIES = (
         "local_kb",
         "web_search",
@@ -134,10 +138,12 @@ class MetaCognition:
     def reflect(self, decision: MetaDecision, outcome: dict[str, Any]) -> dict[str, Any]:
         ok = bool(outcome.get("ok", outcome.get("supported", True)))
         note = "strategy_ok" if ok else "strategy_miss"
+        self.record_outcome(decision.strategy, success=ok)
         return {
             "decision": decision.to_dict(),
             "outcome_ok": ok,
             "reflection": note,
+            "calibrated_rate": self.strategy_rate(decision.strategy),
             "adjust_next": (
                 None
                 if ok
@@ -146,6 +152,18 @@ class MetaCognition:
             "limits": self.CAPABILITY_LIMITS,
             "human_level_agi": False,
         }
+
+    def record_outcome(self, strategy: str, *, success: bool) -> None:
+        bucket = self.calibration.setdefault(strategy, [0, 0])
+        bucket[1] += 1
+        if success:
+            bucket[0] += 1
+
+    def strategy_rate(self, strategy: str) -> float:
+        s, n = self.calibration.get(strategy, [0, 0])
+        if n == 0:
+            return 0.5
+        return s / n
 
     def critique(self, text: str, draft_answer: str, *, decision: Optional[MetaDecision] = None) -> dict[str, Any]:
         """Post-hoc critique: unsupported claims, missing uncertainty, policy drift."""
@@ -195,6 +213,10 @@ class MetaCognition:
         return {
             "strategies": list(self.STRATEGIES),
             "limits": list(self.CAPABILITY_LIMITS),
+            "calibration": {
+                k: {"successes": v[0], "trials": v[1], "rate": (v[0] / v[1] if v[1] else 0.5)}
+                for k, v in self.calibration.items()
+            },
             "human_level_agi": False,
             "note": "Metacognition is rule/heuristic based — not full self-awareness.",
         }
