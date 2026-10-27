@@ -74,8 +74,15 @@ def build_parser() -> argparse.ArgumentParser:
             "agent",
             "code",
             "vision",
+            "complete-ai",
         ],
-        help="Optional subcommand: os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
+        help="Optional subcommand: complete-ai, os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
+    )
+    p.add_argument(
+        "--mode",
+        type=str,
+        default="auto",
+        help="Complete AI route mode: auto|symbolic|llm|finderbay|vision|coding|agent",
     )
     p.add_argument(
         "--image",
@@ -608,6 +615,54 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(json.dumps(result.get("structured") or {}, indent=2, default=str)[:3000])
         return 0
 
+    if args.command == "complete-ai":
+        from .complete_ai import CompleteAI
+
+        ai = CompleteAI(seed_demo=True)
+        if args.ask:
+            out = ai.handle(args.ask, mode=args.mode or "auto")
+            print(out["text"])
+            return 0
+        if args.demo or not sys.stdin.isatty():
+            print(ai.greeting())
+            print(json.dumps(ai.status(), indent=2, default=str)[:2500])
+            for q in (
+                "Who are you?",
+                "Show unpaid invoices for Project A",
+                "Can penguins fly?",
+                "Explain gravity simply",
+                "Count people in image ./crowd_people.jpg",
+                "generate function add(a, b)",
+            ):
+                print("-" * 40)
+                print("USER:", q)
+                print("AI:  ", ai.ask(q))
+            print("Complete AI demo done. human_level_agi=false")
+            return 0
+        print(ai.greeting())
+        print("Type quit to exit. Commands: /status /mode <auto|symbolic|llm|...>")
+        mode = args.mode or "auto"
+        while True:
+            try:
+                line = input("complete-ai> ")
+            except (EOFError, KeyboardInterrupt):
+                print()
+                break
+            line = line.strip()
+            if not line:
+                continue
+            if line.lower() in ("quit", "exit", "q"):
+                break
+            if line.lower() == "/status":
+                print(json.dumps(ai.status(), indent=2, default=str))
+                continue
+            if line.lower().startswith("/mode "):
+                mode = line.split(None, 1)[1].strip()
+                print(f"mode={mode}")
+                continue
+            print(ai.handle(line, mode=mode)["text"])
+        return 0
+
     # Chat UI launcher
     if args.command in ("chat", "ui"):
         from .ui.server import serve_chat
@@ -615,7 +670,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         serve_chat(
             host=args.host,
             port=args.port,
-            domain=args.domain or "finderbay",
+            domain=args.domain or "complete",
         )
         return 0
 

@@ -34,9 +34,16 @@ class ChatSession:
         self.general = None
         self.brain = None
         if self.mode == "general":
-            from ..general.agent import GeneralNonLLMAI
+            # Prefer Complete AI facade when domain is complete/general/finderbay
+            try:
+                from ..complete_ai import CompleteAI
 
-            self.general = GeneralNonLLMAI(seed_demo=True)
+                self.complete = CompleteAI(seed_demo=True)
+                self.general = self.complete.general
+            except Exception:  # noqa: BLE001
+                from ..general.agent import GeneralNonLLMAI
+
+                self.general = GeneralNonLLMAI(seed_demo=True)
         else:
             self.brain = Brain(name="ChatBrain")
             self.brain.load_domain(domain)
@@ -45,6 +52,8 @@ class ChatSession:
 
     def status(self) -> dict[str, Any]:
         with self.lock:
+            if self.complete is not None:
+                return self.complete.status()
             if self.general is not None:
                 return self.general.status()
             assert self.brain is not None
@@ -52,19 +61,20 @@ class ChatSession:
 
     def greeting(self) -> str:
         with self.lock:
+            if self.complete is not None:
+                return self.complete.greeting()
             if self.general is not None:
                 return (
-                    f"General Non-LLM AI ready (v{__version__}).\n"
-                    "Finderbay tasks + open-domain common-sense chat.\n"
-                    "Speech: Vosk · OCR: Tesseract (when available).\n\n"
+                    f"Complete AI ready (v{__version__}).\n"
+                    "Finderbay tasks + open-domain chat + vision + coding.\n"
+                    "Optional ChatGPT-class LLM chat when COMPLETE_AI_ENABLE_LLM=1.\n\n"
                     "Try:\n"
                     "  • Show unpaid invoices above ₹1 lakh for Project A, excluding disputed ones.\n"
                     "  • Can penguins fly?\n"
-                    "  • What is a knife used for?\n"
-                    "  • dog:bark :: cat:?\n"
-                    "  • Reserve 10 bags of cement\n"
+                    "  • Explain gravity simply\n"
+                    "  • Count people in image ./crowd_people.jpg\n"
                     "  • Are you ChatGPT?\n\n"
-                    "Not human-level AGI — explicit knowledge, rules, planning; no LLM."
+                    "Not human-level AGI."
                 )
             assert self.brain is not None
             st = self.brain.status()
@@ -81,6 +91,9 @@ class ChatSession:
 
     def handle_message(self, message: str) -> str:
         with self.lock:
+            if self.complete is not None:
+                result = self.complete.handle(message.strip())
+                return str(result.get("text") or "")
             if self.general is not None:
                 result = self.general.handle(message.strip())
                 return str(result.get("text") or "")

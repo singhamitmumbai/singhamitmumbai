@@ -30,14 +30,15 @@ def _singularize(word: str) -> str:
 FAQ = [
     (
         re.compile(r"what (?:is|are) you|who are you|what can you do", re.I),
-        "I am a complete non-LLM cognitive system: Finderbay task AI plus open-domain "
-        "common-sense chat, speech (Vosk) and OCR (Tesseract). I use explicit knowledge, "
-        "rules, planning and verification — not a large language model.",
+        "I am Complete AI: Finderbay tasks, computer vision, coding tools, an autonomous "
+        "agent, speech/OCR, and open-domain chat. Core reasoning is symbolic/non-LLM; "
+        "optional ChatGPT-class chat can be enabled with an API key. Not human-level AGI.",
     ),
     (
         re.compile(r"are you (?:chatgpt|an? llm|a language model)", re.I),
-        "No. I do not run a pretrained general-purpose LLM. My answers come from "
-        "structured knowledge, rules, search/planning and specialist models (speech/OCR).",
+        "By default I am not ChatGPT — my core uses structured knowledge, rules, planning "
+        "and specialist models. If COMPLETE_AI_ENABLE_LLM is on with an API key, I can also "
+        "use ChatGPT-class general chat for open questions.",
     ),
     (
         re.compile(r"what is (?:ai|artificial intelligence)", re.I),
@@ -48,6 +49,11 @@ FAQ = [
         re.compile(r"how (?:do you|does .+ ) think", re.I),
         "I run a perceive → understand → update state → reason → plan → act → verify → "
         "respond cycle, with a separate reviewed learning loop.",
+    ),
+    (
+        re.compile(r"are you (?:complete ai|a complete ai)", re.I),
+        "Yes — I am Complete AI (full stack). I still set human_level_agi=false: complete "
+        "product coverage is not the same as unrestricted human-level intelligence.",
     ),
 ]
 
@@ -67,6 +73,8 @@ class OpenDomainChat:
         self.last_predicate: str = "is_a"
         self.last_object: str = "*"
         self.questions = QuestionAnalyzer()
+        self.user_name: Optional[str] = None
+        self.preferences: dict[str, str] = {}
 
     def respond(self, message: str) -> dict[str, Any]:
         msg = message.strip()
@@ -74,22 +82,114 @@ class OpenDomainChat:
         lower = msg.lower()
         qinfo = self.questions.analyze(msg)
 
+        # Remember user name
+        m_name = re.search(
+            r"(?:my name is|i am|i'm|call me)\s+([A-Z][a-zA-Z]{1,30})\b",
+            msg,
+        ) or re.search(r"(?:my name is|i am|i'm|call me)\s+(\w+)\b", lower)
+        if m_name:
+            self.user_name = m_name.group(1).strip().title()
+            return self._emit(
+                f"Nice to meet you, {self.user_name}. How can Complete AI help?",
+                method="name_memory",
+                confidence=0.95,
+                question=qinfo.to_dict(),
+            )
+
         # FAQ / meta
         for pat, ans in FAQ:
             if pat.search(msg):
                 return self._emit(ans, method="faq", confidence=0.9, question=qinfo.to_dict())
 
         if re.search(r"^(hi|hello|hey|namaste|good (morning|evening))\b", lower):
+            who = f" {self.user_name}" if self.user_name else ""
             return self._emit(
-                "Hello. Ask a Finderbay task, a common-sense question "
-                "(e.g. 'can penguins fly?'), or an analogy ('dog:bark :: cat:?').",
+                f"Hello{who}. I am Complete AI — ask a Finderbay task, a common-sense "
+                "question (e.g. 'can penguins fly?'), 'explain gravity', "
+                "or an analogy ('dog:bark :: cat:?').",
                 method="greeting",
                 confidence=1.0,
                 question=qinfo.to_dict(),
             )
 
-        if lower in ("thanks", "thank you", "thx"):
+        if lower in ("thanks", "thank you", "thx", "thank you so much"):
             return self._emit("You're welcome.", method="social", confidence=1.0, question=qinfo.to_dict())
+
+        if re.search(r"\b(how are you|how's it going|how r u)\b", lower):
+            return self._emit(
+                "I'm running normally — ready for tasks, vision, coding, or questions.",
+                method="social",
+                confidence=0.9,
+                question=qinfo.to_dict(),
+            )
+
+        if re.search(r"\b(bye|goodbye|see you|good night)\b", lower):
+            bye = f"Goodbye{', ' + self.user_name if self.user_name else ''}."
+            return self._emit(bye + " Come back anytime.", method="social", confidence=1.0, question=qinfo.to_dict())
+
+        # Explain / ELI5
+        m_ex = re.search(
+            r"(?:explain|describe|eli5|what does .+ mean(?: by)?)\s+(.+?)(?:\s+simply)?\??$",
+            lower,
+        ) or re.search(r"explain\s+(.+?)\s+(?:to me|simply|in simple terms)\??$", lower)
+        if m_ex or re.search(r"^(?:explain|eli5)\s+", lower):
+            topic = (m_ex.group(1) if m_ex else re.sub(r"^(?:explain|eli5)\s+", "", lower)).strip(" ?.")
+            topic = re.sub(r"\s+(simply|in simple terms|to me)$", "", topic).strip()
+            ent = _singularize(topic.split()[0]) if topic else ""
+            rel = self.reasoner.cs.related(ent) if ent else []
+            if rel:
+                self.topic = ent
+                text = (
+                    f"Simple take on '{topic}': "
+                    + "; ".join(str(t) for t in rel[:8])
+                    + ". (From Complete AI common-sense KB — not an LLM essay.)"
+                )
+                return self._emit(text, method="explain", confidence=0.8, triples=[str(t) for t in rel[:8]], question=qinfo.to_dict())
+            return self._emit(
+                f"I don't have a deep essay on '{topic}' in my curated KB. "
+                "Try a shorter entity ('explain penguin') or enable LLM chat for open essays.",
+                method="explain_miss",
+                confidence=0.35,
+                supported=False,
+                question=qinfo.to_dict(),
+            )
+
+        # Compare X and Y
+        m_cmp = re.search(r"compare\s+(\w+)\s+(?:and|vs\.?|versus)\s+(\w+)", lower)
+        if m_cmp:
+            a, b = _singularize(m_cmp.group(1)), _singularize(m_cmp.group(2))
+            ra, rb = self.reasoner.cs.related(a), self.reasoner.cs.related(b)
+            if ra or rb:
+                self.topic = a
+                text = (
+                    f"Compare {a} vs {b}: "
+                    f"{a} → " + "; ".join(str(t) for t in ra[:5])
+                    + f" || {b} → " + "; ".join(str(t) for t in rb[:5]) + "."
+                )
+                return self._emit(text, method="compare", confidence=0.75, question=qinfo.to_dict())
+
+        # How to / advice templates (honest, non-LLM)
+        m_how = re.search(r"how (?:do i|to|can i)\s+(.+?)\??$", lower)
+        if m_how:
+            goal = m_how.group(1).strip()
+            return self._emit(
+                f"For '{goal}': break it into steps — (1) clarify the goal and constraints, "
+                "(2) list required materials/info, (3) do the smallest safe first action, "
+                "(4) check the result, (5) iterate. "
+                "Ask me a Finderbay/vision/coding task if it maps to those tools.",
+                method="howto",
+                confidence=0.55,
+                question=qinfo.to_dict(),
+            )
+
+        if re.search(r"\b(?:joke|tell me a joke)\b", lower):
+            return self._emit(
+                "Why did the symbolic reasoner break up with the neural net? "
+                "It needed more explicit commitments.",
+                method="joke",
+                confidence=0.7,
+                question=qinfo.to_dict(),
+            )
 
         # Analogy: a:b :: c:?   or  a is to b as c is to
         m = re.search(
@@ -172,7 +272,10 @@ class OpenDomainChat:
             "I could not map that to Finderbay tools or my common-sense knowledge. "
             "Try a task ('show unpaid invoices for Project A'), "
             "a fact question ('can penguins fly?'), "
-            "or an analogy ('knife:cutting :: umbrella:?').",
+            "an explanation ('explain gravity'), "
+            "or an analogy ('knife:cutting :: umbrella:?'). "
+            "For open unrestricted chat like ChatGPT, enable COMPLETE_AI_ENABLE_LLM=1 "
+            "with OPENAI_API_KEY.",
             method="fallback",
             confidence=0.2,
             supported=False,

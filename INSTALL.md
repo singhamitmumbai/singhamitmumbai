@@ -1,17 +1,19 @@
-# Install — Complete Non-LLM AI v1.2.1
+# Install — Complete AI v1.3.0
 
 ## Requirements
 
 - Python 3.10+ (3.12 recommended)
-- No pretrained general-purpose LLM is required or used at runtime
+- Core runs **without** any LLM
+- Optional ChatGPT-class chat: OpenAI-compatible API key
 
 ## Quick install (core)
 
 ```bash
-unzip Complete_Non_LLM_AI_v1.2.1.zip
+unzip Complete_Non_LLM_AI_v1.3.0.zip
 cd Complete_Non_LLM_AI
 pip install -e ".[dev]"
 pytest -q
+python -m cognitive_ai complete-ai --demo
 ```
 
 ## Optional extras
@@ -47,11 +49,24 @@ python scripts/demo_vision.py
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.2.1.zip
+# → dist/Complete_Non_LLM_AI_v1.3.0.zip
 ```
+
+## Optional ChatGPT-class general chat
+
+```bash
+export COMPLETE_AI_ENABLE_LLM=1
+export OPENAI_API_KEY=sk-...
+# optional: COMPLETE_AI_LLM_MODEL=gpt-4o-mini
+python -m cognitive_ai complete-ai --mode llm --ask "Explain recursion simply"
+```
+
+When the LLM bridge is off (default), open questions use the curated non-LLM chat.
+When on, unrestricted-style chat uses your API and reports `llm_at_runtime=true`.
 
 ## Honest limits
 
 - Not human-level AGI (`human_level_agi: false`)
-- Computer vision uses CNN / classical CV — not ChatGPT-style generation
+- “Complete AI” = full product stack, not unrestricted intelligence
+- Computer vision uses CNN / classical CV
 - Stub vision mode works without Ultralytics; install `[vision]` for real detections

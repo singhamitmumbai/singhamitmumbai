@@ -130,12 +130,13 @@ class ResponseGenerator:
         if op == "status":
             answer = {
                 "text": (
-                    "I am a complete non-LLM assistant for Finderbay. "
+                    "I am Complete AI — a complete non-LLM task engine for Finderbay "
+                    "(optional ChatGPT-class LLM chat can be enabled separately). "
                     "Supported: invoices, deliveries, materials, tasks, documents, payments, "
                     "contracts, vendors/POs, proactive alerts, CSV reports, auth, follow-up drafts "
                     "(without sending), and computer vision (YOLO object/vehicle/people/fire + "
                     "document scan via vendored YOLO_Projects). "
-                    "I keep unknown ≠ false, predicted ≠ observed, attempted ≠ confirmed."
+                    "human_level_agi=false. I keep unknown ≠ false, predicted ≠ observed, attempted ≠ confirmed."
                 ),
                 "structured": state.summary(),
                 "faithful": True,

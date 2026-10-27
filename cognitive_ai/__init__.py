@@ -1,12 +1,9 @@
-"""Complete non-LLM cognitive AI — Finderbay + open-domain + speech/OCR.
+"""Complete AI — full stack product.
 
-No pretrained general-purpose LLM at runtime. Includes:
-- Finderbay task assistant (invoices, deliveries, materials, tasks, documents)
-- Open-domain common-sense chat (curated KB + rules)
-- Production speech (Vosk) and OCR (Tesseract) when installed
-- Symbolic Cognitive OS / brain demos
+Core: Finderbay tasks, vision, coding, SelfBrain agent, speech/OCR, open-domain chat
+(symbolic / non-LLM). Optional: ChatGPT-class general chat via LLM bridge when enabled.
 
-Honest limits: not human-level AGI; open-domain coverage is finite and explicit.
+Honest limits: human_level_agi=false. LLM is OFF by default (llm_at_runtime=false).
 """
 
 from .brain import Brain
@@ -14,6 +11,7 @@ from .version import __version__
 
 __all__ = [
     "Brain",
+    "CompleteAI",
     "CompleteNonLLMAI",
     "GeneralNonLLMAI",
     "__version__",
@@ -26,6 +24,10 @@ def __getattr__(name: str):
         from .os.system import CognitiveOS
 
         return CognitiveOS
+    if name == "CompleteAI":
+        from .complete_ai import CompleteAI
+
+        return CompleteAI
     if name == "CompleteNonLLMAI":
         from .system import CompleteNonLLMAI
 

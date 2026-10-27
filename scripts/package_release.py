@@ -75,7 +75,7 @@ def build_zip(out: Path) -> dict:
         manifest = (
             f"name=Complete_Non_LLM_AI\n"
             f"version={__version__}\n"
-            f"built_at={dt.datetime.utcnow().isoformat()}Z\n"
+            f"built_at={dt.datetime.now(dt.timezone.utc).isoformat()}\n"
             f"files={count}\n"
             f"llm_at_runtime=false\n"
             f"human_level_agi=false\n"

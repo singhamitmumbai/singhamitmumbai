@@ -1,16 +1,28 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-A runnable **complete non-LLM AI** (v1.2.1) built from the engineering blueprint:
+A runnable **Complete AI** (v1.3.0) — full stack built from the engineering blueprint:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
 pretrained general-purpose LLM at runtime**.
 
+### Complete AI (v1.3) — product entrypoint
+
+```bash
+python -m cognitive_ai complete-ai --demo
+python -m cognitive_ai complete-ai --ask "Who are you?"
+# Optional ChatGPT-class general chat:
+#   export COMPLETE_AI_ENABLE_LLM=1 OPENAI_API_KEY=sk-...
+#   python -m cognitive_ai complete-ai --mode llm --ask "Write a short poem about Mars"
+```
+
+`human_level_agi` stays **false**. LLM chat is **off by default**; when enabled, answers report `llm_at_runtime=true`.
+
 ### Release zip
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.2.1.zip
+# → dist/Complete_Non_LLM_AI_v1.3.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.

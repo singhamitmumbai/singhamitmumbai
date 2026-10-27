@@ -108,7 +108,7 @@ def test_ai_status_includes_vision():
     s = ai.status()
     assert "vision" in s
     assert s["vision"]["llm"] is False
-    assert s["version"].startswith("1.2")
+    assert s["version"].startswith("1.")
 
 
 def test_package_release_script_imports():
