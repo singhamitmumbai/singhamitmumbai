@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.18.0) — ChatGPT-level chat + **integrated proto-AGI gap stack** with multi-goal autonomy, multimodal arbitration, lifelong persist, open-world chat grounding, and pillar scorecards. Still `human_level_agi=false`:
+**Complete AI** (v1.19.0) — modern **Chat UI frontend** + ChatGPT-level chat + integrated proto-AGI gap stack. Still `human_level_agi=false`:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
@@ -31,11 +31,27 @@ python -m cognitive_ai assistant --ask "computer open_url https://example.com"
 
 # API + Chat UI
 python -m cognitive_ai api --mode assistant --port 8787
-python -m cognitive_ai chat --domain complete
+python -m cognitive_ai chat --domain complete --port 8765
+# → open http://127.0.0.1:8765/
 ```
 
 Product: **Complete AI** / **Finderbay Assistant** / **JARVIS tools**. `human_level_agi=false`.  
 Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.
+
+### What v1.19 adds — Modern Chat UI frontend
+
+| Piece | Role |
+|------|------|
+| `ui/static/index.html` | ChatGPT-style layout: sidebar, history, mode select, welcome grid |
+| `ui/static/chat.css` | Light/dark theme, responsive mobile drawer |
+| `ui/static/chat.js` | Markdown-lite replies, typing indicator, copy, suggestions |
+| `ui/server.py` | Richer `/api/chat` (mode, route, suggestions) + `/api/completeness` |
+
+```bash
+python -m cognitive_ai chat --domain complete --port 8765
+# open http://127.0.0.1:8765/
+pytest tests/test_chat_ui.py -q
+```
 
 ### What v1.18 adds — Persist, multi-goal, arbitrate, scorecard
 
@@ -209,7 +225,7 @@ Tool contracts, job store, provenance memory, material shortage skill, voice PTT
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.18.0.zip
+# → dist/Complete_Non_LLM_AI_v1.19.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.

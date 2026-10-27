@@ -17,7 +17,8 @@ from cognitive_ai.version import __version__
 
 
 def test_version_118():
-    assert __version__.startswith("1.18")
+    major_minor = tuple(int(x) for x in __version__.split(".")[:2])
+    assert major_minor >= (1, 18)
 
 
 def test_multi_goal_horizon_queue():

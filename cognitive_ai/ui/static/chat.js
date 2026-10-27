@@ -1,40 +1,218 @@
 (() => {
-  const messages = document.getElementById("messages");
-  const form = document.getElementById("composer");
-  const input = document.getElementById("input");
-  const sendBtn = document.getElementById("send");
-  const statusPill = document.getElementById("statusPill");
-  const mindStats = document.getElementById("mindStats");
+  const $ = (id) => document.getElementById(id);
+  const messages = $("messages");
+  const form = $("composer");
+  const input = $("input");
+  const sendBtn = $("send");
+  const statusLine = $("statusLine");
+  const versionLabel = $("versionLabel");
+  const llmPill = $("llmPill");
+  const agiPill = $("agiPill");
+  const historyList = $("historyList");
+  const suggestions = $("suggestions");
+  const modeSelect = $("modeSelect");
+  const sidebar = $("sidebar");
+  const backdrop = $("sidebarBackdrop");
 
-  function addMsg(role, text, meta) {
+  const state = {
+    busy: false,
+    history: [],
+    theme: localStorage.getItem("complete_ai_theme") || "light",
+  };
+
+  // --- theme ---
+  function applyTheme(theme) {
+    state.theme = theme;
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("complete_ai_theme", theme);
+  }
+  applyTheme(state.theme);
+
+  // --- markdown-lite ---
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function renderMarkdown(text) {
+    const raw = String(text || "");
+    // Extract fenced code blocks first
+    const blocks = [];
+    let work = raw.replace(/```([\s\S]*?)```/g, (_, code) => {
+      const i = blocks.length;
+      blocks.push(`<pre><code>${escapeHtml(code.replace(/^\w*\n/, ""))}</code></pre>`);
+      return `\u0000BLOCK${i}\u0000`;
+    });
+    work = escapeHtml(work);
+    work = work.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    work = work.replace(/`([^`]+)`/g, "<code>$1</code>");
+    work = work.replace(/^### (.+)$/gm, "<strong>$1</strong>");
+    work = work.replace(/^\- (.+)$/gm, "• $1");
+    work = work.replace(/^\d+\. (.+)$/gm, "• $1");
+    // paragraphs
+    work = work
+      .split(/\n{2,}/)
+      .map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`)
+      .join("");
+    work = work.replace(/\u0000BLOCK(\d+)\u0000/g, (_, i) => blocks[Number(i)] || "");
+    return work;
+  }
+
+  function addMsg(role, text, meta = {}) {
+    // Remove welcome if present
+    const welcome = messages.querySelector(".welcome");
+    if (welcome) welcome.remove();
+
     const el = document.createElement("div");
     el.className = `msg ${role}`;
-    const who = document.createElement("span");
+
+    const who = document.createElement("div");
     who.className = "who";
-    who.textContent = role === "user" ? "You" : "Complete AI";
-    el.appendChild(who);
-    el.appendChild(document.createTextNode(text));
-    if (meta && meta.route) {
-      const tag = document.createElement("div");
-      tag.className = "hint";
-      tag.textContent = `route=${meta.route}` + (meta.llm ? " · llm" : "");
-      el.appendChild(tag);
+    const label = document.createElement("span");
+    label.textContent = role === "user" ? "You" : "Complete AI";
+    who.appendChild(label);
+
+    if (role === "bot") {
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      const copy = document.createElement("button");
+      copy.type = "button";
+      copy.textContent = "Copy";
+      copy.title = "Copy reply";
+      copy.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          copy.textContent = "Copied";
+          setTimeout(() => (copy.textContent = "Copy"), 1200);
+        } catch {
+          copy.textContent = "Failed";
+        }
+      });
+      actions.appendChild(copy);
+      who.appendChild(actions);
     }
+    el.appendChild(who);
+
+    const body = document.createElement("div");
+    body.className = "body";
+    if (role === "bot") body.innerHTML = renderMarkdown(text);
+    else body.textContent = text;
+    el.appendChild(body);
+
+    if (role === "bot" && (meta.route || meta.llm || meta.confidence != null)) {
+      const metaEl = document.createElement("div");
+      metaEl.className = "meta";
+      if (meta.route) {
+        const t = document.createElement("span");
+        t.className = "tag";
+        t.textContent = `route=${meta.route}`;
+        metaEl.appendChild(t);
+      }
+      if (meta.llm) {
+        const t = document.createElement("span");
+        t.className = "tag";
+        t.textContent = "llm";
+        metaEl.appendChild(t);
+      }
+      if (meta.confidence != null) {
+        const t = document.createElement("span");
+        t.className = "tag";
+        t.textContent = `conf=${Number(meta.confidence).toFixed(2)}`;
+        metaEl.appendChild(t);
+      }
+      if (meta.proto_agi) {
+        const t = document.createElement("span");
+        t.className = "tag";
+        t.textContent = "proto-agi";
+        metaEl.appendChild(t);
+      }
+      el.appendChild(metaEl);
+    }
+
+    messages.appendChild(el);
+    messages.scrollTop = messages.scrollHeight;
+    return el;
+  }
+
+  function showTyping(on) {
+    const existing = messages.querySelector(".typing");
+    if (existing) existing.remove();
+    if (!on) return;
+    const el = document.createElement("div");
+    el.className = "typing";
+    el.innerHTML = "<span></span><span></span><span></span>";
     messages.appendChild(el);
     messages.scrollTop = messages.scrollHeight;
   }
 
+  function showWelcome() {
+    messages.innerHTML = "";
+    const wrap = document.createElement("div");
+    wrap.className = "welcome";
+    wrap.innerHTML = `
+      <h2>How can Complete AI help?</h2>
+      <p>Chat, Finderbay tasks, vision, coding, web research, and proto-AGI multi-step goals — without claiming human-level AGI.</p>
+      <div class="welcome-grid">
+        <button type="button" data-prompt="Explain gravity in simple terms"><strong>Explain</strong><span>Gravity in simple terms</span></button>
+        <button type="button" data-prompt="Show unpaid invoices for Project A"><strong>Business</strong><span>Unpaid invoices for Project A</span></button>
+        <button type="button" data-prompt="multi-step research photosynthesis then verify"><strong>Research</strong><span>Multi-step research + verify</span></button>
+        <button type="button" data-prompt="Write a poem about Mars"><strong>Create</strong><span>A short poem about Mars</span></button>
+      </div>
+    `;
+    messages.appendChild(wrap);
+    wrap.querySelectorAll("[data-prompt]").forEach((btn) => {
+      btn.addEventListener("click", () => sendText(btn.dataset.prompt));
+    });
+  }
+
+  function renderHistory() {
+    historyList.innerHTML = "";
+    if (!state.history.length) {
+      historyList.innerHTML = `<p class="muted empty-hist">No saved turns yet</p>`;
+      return;
+    }
+    state.history
+      .slice()
+      .reverse()
+      .slice(0, 30)
+      .forEach((item) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "history-item";
+        b.textContent = item.user;
+        b.title = item.user;
+        b.addEventListener("click", () => {
+          input.value = item.user;
+          input.focus();
+          closeSidebar();
+        });
+        historyList.appendChild(b);
+      });
+  }
+
+  function setSuggestions(list) {
+    suggestions.innerHTML = "";
+    (list || []).slice(0, 6).forEach((s) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = s;
+      b.addEventListener("click", () => sendText(s));
+      suggestions.appendChild(b);
+    });
+  }
+
   async function api(path, body) {
     const res = await fetch(path, {
-      method: body ? "POST" : "GET",
-      headers: body ? { "Content-Type": "application/json" } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
+      method: body !== undefined ? "POST" : "GET",
+      headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(err.error || res.statusText);
-    }
-    return res.json();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || res.statusText || "request failed");
+    return data;
   }
 
   async function refreshStatus() {
@@ -42,59 +220,105 @@
       const st = await api("/api/status");
       const name = st.name || "Complete AI";
       const ver = st.version || "";
-      const llm = (st.llm_at_runtime || st.chatgpt_class_general_chat) ? "llm:on" : "llm:off";
-      statusPill.textContent = `${name} ${ver} · ${llm}`;
-      const modes = st.modes || {};
-      mindStats.innerHTML = `
-        <dt>product</dt><dd>${name}</dd>
-        <dt>version</dt><dd>${ver}</dd>
-        <dt>chat</dt><dd>${modes.general_chat || "?"}</dd>
-        <dt>session</dt><dd>${st.session_turns ?? "—"}</dd>
-        <dt>tools</dt><dd>${(st.tools || []).join(", ") || "—"}</dd>
-        <dt>agi</dt><dd>${st.human_level_agi === false ? "false" : st.human_level_agi}</dd>
-      `;
-    } catch (e) {
-      statusPill.textContent = "offline";
+      const llmOn = !!(st.llm_at_runtime || st.chatgpt_class_general_chat);
+      statusLine.textContent = `${name} v${ver} · chat=${(st.modes && st.modes.general_chat) || "symbolic"} · session=${st.session_turns ?? 0}`;
+      versionLabel.textContent = `${name} v${ver}`;
+      llmPill.textContent = llmOn ? "llm:on" : "llm:off";
+      agiPill.textContent = "agi=false";
+    } catch {
+      statusLine.textContent = "offline — start the chat server";
+      llmPill.textContent = "llm:?";
     }
   }
 
   async function sendText(text) {
-    const trimmed = text.trim();
-    if (!trimmed) return;
+    const trimmed = (text || "").trim();
+    if (!trimmed || state.busy) return;
+    state.busy = true;
+    sendBtn.disabled = true;
     addMsg("user", trimmed);
     input.value = "";
-    sendBtn.disabled = true;
+    autosize();
+    showTyping(true);
+    closeSidebar();
+
     try {
       if (trimmed === "/status") {
         const st = await api("/api/status");
-        addMsg("bot", JSON.stringify(st, null, 2).slice(0, 2000));
+        showTyping(false);
+        addMsg("bot", "```\n" + JSON.stringify(st, null, 2).slice(0, 3500) + "\n```");
       } else if (trimmed === "/diag" || trimmed === "/diagnostics") {
         const d = await api("/api/diagnostics");
-        addMsg("bot", `diagnostics ok=${d.ok} passed=${d.passed}/${d.total}`);
+        showTyping(false);
+        addMsg("bot", `Diagnostics **ok=${d.ok}** · passed **${d.passed}/${d.total}** · human_level_agi=false`);
+      } else if (trimmed === "/completeness") {
+        const d = await api("/api/completeness");
+        showTyping(false);
+        addMsg(
+          "bot",
+          `Completeness **ok=${d.ok}** · complete_code=**${d.complete_code}** · modules=${(d.results || []).length}`
+        );
       } else if (trimmed === "/reset") {
         await api("/api/reset", {});
-        addMsg("bot", "Session reset.");
+        showTyping(false);
+        state.history = [];
+        renderHistory();
+        showWelcome();
+        addMsg("bot", "Session reset. Ready for a new conversation.");
       } else {
-        const data = await api("/api/chat", { message: trimmed });
-        addMsg("bot", data.reply || "(empty)", {
+        const data = await api("/api/chat", {
+          message: trimmed,
+          mode: modeSelect.value || "auto",
+        });
+        showTyping(false);
+        addMsg("bot", data.reply || "(empty reply)", {
           route: data.route,
           llm: data.llm_at_runtime,
+          confidence: data.confidence,
+          proto_agi: data.proto_agi,
         });
+        state.history.push({ user: trimmed, bot: data.reply || "", route: data.route });
+        renderHistory();
+        if (Array.isArray(data.suggestions) && data.suggestions.length) {
+          setSuggestions(data.suggestions);
+        } else {
+          setSuggestions([
+            "Explain that simply",
+            "Give more detail",
+            "Search the web for related info",
+          ]);
+        }
       }
       await refreshStatus();
     } catch (e) {
-      addMsg("bot", `Error: ${e.message}`);
+      showTyping(false);
+      addMsg("bot", `**Error:** ${e.message}`);
     } finally {
+      state.busy = false;
       sendBtn.disabled = false;
       input.focus();
     }
+  }
+
+  function autosize() {
+    input.style.height = "auto";
+    input.style.height = Math.min(160, Math.max(44, input.scrollHeight)) + "px";
+  }
+
+  function openSidebar() {
+    sidebar.classList.add("open");
+    backdrop.hidden = false;
+  }
+  function closeSidebar() {
+    sidebar.classList.remove("open");
+    backdrop.hidden = true;
   }
 
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     sendText(input.value);
   });
-
+  input.addEventListener("input", autosize);
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -109,13 +333,33 @@
     btn.addEventListener("click", () => sendText(btn.dataset.cmd));
   });
 
+  $("btnNewChat").addEventListener("click", () => {
+    state.history = [];
+    renderHistory();
+    showWelcome();
+    closeSidebar();
+    input.focus();
+  });
+  $("btnTheme").addEventListener("click", () => {
+    applyTheme(state.theme === "dark" ? "light" : "dark");
+  });
+  $("btnOpenSidebar").addEventListener("click", openSidebar);
+  $("btnCloseSidebar").addEventListener("click", closeSidebar);
+  backdrop.addEventListener("click", closeSidebar);
+
   (async () => {
+    showWelcome();
     try {
       const hello = await api("/api/hello");
-      addMsg("bot", hello.greeting);
+      // Keep welcome; append greeting as first bot note under it optionally
+      if (hello.greeting) {
+        // soft status only
+        statusLine.textContent = "Ready";
+      }
       await refreshStatus();
     } catch (e) {
-      addMsg("bot", `Could not reach Complete AI: ${e.message}`);
+      addMsg("bot", `Could not reach Complete AI API: ${e.message}`);
     }
+    input.focus();
   })();
 })();

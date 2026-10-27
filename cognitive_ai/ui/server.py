@@ -89,16 +89,37 @@ class ChatSession:
                 "I am symbolic — no language model behind this chat."
             )
 
-    def handle_message(self, message: str) -> dict[str, Any]:
+    def handle_message(self, message: str, *, mode: str = "auto") -> dict[str, Any]:
         with self.lock:
             if self.complete is not None:
-                result = self.complete.handle(message.strip())
+                result = self.complete.handle(message.strip(), mode=mode or "auto")
+                suggestions = []
+                style = result.get("style") or {}
+                if isinstance(style, dict) and style.get("follow_ups"):
+                    suggestions = list(style.get("follow_ups") or [])[:4]
+                smart = result.get("smart") or {}
+                if not suggestions and isinstance(smart, dict):
+                    ents = smart.get("entities") or []
+                    if ents:
+                        suggestions = [
+                            f"Explain {ents[0]} simply",
+                            f"Search the web for {ents[0]}",
+                        ]
+                conf = None
+                if isinstance(result.get("confidence"), (int, float)):
+                    conf = float(result["confidence"])
+                elif isinstance(result.get("confidence"), dict):
+                    conf = result["confidence"].get("score")
                 return {
                     "reply": str(result.get("text") or ""),
                     "route": result.get("route"),
-                    "llm_at_runtime": result.get("llm_at_runtime"),
+                    "llm_at_runtime": bool(result.get("llm_at_runtime")),
                     "human_level_agi": False,
                     "product": result.get("product") or "Complete AI",
+                    "proto_agi": bool(result.get("proto_agi")),
+                    "confidence": conf,
+                    "suggestions": suggestions,
+                    "version": __version__,
                 }
             if self.general is not None:
                 result = self.general.handle(message.strip())
@@ -107,8 +128,16 @@ class ChatSession:
                     "route": result.get("route"),
                     "llm_at_runtime": False,
                     "human_level_agi": False,
+                    "suggestions": [],
+                    "version": __version__,
                 }
-            return {"reply": self._dispatch(message.strip()), "route": "symbolic"}
+            return {
+                "reply": self._dispatch(message.strip()),
+                "route": "symbolic",
+                "human_level_agi": False,
+                "suggestions": [],
+                "version": __version__,
+            }
 
     def _dispatch(self, msg: str) -> str:
         if not msg:
@@ -265,6 +294,14 @@ def make_handler(session: ChatSession):
                 else:
                     self._json(200, {"ok": True, "note": "symbolic_mode"})
                 return
+            if path == "/api/completeness":
+                if session.complete is not None and hasattr(session.complete, "completeness"):
+                    self._json(200, session.complete.completeness())
+                else:
+                    from ..runtime.completeness import run_completeness_check
+
+                    self._json(200, run_completeness_check())
+                return
             self._json(404, {"error": "not found"})
 
         def do_POST(self) -> None:  # noqa: N802
@@ -279,11 +316,13 @@ def make_handler(session: ChatSession):
 
             if path == "/api/chat":
                 message = str(payload.get("message", ""))
+                mode = str(payload.get("mode") or "auto")
                 try:
-                    out = session.handle_message(message)
+                    out = session.handle_message(message, mode=mode)
                     if isinstance(out, str):
                         out = {"reply": out}
                     out["status"] = session.status()
+                    out.setdefault("human_level_agi", False)
                     self._json(200, out)
                 except Exception as exc:  # noqa: BLE001
                     self._json(500, {"error": str(exc)})
@@ -321,8 +360,9 @@ def serve_chat(
     handler = make_handler(session)
     httpd = ThreadingHTTPServer((host, port), handler)
     mode = session.mode
-    print(f"Complete AI chat UI → http://127.0.0.1:{port}/  (domain={domain}, mode={mode})")
-    print("Ctrl+C to stop. Set OPENAI_API_KEY for ChatGPT-class chat.")
+    print(f"Complete AI chat UI → http://127.0.0.1:{port}/  (domain={domain}, mode={mode}, v{__version__})")
+    print("Open that URL in a browser. Ctrl+C to stop.")
+    print("Set OPENAI_API_KEY for ChatGPT-class chat. human_level_agi=false")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -341,8 +381,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     p.add_argument("--port", type=int, default=8765)
     p.add_argument(
         "--domain",
-        default="finderbay",
-        help="animals|blocks|kitchen|finderbay|complete",
+        default="complete",
+        help="animals|blocks|kitchen|finderbay|complete|general",
     )
     args = p.parse_args(argv)
     serve_chat(host=args.host, port=args.port, domain=args.domain)
