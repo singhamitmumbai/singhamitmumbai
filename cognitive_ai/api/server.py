@@ -156,12 +156,30 @@ def serve_api(host: str = "127.0.0.1", port: int = 8787, *, mode: str = "complet
             path = parsed.path.rstrip("/") or "/"
             data = self._read_json()
             with state.lock:
-                if path in ("/ask", "/handle", "/complete", "/assistant"):
+                if path in ("/ask", "/handle", "/complete", "/assistant", "/jarvis"):
                     text = data.get("text") or data.get("message") or ""
+                    if path == "/jarvis" and (data.get("action") or "").lower() == "eval":
+                        if state.assistant is None:
+                            from ..assistant import FinderbayAssistant
+
+                            state.assistant = FinderbayAssistant(
+                                complete=state.complete or CompleteAI(seed_demo=True),
+                                seed_demo=True,
+                            )
+                        return self._json(200, state.assistant.jarvis_eval())
                     if not text and not data.get("audio"):
                         return self._json(400, {"error": "text_required"})
                     mode = data.get("mode") or "auto"
-                    if state.assistant is not None and path == "/assistant":
+                    if path == "/jarvis":
+                        if state.assistant is None:
+                            from ..assistant import FinderbayAssistant
+
+                            state.assistant = FinderbayAssistant(
+                                complete=state.complete or CompleteAI(seed_demo=True),
+                                seed_demo=True,
+                            )
+                        out = state.assistant.jarvis_handle(text, speak=bool(data.get("speak")))
+                    elif state.assistant is not None and path == "/assistant":
                         out = state.assistant.handle(
                             text or "",
                             mode=mode,

@@ -1,10 +1,12 @@
-"""Finderbay Assistant — unified voice, memory, vision, planning, control, learning."""
+"""Finderbay Assistant — unified voice, memory, vision, planning, control, learning + JARVIS."""
 
 from __future__ import annotations
 
 from typing import Any, Optional
 
 from ..complete_ai import CompleteAI
+from ..jarvis import JarvisPipeline, run_jarvis_eval
+from ..jarvis.voice import VoicePipeline
 from ..version import __version__
 from .computer import ComputerControl
 from .learning_bridge import LearningBridge
@@ -13,7 +15,11 @@ from .voice import AssistantVoice
 
 
 class FinderbayAssistant:
-    """High-level assistant that composes Complete AI capabilities."""
+    """High-level assistant that composes Complete AI capabilities.
+
+    Includes a non-LLM JARVIS controller (tool contracts, jobs, provenance memory,
+    skills, voice pipeline) with optional LLM via Complete AI.
+    """
 
     PRODUCT_NAME = "Finderbay Assistant"
 
@@ -37,6 +43,9 @@ class FinderbayAssistant:
         self.learning = LearningBridge(self.finderbay)
         self.speak_replies = speak_replies
         self.last_plan: Optional[dict[str, Any]] = None
+        # JARVIS blueprint stack (non-LLM controller)
+        self.jarvis = JarvisPipeline()
+        self.jarvis_voice = VoicePipeline()
         # Expose assistant tools on Complete AI tool router
         self.complete.attach_assistant(self)
 
@@ -81,10 +90,18 @@ class FinderbayAssistant:
             return self._computer_cmd(text)
         if lower in ("assistant status", "finder assistant status", "capabilities"):
             return self._tag({"text": self.greeting(), "structured": self.status()}, route="assistant_status")
+        if lower in ("jarvis status", "jarvis eval", "jarvis tools"):
+            return self._jarvis_meta(lower)
+        if lower.startswith("jarvis ") or lower.startswith("jarvis,"):
+            return self.jarvis_handle(text, speak=speak)
 
         # Plan preview without execute
         if lower.startswith("plan ") or lower.startswith("how would you "):
             return self.plan(text)
+
+        # JARVIS non-LLM controller for supported workflows (shortage, schedule, stop, …)
+        if self._looks_like_jarvis(lower):
+            return self.jarvis_handle(text, speak=speak)
 
         # Default → Complete AI (vision/coding/finderbay/llm/tools)
         out = self.complete.handle(text, mode=mode)
@@ -177,18 +194,96 @@ class FinderbayAssistant:
             "computer_control": self.computer.status(),
             "learning": self.learning.status(),
             "complete_ai": self.complete.status(),
+            "jarvis": {
+                "controller": "non_llm",
+                "tools": len(self.jarvis.tools.contracts),
+                "skills": self.jarvis.skills.list_skills(),
+                "jobs": self.jarvis.jobs.summary(),
+                "memory": self.jarvis.memory.snapshot(),
+                "voice": self.jarvis_voice.status(),
+            },
         }
 
     def greeting(self) -> str:
         cc = "ON" if self.computer.allow else "OFF"
         tts = self.voice.tts_engine
+        n_tools = len(self.jarvis.tools.contracts)
         return (
             f"{self.PRODUCT_NAME} v{self.version}\n"
-            f"Voice TTS={tts} · Computer control={cc}\n"
+            f"Voice TTS={tts} · Computer control={cc} · JARVIS tools={n_tools} (non-LLM controller)\n"
             "I can: talk (ASR/TTS), remember, see (YOLO), plan, control this computer (gated), learn from corrections.\n"
-            "Try: 'Show unpaid invoices for Project A' · 'Count people in image ./crowd_people.jpg'\n"
+            "JARVIS workflows: material shortage report, schedule, file search, verified jobs.\n"
+            "Try: 'Prepare tomorrow's material shortage report for the selected site'\n"
+            "     'Show unpaid invoices for Project A' · 'Count people in image ./crowd_people.jpg'\n"
             "     'remember that my warehouse is Central Store' · 'plan reserve 10 cement'\n"
             "     'computer open_url https://example.com' (requires control enabled)\n"
+            "human_level_agi=false — optional LLM via API key only.\n"
+        )
+
+    def jarvis_handle(self, text: str, *, speak: Optional[bool] = None) -> dict[str, Any]:
+        """Run the JARVIS capture→…→record pipeline (blueprint control loop)."""
+        raw = text.strip()
+        if raw.lower().startswith("jarvis"):
+            raw = raw.split(None, 1)[1] if " " in raw else raw
+        result = self.jarvis.run(raw)
+        out = self._tag(
+            {
+                "text": result.response,
+                "structured": result.to_dict(),
+                "job_id": result.job_id,
+                "verified": result.verified,
+                "intent": result.intent,
+            },
+            route="jarvis",
+        )
+        out["capabilities_used"] = ["jarvis", "planning", "tools", "verification"]
+        do_speak = self.speak_replies if speak is None else speak
+        if do_speak and out.get("text"):
+            out["voice"] = self.jarvis_voice.speak(str(out["text"])[:500])
+        self.memory.note_episode(
+            summary=f"jarvis:{result.intent}:{raw[:100]}",
+            tags=["jarvis", result.intent],
+            data={"verified": result.verified, "job_id": result.job_id},
+        )
+        return out
+
+    def jarvis_eval(self) -> dict[str, Any]:
+        return run_jarvis_eval(self.jarvis)
+
+    def _looks_like_jarvis(self, lower: str) -> bool:
+        keys = (
+            "shortage report",
+            "material shortage",
+            "material balance",
+            "yaad dilana",
+            "remind me",
+            "stop this task",
+            "cancel this job",
+            "jarvis eval",
+        )
+        return any(k in lower for k in keys)
+
+    def _jarvis_meta(self, lower: str) -> dict[str, Any]:
+        if "eval" in lower:
+            report = self.jarvis_eval()
+            return self._tag(
+                {
+                    "text": f"JARVIS eval: {report['passed']}/{report['total']} passed "
+                    f"(rate={report['pass_rate']:.0%}). human_level_agi=false.",
+                    "structured": report,
+                },
+                route="jarvis_eval",
+            )
+        if "tools" in lower:
+            tools = self.jarvis.tools.list_tools()
+            names = ", ".join(t["name"] for t in tools[:20])
+            return self._tag(
+                {"text": f"JARVIS tools ({len(tools)}): {names}", "structured": {"tools": tools}},
+                route="jarvis_tools",
+            )
+        return self._tag(
+            {"text": self.greeting(), "structured": self.status().get("jarvis")},
+            route="jarvis_status",
         )
 
     # --- command helpers ------------------------------------------------------

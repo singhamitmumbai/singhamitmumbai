@@ -78,8 +78,9 @@ def build_parser() -> argparse.ArgumentParser:
             "diagnostics",
             "completeness",
             "assistant",
+            "jarvis",
         ],
-        help="Optional subcommand: assistant, complete-ai, diagnostics, completeness, os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
+        help="Optional subcommand: jarvis, assistant, complete-ai, diagnostics, completeness, os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
     )
     p.add_argument(
         "--mode",
@@ -157,6 +158,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--repl",
         action="store_true",
         help="Force interactive REPL",
+    )
+    p.add_argument(
+        "--eval",
+        action="store_true",
+        help="Run JARVIS evaluation suite (with jarvis subcommand)",
     )
     return p
 
@@ -625,34 +631,54 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(json.dumps(result.get("structured") or {}, indent=2, default=str)[:3000])
         return 0
 
-    if args.command == "assistant":
+    if args.command in ("assistant", "jarvis"):
         from .assistant import FinderbayAssistant
 
         assist = FinderbayAssistant(seed_demo=True, speak_replies=False)
+        if args.command == "jarvis" and (args.eval or (args.ask and args.ask.strip().lower() == "eval")):
+            print(json.dumps(assist.jarvis_eval(), indent=2, default=str))
+            return 0
         if args.ask:
-            print(assist.ask(args.ask, mode=args.mode or "auto"))
+            if args.command == "jarvis":
+                print(assist.jarvis_handle(args.ask)["text"])
+            else:
+                print(assist.ask(args.ask, mode=args.mode or "auto"))
             return 0
         if args.demo or not sys.stdin.isatty():
             print(assist.greeting())
             print(json.dumps(assist.status(), indent=2, default=str)[:3000])
-            for q in (
-                "Show unpaid invoices for Project A",
-                "plan reserve 10 bags of cement",
-                "remember that my warehouse is Central Store",
-                "recall warehouse",
-                "Count people in image ./crowd_people.jpg",
-                "computer status",
-                "Who are you?",
-            ):
+            demos = (
+                (
+                    "Prepare tomorrow's material shortage report for the selected site",
+                    "plan reserve 10 bags of cement",
+                    "jarvis eval",
+                    "Show unpaid invoices for Project A",
+                    "remember that my warehouse is Central Store",
+                    "computer status",
+                )
+                if args.command == "jarvis"
+                else (
+                    "Show unpaid invoices for Project A",
+                    "plan reserve 10 bags of cement",
+                    "remember that my warehouse is Central Store",
+                    "recall warehouse",
+                    "Count people in image ./crowd_people.jpg",
+                    "computer status",
+                    "Prepare tomorrow's material shortage report for the selected site",
+                    "Who are you?",
+                )
+            )
+            for q in demos:
                 print("-" * 40)
                 print("USER:", q)
                 print("AI:  ", assist.ask(q))
-            print("Finderbay Assistant demo done.")
+            print(f"{'JARVIS' if args.command == 'jarvis' else 'Finderbay Assistant'} demo done.")
             return 0
         print(assist.greeting())
+        prompt = "jarvis> " if args.command == "jarvis" else "assistant> "
         while True:
             try:
-                line = input("assistant> ")
+                line = input(prompt)
             except (EOFError, KeyboardInterrupt):
                 print()
                 break
@@ -661,7 +687,13 @@ def main(argv: Optional[list[str]] = None) -> int:
             if line.strip().lower() == "/status":
                 print(json.dumps(assist.status(), indent=2, default=str))
                 continue
-            print(assist.ask(line))
+            if line.strip().lower() in ("/eval", "jarvis eval"):
+                print(json.dumps(assist.jarvis_eval(), indent=2, default=str))
+                continue
+            if args.command == "jarvis":
+                print(assist.jarvis_handle(line)["text"])
+            else:
+                print(assist.ask(line))
         return 0
 
     if args.command in ("complete-ai", "diagnostics", "completeness"):

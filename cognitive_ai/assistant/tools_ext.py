@@ -47,6 +47,21 @@ def attach_assistant_tools(complete_ai, assistant) -> None:
     def plan(args: dict[str, Any]) -> dict[str, Any]:
         return assistant.plan(str(args.get("text") or args.get("goal") or ""))
 
+    def jarvis(args: dict[str, Any]) -> dict[str, Any]:
+        action = (args.get("action") or "run").lower()
+        if action == "eval":
+            return assistant.jarvis_eval()
+        if action == "tools":
+            return {"ok": True, "tools": assistant.jarvis.tools.list_tools()}
+        if action == "skills":
+            return {"ok": True, "skills": assistant.jarvis.skills.list_skills()}
+        if action == "jobs":
+            return {"ok": True, **assistant.jarvis.jobs.summary()}
+        if action == "status":
+            return {"ok": True, **(assistant.status().get("jarvis") or {})}
+        text = str(args.get("text") or args.get("request") or "")
+        return assistant.jarvis_handle(text)
+
     complete_ai.tools.handlers.update(
         {
             "voice": voice,
@@ -54,5 +69,6 @@ def attach_assistant_tools(complete_ai, assistant) -> None:
             "computer": computer,
             "learn": learn,
             "plan": plan,
+            "jarvis": jarvis,
         }
     )

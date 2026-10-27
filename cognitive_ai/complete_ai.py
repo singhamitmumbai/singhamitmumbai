@@ -40,6 +40,7 @@ TOOL_AWARE_SYSTEM = (
     'TOOL plan {"text": "reserve 10 cement"}\n'
     'TOOL computer {"action": "open_url", "url": "https://example.com"}\n'
     'TOOL learn {"action": "alias", "former": "Warehouse B", "alias": "Central Store"}\n'
+    'TOOL jarvis {"text": "Prepare tomorrow material shortage report for Site-7"}\n'
     'TOOL status {}\n'
     "After tool results are provided, give the user a clear final answer. "
     "Do not invent Finderbay numbers — use TOOL finderbay / alerts. "

@@ -1,15 +1,20 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.7.0) + **Finderbay Assistant** — voice, memory, vision, planning, gated computer control, learning:
+**Complete AI** (v1.8.0) + **Finderbay Assistant** + **JARVIS blueprint** — voice, memory, vision, planning, gated computer control, learning, verified tool workflows:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
-pretrained general-purpose LLM at runtime**.
+pretrained general-purpose LLM required at runtime** (optional LLM via API key).
 
-### Complete AI / Finderbay Assistant — start here
+### Complete AI / Finderbay Assistant / JARVIS — start here
 
 ```bash
-# Finderbay Assistant (voice · memory · vision · planning · computer · learning)
+# JARVIS non-LLM controller (tool contracts · jobs · provenance · shortage skill)
+python -m cognitive_ai jarvis --demo
+python -m cognitive_ai jarvis --eval
+python -m cognitive_ai jarvis --ask "Prepare tomorrow's material shortage report for Site-7"
+
+# Finderbay Assistant (voice · memory · vision · planning · computer · learning · JARVIS)
 python -m cognitive_ai assistant --demo
 python -m cognitive_ai assistant --ask "remember that my warehouse is Central Store"
 python -m cognitive_ai assistant --ask "plan Show unpaid invoices for Project A"
@@ -29,14 +34,26 @@ python -m cognitive_ai api --mode assistant --port 8787
 python -m cognitive_ai chat --domain complete
 ```
 
-Product: **Complete AI** / **Finderbay Assistant**. `human_level_agi=false`.  
-Computer control is **gated** (no keylogging); enable explicitly.
+Product: **Complete AI** / **Finderbay Assistant** / **JARVIS tools**. `human_level_agi=false`.  
+Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.
+
+### What v1.8 adds — JARVIS Tools & System Blueprint
+
+| Piece | Role |
+|------|------|
+| `cognitive_ai/jarvis/` | Non-LLM controller: contracts, jobs, provenance memory, skills, voice, eval |
+| Tool contracts | Input/output schemas, effect, scope, timeout, retry, verification |
+| Job store | ready→running→verifying→completed / needs_input / failed / outcome_unknown / cancelled |
+| Provenance memory | working · episodic · semantic · procedural · source + supersession |
+| Material shortage skill | Blueprint §13 worked example with Decimal arithmetic + report verify |
+| Voice pipeline | Push-to-talk first; VAD/ASR/TTS adapters (stubs until local models) |
+| CLI / API | `python -m cognitive_ai jarvis` · `POST /jarvis` |
 
 ### Release zip
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.7.0.zip
+# → dist/Complete_Non_LLM_AI_v1.8.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.

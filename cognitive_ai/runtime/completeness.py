@@ -28,6 +28,12 @@ REQUIRED_MODULES = [
     "cognitive_ai.assistant.computer",
     "cognitive_ai.assistant.memory_hub",
     "cognitive_ai.assistant.learning_bridge",
+    "cognitive_ai.jarvis.pipeline",
+    "cognitive_ai.jarvis.registry",
+    "cognitive_ai.jarvis.skills",
+    "cognitive_ai.jarvis.provenance",
+    "cognitive_ai.jarvis.voice",
+    "cognitive_ai.jarvis.eval_suite",
 ]
 
 
@@ -38,6 +44,9 @@ REQUIRED_ATTRS = {
     "cognitive_ai.vision.system": ["VisionSystem"],
     "cognitive_ai.coding.system": ["CodingSystem"],
     "cognitive_ai.assistant.finder_assistant": ["FinderbayAssistant"],
+    "cognitive_ai.jarvis.pipeline": ["JarvisPipeline"],
+    "cognitive_ai.jarvis.skills": ["MaterialShortageSkill", "SkillRegistry"],
+    "cognitive_ai.jarvis.eval_suite": ["run_jarvis_eval"],
 }
 
 
