@@ -48,6 +48,9 @@ REQUIRED_MODULES = [
     "cognitive_ai.jarvis.documents",
     "cognitive_ai.jarvis.dialogue",
     "cognitive_ai.jarvis.adapters",
+    "cognitive_ai.intelligence.router",
+    "cognitive_ai.intelligence.confidence",
+    "cognitive_ai.intelligence.hardening",
 ]
 
 
@@ -70,6 +73,9 @@ REQUIRED_ATTRS = {
     "cognitive_ai.jarvis.nlu": ["IntentClassifier"],
     "cognitive_ai.jarvis.sqlite_memory": ["SqliteMemory"],
     "cognitive_ai.jarvis.learning": ["LearningPipeline"],
+    "cognitive_ai.intelligence.router": ["SmartRouter", "RouteDecision"],
+    "cognitive_ai.intelligence.confidence": ["score_response", "ConfidenceScore"],
+    "cognitive_ai.intelligence.hardening": ["SelfCheck", "harden_text"],
 }
 
 

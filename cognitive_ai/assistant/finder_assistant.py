@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from ..complete_ai import CompleteAI
+from ..intelligence import SmartRouter, harden_text, score_response
 from ..jarvis import JarvisPipeline, JarvisSystem, run_jarvis_eval
 from ..jarvis.voice import VoicePipeline
 from ..version import __version__
@@ -47,6 +48,7 @@ class FinderbayAssistant:
         self.jarvis_system = JarvisSystem(finderbay=self.finderbay)
         self.jarvis = self.jarvis_system.pipeline  # backward-compatible pipeline handle
         self.jarvis_voice = self.jarvis_system.voice
+        self.router = SmartRouter()
         # Expose assistant tools on Complete AI tool router
         self.complete.attach_assistant(self)
 
@@ -76,7 +78,8 @@ class FinderbayAssistant:
                     "human_level_agi": False,
                 }
 
-        lower = (text or "").lower().strip()
+        text = harden_text(text or "")
+        lower = text.lower().strip()
 
         # Assistant meta commands
         if lower.startswith("remember that ") or lower.startswith("remember "):
@@ -95,16 +98,50 @@ class FinderbayAssistant:
             return self._jarvis_meta(lower)
         if lower.startswith("jarvis ") or lower.startswith("jarvis,"):
             return self.jarvis_handle(text, speak=speak)
+        if lower in ("self check", "self-check", "assistant selfcheck"):
+            return self._self_check()
 
         # Plan preview without execute
         if lower.startswith("plan ") or lower.startswith("how would you "):
             return self.plan(text)
 
-        # JARVIS non-LLM controller for supported workflows (shortage, schedule, stop, …)
-        if self._looks_like_jarvis(lower):
-            return self.jarvis_handle(text, speak=speak)
+        # Smart multi-signal router
+        decision = self.router.decide(text)
+        route = decision.route
+        image_path = decision.hints.get("image_path")
 
-        # Vision understand / thermal shorthand
+        if route == "jarvis" or self._looks_like_jarvis(lower):
+            out = self.jarvis_handle(text, speak=speak)
+            out["router"] = decision.to_dict()
+            return out
+        if route == "vision_thermal":
+            path = image_path or (text.split(None, 2)[-1].strip().strip("\"'") if " " in text else "")
+            if path:
+                out = self.analyze_thermal(path)
+                out["router"] = decision.to_dict()
+                return out
+        if route == "vision_understand" or (
+            route == "vision" and any(k in lower for k in ("understand", "what do you see", "describe"))
+        ):
+            path = image_path or (text.split(None, 2)[-1].strip().strip("\"'") if " " in text else "")
+            if path and ("/" in path or path.endswith((".jpg", ".png", ".jpeg", ".webp", ".bmp", ".tif", ".dcm"))):
+                out = self.understand_image(path)
+                out["router"] = decision.to_dict()
+                return out
+        if route == "memory":
+            if lower.startswith("remember"):
+                return self._remember_cmd(text)
+            return self._recall_cmd(text)
+        if route == "learning":
+            if "correction" in lower:
+                return self._correction_cmd(text)
+            return self._learn_alias_cmd(text)
+        if route == "computer":
+            return self._computer_cmd(text)
+        if route == "planning":
+            return self.plan(text)
+
+        # Vision shorthand prefixes
         if lower.startswith("understand image ") or lower.startswith("understand scene "):
             path = text.split(None, 2)[-1].strip().strip("\"'")
             return self.understand_image(path)
@@ -117,16 +154,30 @@ class FinderbayAssistant:
                 return self.analyze_thermal(path)
 
         # Default → Complete AI (vision/coding/finderbay/llm/tools)
-        out = self.complete.handle(text, mode=mode)
+        # Prefer vision mode when router says so
+        use_mode = mode
+        if mode == "auto" and route in ("vision", "vision_understand", "vision_thermal"):
+            use_mode = "vision"
+        elif mode == "auto" and route == "coding":
+            use_mode = "coding"
+        elif mode == "auto" and route == "finderbay":
+            use_mode = "finderbay"
+
+        out = self.complete.handle(text, mode=use_mode)
         out = dict(out)
         out["product"] = self.PRODUCT_NAME
         out["assistant"] = True
-        # Attach plan snapshot when Finderbay produced one
-        goal = out.get("goal")
+        out["router"] = decision.to_dict()
         plan = out.get("plan")
         if plan:
             self.last_plan = plan
         out["capabilities_used"] = self._infer_caps(out)
+        out["confidence"] = score_response(
+            verified=out.get("faithful"),
+            supported=(out.get("frame") or {}).get("supported", True) if out.get("frame") else True,
+            intent_confidence=decision.confidence,
+            engine_stub=("stub" in str((out.get("structured") or {}).get("engine") or "")),
+        ).to_dict()
 
         do_speak = self.speak_replies if speak is None else speak
         if do_speak and out.get("text"):
@@ -134,8 +185,8 @@ class FinderbayAssistant:
 
         self.memory.note_episode(
             summary=f"{out.get('route')}: {text[:120]}",
-            tags=[str(out.get("route") or "ask")],
-            data={"reply_preview": str(out.get("text") or "")[:200]},
+            tags=[str(out.get("route") or "ask"), decision.route],
+            data={"reply_preview": str(out.get("text") or "")[:200], "router": decision.route},
         )
         return out
 
@@ -245,6 +296,8 @@ class FinderbayAssistant:
             "learning": self.learning.status(),
             "complete_ai": self.complete.status(),
             "jarvis": self.jarvis_system.status(),
+            "router": {"engine": "SmartRouter", "routes": list(self.router.ROUTES)},
+            "intelligence": {"hardening": True, "confidence": True, "self_check": True},
         }
 
     def greeting(self) -> str:
@@ -443,6 +496,18 @@ class FinderbayAssistant:
         if out.get("tools"):
             caps.append("tools")
         return caps
+
+    def _self_check(self) -> dict[str, Any]:
+        from ..intelligence import SelfCheck
+
+        report = SelfCheck().run_core_imports().run_invariants().summary()
+        return self._tag(
+            {
+                "text": f"Self-check {report['passed']}/{report['total']} passed. human_level_agi=false.",
+                "structured": report,
+            },
+            route="self_check",
+        )
 
     def _tag(self, out: dict[str, Any], *, route: str) -> dict[str, Any]:
         result = dict(out)

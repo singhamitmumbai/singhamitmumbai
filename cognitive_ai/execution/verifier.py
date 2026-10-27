@@ -76,6 +76,19 @@ class Verifier:
             elif check == "payment_posted":
                 if not effects.get("payment_posted"):
                     return False
+            elif check == "vision_result_present":
+                vision = effects.get("vision") or {}
+                if not vision and "detections_ready" not in effects:
+                    return False
+            elif check == "detections_ready":
+                if not effects.get("detections_ready") and not (effects.get("vision") or {}).get("detections"):
+                    return False
+            elif check == "report_ready":
+                if not effects.get("report_ready") and not effects.get("report"):
+                    return False
+            elif check == "po_created":
+                if not effects.get("po_created"):
+                    return False
             else:
                 # Unknown check name — do not pretend success
                 continue

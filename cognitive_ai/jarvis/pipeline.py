@@ -8,6 +8,7 @@ from typing import Any, Optional
 
 from .contracts import JobState
 from .jobs import JobStore
+from .nlu import IntentClassifier
 from .provenance import ProvenanceMemory
 from .registry import JarvisToolRegistry
 from .skills import SkillRegistry, SkillResult
@@ -27,6 +28,7 @@ class PipelineResult:
     missing: list[str] = field(default_factory=list)
     verified: bool = False
     evidence: dict[str, Any] = field(default_factory=dict)
+    confidence: Optional[dict[str, Any]] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -42,6 +44,7 @@ class PipelineResult:
             "missing": self.missing,
             "verified": self.verified,
             "evidence": self.evidence,
+            "confidence": self.confidence,
         }
 
 
@@ -72,6 +75,7 @@ class JarvisPipeline:
         self.jobs = jobs or JobStore()
         self.memory = memory or ProvenanceMemory()
         self.skills = skills or SkillRegistry(self.tools)
+        self.classifier = IntentClassifier()
         # Seed procedural memory
         self.memory.register_procedure(
             "materials.shortage_report",
@@ -93,14 +97,47 @@ class JarvisPipeline:
         }
 
     def interpret(self, captured: dict[str, Any]) -> tuple[str, dict[str, Any], list[str]]:
+        """Hybrid interpret: regex cues + TF-IDF classifier; keep higher-confidence intent."""
         text = captured["raw_text"]
-        intent = "unsupported"
+        regex_intent = "unsupported"
         for name, pat in _INTENT_PATTERNS:
             if pat.search(text):
-                intent = name
+                regex_intent = name
                 break
+        clf = self.classifier.predict(text, threshold=0.20)
+        # Prefer classifier when confident; otherwise regex; merge slots
+        if regex_intent == "jobs.cancel":
+            intent = "jobs.cancel"  # safety-critical
+        elif regex_intent != "unsupported":
+            # Regex cue present: allow classifier override only if clearly stronger same-family
+            if clf.supported and clf.confidence >= 0.28 and clf.intent == regex_intent:
+                intent = clf.intent
+            else:
+                intent = regex_intent
+        elif clf.supported and clf.confidence >= 0.30:
+            # No regex hit — require stronger classifier confidence to avoid false accepts
+            intent = clf.intent
+        else:
+            intent = "unsupported"
+
         slots = self._extract_slots(text, intent)
+        # Merge classifier slots when richer
+        if intent != "unsupported":
+            for k, v in (clf.slots or {}).items():
+                if k not in slots or slots.get(k) in (None, ""):
+                    slots[k] = v
         missing = list(slots.pop("_missing", []))
+        if intent != "unsupported":
+            for m in clf.missing or []:
+                if m not in missing:
+                    missing.append(m)
+        if intent == "unsupported":
+            slots["_intent_confidence"] = float(clf.confidence or 0.0)
+        elif clf.supported and clf.intent == intent:
+            slots["_intent_confidence"] = float(clf.confidence)
+        else:
+            slots["_intent_confidence"] = 0.7 if regex_intent != "unsupported" else float(clf.confidence or 0.5)
+        slots["_interpret_method"] = "hybrid"
         return intent, slots, missing
 
     def resolve(self, intent: str, slots: dict[str, Any]) -> dict[str, Any]:
@@ -297,6 +334,17 @@ class JarvisPipeline:
 
         response = self.respond(intent, verified, evidence, [])
         self.record(intent, slots, evidence, verified)
+        try:
+            from ..intelligence import score_response
+
+            conf = score_response(
+                verified=verified,
+                supported=intent != "unsupported",
+                intent_confidence=float(slots.get("_intent_confidence") or 0.5),
+                missing_fields=[],
+            ).to_dict()
+        except Exception:  # noqa: BLE001
+            conf = None
         return PipelineResult(
             ok=verified,
             stage="respond",
@@ -309,6 +357,7 @@ class JarvisPipeline:
             response=response,
             verified=verified,
             evidence=evidence,
+            confidence=conf,
         )
 
     def _extract_slots(self, text: str, intent: str) -> dict[str, Any]:

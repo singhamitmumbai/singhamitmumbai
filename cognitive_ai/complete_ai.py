@@ -373,6 +373,19 @@ class CompleteAI:
         )
         check("persist_store", lambda: str(self.store.path))
         check("export_markdown", lambda: "Complete AI" in self.export_session())
+        check(
+            "intelligence_self_check",
+            lambda: __import__(
+                "cognitive_ai.intelligence", fromlist=["SelfCheck"]
+            ).SelfCheck().run_core_imports().run_invariants().summary()["ok"],
+        )
+        check(
+            "smart_router",
+            lambda: __import__(
+                "cognitive_ai.intelligence", fromlist=["SmartRouter"]
+            ).SmartRouter().decide("shortage report for Site-7").route
+            == "jarvis",
+        )
         passed = sum(1 for c in checks if c["ok"])
         return {
             "product": self.PRODUCT_NAME,
@@ -506,6 +519,11 @@ class CompleteAI:
                 "find symbol",
                 "analyze code",
                 "create module",
+                "unit test",
+                "pytest",
+                "implement function",
+                "bugfix",
+                "write a class",
             )
         )
 
@@ -523,6 +541,18 @@ class CompleteAI:
                 "ppe compliance",
                 "in image ",
                 "computer vision",
+                "understand the scene",
+                "understand this image",
+                "what do you see",
+                "thermal",
+                "thermography",
+                "flir",
+                "night vision",
+                "infrared",
+                ".jpg",
+                ".png",
+                ".jpeg",
+                ".webp",
             )
         )
 

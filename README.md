@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.11.0) + **Finderbay Assistant** + **JARVIS** + **Smart multi-modality vision** (RGB, thermal, IR, night, …) — voice, memory, planning, gated computer control, learning, verified tool workflows:
+**Complete AI** (v1.12.0) — stronger/smarter full stack: SmartRouter, confidence bands, hybrid JARVIS NLU, fuzzy BM25, thermal vision, verified tools:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
@@ -36,6 +36,23 @@ python -m cognitive_ai chat --domain complete
 
 Product: **Complete AI** / **Finderbay Assistant** / **JARVIS tools**. `human_level_agi=false`.  
 Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.
+
+### What v1.12 adds — Full-code strength upgrade
+
+| Piece | Role |
+|------|------|
+| `intelligence/router.py` | Multi-signal SmartRouter (jarvis/vision/thermal/finderbay/coding/…) |
+| `intelligence/confidence.py` | Honest confidence bands on answers |
+| `intelligence/hardening.py` | Input harden + SelfCheck battery |
+| JARVIS interpret | Hybrid regex + TF-IDF classifier |
+| BM25 retrieval | Fuzzy + character n-gram boost (Hinglish/typos) |
+| Verifier | More vision/report/payment checks |
+| Assistant | Router-first dispatch + `self check` |
+
+```bash
+python -m cognitive_ai assistant --ask "self check"
+python -m cognitive_ai diagnostics
+```
 
 ### What v1.11 adds — Smarter vision + thermal & other modalities
 
@@ -78,7 +95,7 @@ Tool contracts, job store, provenance memory, material shortage skill, voice PTT
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.11.0.zip
+# → dist/Complete_Non_LLM_AI_v1.12.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.

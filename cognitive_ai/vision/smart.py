@@ -6,14 +6,16 @@ from typing import Any, Optional
 
 
 SCENE_RULES: list[tuple[str, tuple[str, ...], str]] = [
-    ("construction_site", ("person", "truck", "hardhat", "helmet", "steel", "cement", "crane"), "Active construction / civil site cues"),
-    ("traffic", ("car", "truck", "bus", "motorcycle", "traffic light"), "Road / traffic scene"),
-    ("office", ("laptop", "keyboard", "mouse", "chair", "dining table", "tv"), "Indoor workplace / office"),
+    ("construction_site", ("person", "truck", "hardhat", "helmet", "steel", "cement", "crane", "rebar"), "Active construction / civil site cues"),
+    ("traffic", ("car", "truck", "bus", "motorcycle", "traffic light", "stop sign"), "Road / traffic scene"),
+    ("office", ("laptop", "keyboard", "mouse", "chair", "dining table", "tv", "cell phone"), "Indoor workplace / office"),
     ("crowd", ("person",), "People-dense scene"),
     ("hazard_fire", ("fire", "smoke", "thermal_hotspot"), "Possible fire / heat hazard"),
     ("warehouse", ("truck", "suitcase", "backpack", "person"), "Logistics / storage-like mix"),
     ("domestic", ("couch", "bed", "tv", "cat", "dog", "bottle", "cup"), "Indoor domestic scene"),
     ("thermal_inspection", ("thermal_hotspot", "person_thermal", "cold_region"), "Thermal inspection view"),
+    ("document_desk", ("document", "book", "laptop"), "Document / desk reading scene"),
+    ("security_night", ("person",), "Night / low-light security-like view"),
 ]
 
 

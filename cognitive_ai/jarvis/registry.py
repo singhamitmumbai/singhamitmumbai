@@ -245,7 +245,7 @@ class JarvisToolRegistry:
                 effect="read",
                 family="perception",
             ),
-            lambda a: {"ok": True, "audio_path": a["audio_path"], "text": "", "engine": "stub"},
+            self._audio_transcribe,
         )
         self.register(
             ToolContract(
@@ -256,7 +256,7 @@ class JarvisToolRegistry:
                 effect="read",
                 family="perception",
             ),
-            lambda a: {"ok": True, "image_path": a["image_path"], "text": "", "engine": "stub"},
+            self._image_ocr,
         )
         self.register(
             ToolContract(
@@ -377,3 +377,35 @@ class JarvisToolRegistry:
             return {"ok": True, **out}
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": str(exc)}
+
+    def _audio_transcribe(self, args: dict[str, Any]) -> dict[str, Any]:
+        try:
+            from ..perception.speech import SpeechPipeline
+
+            path = args.get("audio_path") or args.get("audio")
+            out = SpeechPipeline().recognize(path, context={})
+            return {
+                "ok": True,
+                "audio_path": path,
+                "text": out.get("transcript") or out.get("text") or "",
+                "uncertainty": out.get("uncertainty"),
+                "engine": out.get("engine") or getattr(SpeechPipeline, "version", "speech"),
+            }
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": str(exc), "text": "", "engine": "unavailable"}
+
+    def _image_ocr(self, args: dict[str, Any]) -> dict[str, Any]:
+        try:
+            from ..perception.ocr import OCRPipeline
+
+            path = args["image_path"]
+            out = OCRPipeline().recognize(path, context={})
+            return {
+                "ok": True,
+                "image_path": path,
+                "text": out.get("text") or out.get("transcript") or "",
+                "engine": out.get("engine") or getattr(OCRPipeline, "version", "ocr"),
+                "boxes": out.get("boxes") or [],
+            }
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": str(exc), "image_path": args.get("image_path"), "text": ""}

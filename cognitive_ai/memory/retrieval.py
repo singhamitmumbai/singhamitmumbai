@@ -53,6 +53,7 @@ class BM25Index:
         if not q or not self.docs:
             return []
         N = len(self.docs)
+        q_chars = _char_ngrams(query.lower())
         scored: list[tuple[float, dict[str, Any]]] = []
         for i, doc in enumerate(self.docs):
             score = 0.0
@@ -60,13 +61,48 @@ class BM25Index:
             dl = self.doc_len[i] or 1
             for term in q:
                 if term not in tf:
-                    continue
-                n_q = self.df.get(term, 0)
+                    # fuzzy: prefix / edit-light match against doc terms
+                    fuzzy = _fuzzy_term_hit(term, tf)
+                    if not fuzzy:
+                        continue
+                    freq = fuzzy
+                    n_q = self.df.get(term, 1)
+                else:
+                    freq = tf[term]
+                    n_q = self.df.get(term, 0)
                 idf = math.log(1 + (N - n_q + 0.5) / (n_q + 0.5))
-                freq = tf[term]
                 denom = freq + self.k1 * (1 - self.b + self.b * dl / (self.avgdl or 1))
                 score += idf * (freq * (self.k1 + 1)) / denom
+            # Character n-gram boost helps Hinglish / typos
+            if q_chars:
+                doc_chars = _char_ngrams(" ".join(self.doc_tokens[i]))
+                inter = len(q_chars & doc_chars)
+                if inter:
+                    score += 0.15 * inter / max(1, len(q_chars))
             if score > 0:
                 scored.append((score, {**doc, "_score": score}))
         scored.sort(key=lambda x: -x[0])
         return scored[:top_k]
+
+
+def _char_ngrams(text: str, n: int = 3) -> set[str]:
+    t = re.sub(r"\s+", " ", text.lower())
+    if len(t) < n:
+        return {t} if t else set()
+    return {t[i : i + n] for i in range(len(t) - n + 1)}
+
+
+def _fuzzy_term_hit(term: str, tf: Counter) -> float:
+    """Return a fractional tf if a close token exists (prefix or 1-char edit-ish)."""
+    if not term:
+        return 0.0
+    for tok, freq in tf.items():
+        if tok.startswith(term) or term.startswith(tok):
+            if min(len(tok), len(term)) >= 3:
+                return float(freq) * 0.6
+        if abs(len(tok) - len(term)) <= 1 and len(term) >= 4:
+            # cheap Hamming-ish
+            mismatches = sum(1 for a, b in zip(tok, term) if a != b) + abs(len(tok) - len(term))
+            if mismatches <= 1:
+                return float(freq) * 0.5
+    return 0.0
