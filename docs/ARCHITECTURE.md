@@ -53,6 +53,14 @@ Excluded at runtime: pretrained general-purpose LLMs.
 Perception modules ship **auditable stubs**; production acoustic/OCR checkpoints
 must declare provenance separately.
 
+## v1.0 blueprint completion
+
+1.  — inspectable operating-cycle stage traces  
+2.  +  — conflict & uncertainty routing  
+3.  — case-based reuse of verified episodes  
+4.  +  — improvement loop & program induction  
+5.  — component inventory ()  
+
 ## v0.9 advanced question understanding
 
 1. `nlu/questions.py` — WH-type, ask-form, polarity, aggregation, multi-clause split  

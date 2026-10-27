@@ -26,6 +26,9 @@ from .execution.tools import ToolRegistry
 from .execution.verifier import Verifier
 from .goals.manager import GoalManager
 from .goals.planner import OperatorPlanner
+from .blueprint.audit import run_blueprint_audit
+from .learning_sys.improvement import ImprovementLoop
+from .learning_sys.induction import ProgramInducer
 from .learning_sys.learner import LearningSystem
 from .memory.attention import AttentionScheduler
 from .memory.store import Episode, MemorySystem
@@ -33,11 +36,15 @@ from .nlu.dialogue_tracker import DialogueTracker
 from .nlu.entities import EntityLinker
 from .nlu.pipeline import LanguageUnderstanding
 from .perception.gateway import InputGateway
+from .reasoning.cases import CaseBasedReasoner
+from .reasoning.conflicts import ConflictDetector
 from .reasoning.engine import ReasoningEngine
 from .response.generator import ResponseGenerator
 from .runtime.capability_model import CapabilityModel
+from .runtime.cycle import OperatingCycle
 from .runtime.monitor import RuntimeMonitor
 from .uncertainty.calibration import calibrate_report
+from .uncertainty.router import UncertaintyRouter
 from .world.model import WorldModel
 from .version import __version__
 
@@ -109,11 +116,17 @@ class CompleteNonLLMAI:
         self.executor.reports = self.reports
         self.responder = ResponseGenerator()
         self.learner = LearningSystem(self.memory, dataset_dir=self.config.dataset_dir)
+        self.improvement = ImprovementLoop()
+        self.inducer = ProgramInducer()
+        self.conflicts = ConflictDetector()
+        self.cases = CaseBasedReasoner()
+        self.uncertainty = UncertaintyRouter()
         self.datasets = DatasetRegistry(self.config.dataset_dir)
         self.capabilities = FINDERBAY_CAPABILITIES
         self.capability_model = CapabilityModel()
         self.monitor = RuntimeMonitor()
         self.history: list[dict[str, Any]] = []
+        self.last_cycle = None
         self._bootstrap_datasets()
 
     def _bootstrap_datasets(self) -> None:
@@ -143,8 +156,12 @@ class CompleteNonLLMAI:
         source: str = "user",
         context: Optional[dict] = None,
     ) -> dict[str, Any]:
-        """Full operating cycle for one request."""
+        """Full operating cycle: perceive → understand → attend → reason → plan → act → verify → respond."""
         t0 = time.perf_counter()
+        cycle = OperatingCycle()
+
+        # 1. Perceive
+        t_stage = time.perf_counter()
         obs = self.gateway.ingest(
             payload, modality=modality, source=source, context=context, state=self.state
         )
@@ -153,14 +170,26 @@ class CompleteNonLLMAI:
             if isinstance(obs.extracted_value, str)
             else str(obs.extracted_value or "")
         )
+        cycle.stage(
+            "perceive",
+            ok=True,
+            summary=f"modality={modality}",
+            data={"observation_id": obs.observation_id, "uncertainty": obs.uncertainty},
+            duration_ms=(time.perf_counter() - t_stage) * 1000,
+            uncertainties=["recognition"] if obs.uncertainty >= 0.5 else [],
+        )
         if obs.uncertainty >= 1.0 and modality == "audio" and not text:
+            self.uncertainty.note(self.state, "recognition", "Acoustic model produced no transcript.")
             answer = {
                 "text": self.capability_model.describe("speech"),
                 "structured": {"error": "acoustic_model_not_loaded"},
                 "faithful": True,
                 "trace": {"observation": obs.to_dict()},
+                "cycle": cycle.finish("abstained").to_dict(),
+                "uncertainty": self.uncertainty.report(self.state),
                 "llm_dependency": False,
                 "version": self.version,
+                "human_level_agi": False,
             }
             self.monitor.record(
                 "speech",
@@ -170,11 +199,57 @@ class CompleteNonLLMAI:
                 error="no_acoustic_model",
             )
             self.history.append(answer)
+            self.last_cycle = cycle.trace
             return answer
 
+        # 2. Understand
+        t_stage = time.perf_counter()
         frame = self.dialogue.process(text, self.state)
+        cycle.stage(
+            "understand",
+            ok=frame.supported or frame.operation in ("cancel", "correct", "status"),
+            summary=f"op={frame.operation} conf={frame.confidence:.2f}",
+            data={
+                "operation": frame.operation,
+                "project_id": frame.project_id,
+                "question": frame.question,
+                "needs_clarification": list(frame.needs_clarification or []),
+            },
+            duration_ms=(time.perf_counter() - t_stage) * 1000,
+        )
+
+        # 3. Attend + conflicts + cases
+        t_stage = time.perf_counter()
         context_pack = self.attention.context_pack(self.state, self.memory)
+        conflict_reports = self.conflicts.scan_memory_claims(self.memory)
+        conflict_reports.extend(self.conflicts.scan_state(self.state))
+        if conflict_reports:
+            self.conflicts.apply_to_state(self.state, conflict_reports)
+        case_matches = self.cases.retrieve(self.memory, text, operation=frame.operation)
+        case_hint = self.cases.suggest_plan_hint(case_matches)
+        cycle.stage(
+            "attend",
+            ok=True,
+            summary=f"attention={len(context_pack.get('attention') or [])} conflicts={len(conflict_reports)} cases={len(case_matches)}",
+            data={
+                "conflicts": [c.to_dict() for c in conflict_reports[:5]],
+                "cases": [c.to_dict() for c in case_matches],
+                "case_hint": case_hint,
+            },
+            duration_ms=(time.perf_counter() - t_stage) * 1000,
+            uncertainties=["conflicting_evidence"] if conflict_reports else [],
+        )
+
+        # 4. Goal
+        t_stage = time.perf_counter()
         goal = self.goals.create_from_frame(frame, self.state)
+        cycle.stage(
+            "goal",
+            ok=True,
+            summary=goal.description[:120] if goal else "",
+            data={"goal_id": goal.goal_id if goal else None, "status": goal.status if goal else None},
+            duration_ms=(time.perf_counter() - t_stage) * 1000,
+        )
 
         if frame.operation not in (
             "unsupported",
@@ -193,14 +268,24 @@ class CompleteNonLLMAI:
             "query_vendors",
             "export_report",
         ) and not self.capability_model.can(frame.operation):
+            self.uncertainty.note(self.state, "unsupported_task", f"Capability '{frame.operation}' unavailable.")
             answer = {
                 "text": self.capability_model.describe(frame.operation),
                 "structured": {"supported": False},
                 "faithful": True,
                 "frame": frame.to_dict(),
+                "cycle": cycle.finish("unsupported").to_dict(),
+                "uncertainty": self.uncertainty.report(self.state),
                 "llm_dependency": False,
                 "version": self.version,
+                "human_level_agi": False,
             }
+            self.improvement.record_failure(
+                operation=frame.operation,
+                input_text=text,
+                reason="unsupported_capability",
+                stage="understand",
+            )
             self.monitor.record(
                 frame.operation,
                 (time.perf_counter() - t0) * 1000,
@@ -208,39 +293,118 @@ class CompleteNonLLMAI:
                 abstained=True,
             )
             self.history.append(answer)
+            self.last_cycle = cycle.trace
             return answer
 
         if frame.operation in ("cancel", "correct", "status", "unsupported") or frame.needs_clarification:
+            if frame.needs_clarification:
+                self.uncertainty.note(
+                    self.state,
+                    "missing_information",
+                    "; ".join(frame.needs_clarification),
+                )
             plan = self.planner.plan(goal, self.state)
+            cycle.stage("plan", ok=True, summary=plan.outcome, data={"plan_id": plan.plan_id})
             if plan.outcome == "missing_info":
                 self.executor.run_plan(plan, self.state)
+            cycle.stage("execute", ok=True, summary="clarify_or_status")
+            cycle.stage("verify", ok=True, summary="n/a")
             answer = self.responder.generate(self.state, self.executor)
+            cycle.stage("respond", ok=True, summary=(answer.get("text") or "")[:80])
             abstained = bool(frame.needs_clarification or frame.operation == "unsupported")
             if frame.operation in ("cancel", "correct", "status"):
                 self.goals.mark(self.state, "satisfied")
+                outcome = "satisfied"
             elif abstained:
                 self.goals.mark(
                     self.state,
                     "missing_info" if frame.needs_clarification else "unsupported",
                 )
-            result = self._package_result(answer, frame, plan, context_pack, obs)
+                outcome = "missing_info" if frame.needs_clarification else "unsupported"
+            else:
+                outcome = goal.status
+            if frame.operation == "unsupported":
+                self.improvement.record_failure(
+                    operation=frame.operation,
+                    input_text=text,
+                    reason="unsupported_request",
+                    stage="understand",
+                )
+            result = self._package_result(answer, frame, plan, context_pack, obs, cycle, case_hint, conflict_reports)
+            cycle.finish(outcome)
+            result["cycle"] = cycle.trace.to_dict()
             self._finish(result, goal, t0, abstained=abstained)
+            self.last_cycle = cycle.trace
             return result
 
+        # 5–8. Plan → execute → verify → respond
+        t_stage = time.perf_counter()
         plan = self.planner.plan(goal, self.state)
+        if case_hint and case_hint.get("suggested_operators"):
+            plan.explanation = (plan.explanation or "") + f" | case_hint={case_hint['from_case']}"
+        cycle.stage(
+            "plan",
+            ok=plan.outcome in ("feasible", "optimal", "already_satisfied", "missing_info"),
+            summary=plan.outcome,
+            data={"steps": len(plan.steps), "case_hint": case_hint},
+            duration_ms=(time.perf_counter() - t_stage) * 1000,
+        )
+
+        t_stage = time.perf_counter()
         action_results = self.executor.run_plan(plan, self.state)
+        failed = any(r.status.value == "FAILED" for r in action_results)
+        unknown = any(r.status.value == "OUTCOME_UNKNOWN" for r in action_results)
+        cycle.stage(
+            "execute",
+            ok=not failed,
+            summary=f"actions={len(action_results)} failed={failed} unknown={unknown}",
+            data={"action_ids": [r.attempt_id for r in action_results]},
+            duration_ms=(time.perf_counter() - t_stage) * 1000,
+        )
+        cycle.stage(
+            "verify",
+            ok=not failed and not unknown,
+            summary="OUTCOME_UNKNOWN" if unknown else ("FAILED" if failed else "CONFIRMED"),
+            uncertainties=["stale_information"] if unknown else [],
+        )
+        if unknown:
+            self.uncertainty.note(
+                self.state,
+                "stale_information",
+                "At least one action returned OUTCOME_UNKNOWN — reconcile before retry.",
+            )
+
         answer = self.responder.generate(self.state, self.executor, self.executor.last_reasoning)
+        # Surface conflict note in text when present
+        if conflict_reports and answer.get("text"):
+            answer["text"] = (
+                answer["text"]
+                + " Note: "
+                + conflict_reports[0].message
+            )
+        cycle.stage("respond", ok=bool(answer.get("faithful")), summary=(answer.get("text") or "")[:100])
 
         if answer.get("faithful") and plan.outcome in ("feasible", "optimal", "already_satisfied"):
-            failed = any(r.status.value == "FAILED" for r in action_results)
             self.goals.mark(self.state, "failed" if failed else "satisfied")
         elif plan.outcome in ("missing_info", "unsupported"):
             self.goals.mark(self.state, plan.outcome)
         else:
-            failed = any(r.status.value == "FAILED" for r in action_results)
             self.goals.mark(self.state, "failed" if failed else "satisfied")
 
-        result = self._package_result(answer, frame, plan, context_pack, obs)
+        # 9. Learning hook (record episode + failure if needed)
+        if failed or goal.status in ("failed", "unsupported"):
+            fail = self.improvement.record_failure(
+                operation=frame.operation,
+                input_text=text,
+                reason=f"goal_status={goal.status}",
+                stage="execute" if failed else "plan",
+            )
+            self.improvement.propose_from_failure(fail)
+            cycle.stage("learn_hook", ok=True, summary=f"failure={fail.failure_id}")
+        else:
+            cycle.stage("learn_hook", ok=True, summary="episode_logged" if self.config.log_episodes else "noop")
+
+        result = self._package_result(answer, frame, plan, context_pack, obs, cycle, case_hint, conflict_reports)
         result["actions"] = [r.to_dict() for r in action_results]
         if self.config.log_episodes:
             self.memory.add_episode(
@@ -251,7 +415,10 @@ class CompleteNonLLMAI:
                     outcome=goal.status,
                 )
             )
+        cycle.finish(goal.status if goal else "satisfied")
+        result["cycle"] = cycle.trace.to_dict()
         self._finish(result, goal, t0, abstained=False)
+        self.last_cycle = cycle.trace
         return result
 
     def _finish(self, result: dict, goal, t0: float, *, abstained: bool) -> None:
@@ -266,7 +433,17 @@ class CompleteNonLLMAI:
     def ask(self, text: str) -> str:
         return self.handle(text, modality="text")["text"]
 
-    def _package_result(self, answer, frame, plan, context_pack, obs: Observation) -> dict[str, Any]:
+    def _package_result(
+        self,
+        answer,
+        frame,
+        plan,
+        context_pack,
+        obs: Observation,
+        cycle: Optional[OperatingCycle] = None,
+        case_hint: Optional[dict] = None,
+        conflict_reports: Optional[list] = None,
+    ) -> dict[str, Any]:
         return {
             "text": answer.get("text"),
             "structured": answer.get("structured"),
@@ -281,8 +458,19 @@ class CompleteNonLLMAI:
             "observation": obs.to_dict(),
             "capabilities": self.capability_model.to_dict(),
             "monitor": self.monitor.summary(),
+            "uncertainty": self.uncertainty.report(self.state),
+            "conflicts": [c.to_dict() for c in (conflict_reports or [])[:5]],
+            "case_hint": case_hint,
+            "improvement": self.improvement.summary(),
+            "cycle": cycle.trace.to_dict() if cycle else None,
+            "distinctions": {
+                "unknown_vs_false": True,
+                "predicted_vs_observed": True,
+                "attempted_vs_confirmed": True,
+            },
             "version": self.version,
             "llm_dependency": False,
+            "human_level_agi": False,
         }
 
     # --- improvement / evaluation ---------------------------------------------
@@ -334,6 +522,7 @@ class CompleteNonLLMAI:
             "version": self.version,
             "domain": self.package.name,
             "llm_at_runtime": False,
+            "human_level_agi": False,
             "config": self.config.to_dict(),
             "capabilities": [c.name for c in self.capabilities],
             "capability_model": self.capability_model.to_dict(),
@@ -345,7 +534,14 @@ class CompleteNonLLMAI:
             "package": self.package.manifest(),
             "tools": list(self.tools.tools.keys()),
             "htn_tasks": list(self.planner.htn.methods.keys()),
+            "improvement": self.improvement.summary(),
+            "world_transitions": list(self.world.transitions.keys()),
+            "last_cycle_id": self.last_cycle.cycle_id if self.last_cycle else None,
         }
+
+    def blueprint_audit(self) -> dict[str, Any]:
+        """Honest inventory of blueprint components vs implementation."""
+        return run_blueprint_audit()
 
     def save(self, path: Optional[Path | str] = None) -> Path:
         return self.memory.save(path)

@@ -1,22 +1,24 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-A runnable **complete non-LLM AI** (v0.9) built from the engineering blueprint:
+A runnable **complete non-LLM AI** (v1.0) built from the engineering blueprint:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
 pretrained general-purpose LLM at runtime**.
 
-### What v0.9 adds — advanced question understanding
+### What v1.0 completes (blueprint alignment)
 
-| Capability | Detail |
+| Blueprint theme | Implementation |
 |------|---------|
-| WH / ask-form | what/who/where/when/why/how/how-many + count/sum/exists/list/causal/yes-no |
-| Multi-clause | Splits compound questions; answers the primary clause first |
-| Aggregation | `How many unpaid invoices…?` → numeric answer with sources |
-| Follow-ups | `What about Project B?` / `How many of those?` reuse prior frame |
-| Open-domain | Question analyzer drives can/is/why/where/define routing |
+| Shared operating cycle | Inspectable `cycle` trace on every request (perceive→…→respond) |
+| Uncertainty routing | Separate kinds → clarify / compare / refresh / abstain / qualify |
+| Conflict detection | Conflicting claims & invoice↔payment mismatches exposed |
+| Case-based reasoning | Reuse verified episodes as plan hints |
+| Improvement process | Failure → reviewed candidate → release (no self-labeling) |
+| Program induction | Learn operator sequences from reviewed examples |
+| Blueprint audit | `python -m cognitive_ai blueprint` component inventory |
 
-Prior v0.8: alerts, POs/vendors, clarification, causal CS, REST API/reports.
+Also includes v0.9 question understanding, v0.8 alerts/POs/API, speech/OCR, 2000+ CS KB.
 
 **Honest limits (still):** not human-level AGI; open-domain coverage is finite/explicit; not unrestricted LLM chat.
 

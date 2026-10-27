@@ -70,8 +70,9 @@ def build_parser() -> argparse.ArgumentParser:
             "eval",
             "bench",
             "api",
+            "blueprint",
         ],
-        help="Optional subcommand: os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api",
+        help="Optional subcommand: os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint",
     )
     p.add_argument(
         "--ask",
@@ -525,6 +526,12 @@ def main(argv: Optional[list[str]] = None) -> int:
             pass
         finally:
             httpd.server_close()
+        return 0
+
+    if args.command == "blueprint":
+        from .blueprint.audit import run_blueprint_audit
+
+        print(json.dumps(run_blueprint_audit(), indent=2, default=str))
         return 0
 
     # Chat UI launcher

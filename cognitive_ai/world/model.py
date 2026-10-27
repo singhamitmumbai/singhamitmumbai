@@ -65,8 +65,32 @@ class WorldModel:
             Transition(
                 name="mark_invoice_paid",
                 description="Payment settles an invoice",
-                preconditions=lambda s: s.get("payment_status") == "unpaid",
+                preconditions=lambda s: s.get("payment_status") in ("unpaid", "partial"),
                 effects=lambda s, args: {**s, "payment_status": "paid", "paid_amount": args.get("amount")},
+            )
+        )
+        self.register(
+            Transition(
+                name="mark_damaged",
+                description="Reduce usable available stock due to damage",
+                preconditions=lambda s: float(s.get("available", 0)) >= float(s.get("_qty", 0)),
+                effects=lambda s, args: {
+                    **s,
+                    "available": float(s.get("available", 0)) - float(args["quantity"]),
+                    "damaged": float(s.get("damaged", 0)) + float(args["quantity"]),
+                },
+            )
+        )
+        self.register(
+            Transition(
+                name="post_payment_partial",
+                description="Partial payment reduces outstanding without full settlement",
+                preconditions=lambda s: s.get("payment_status") in ("unpaid", "partial"),
+                effects=lambda s, args: {
+                    **s,
+                    "payment_status": "partial",
+                    "paid_total": float(s.get("paid_total", 0)) + float(args.get("amount") or 0),
+                },
             )
         )
 
