@@ -1,4 +1,4 @@
-"""Minimal REST API over CompleteNonLLMAI / GeneralNonLLMAI — stdlib only."""
+"""REST API for Complete AI / Finderbay — stdlib only."""
 
 from __future__ import annotations
 
@@ -8,24 +8,31 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlparse
 
+from ..complete_ai import CompleteAI
 from ..general.agent import GeneralNonLLMAI
 from ..system import CompleteNonLLMAI
 from ..version import __version__
 
 
 class APIState:
-    def __init__(self, mode: str = "general") -> None:
+    def __init__(self, mode: str = "complete") -> None:
         self.lock = threading.RLock()
         self.mode = mode
-        if mode == "finderbay":
-            self.ai: Any = CompleteNonLLMAI(seed_demo=True)
-            self.general = None
+        self.complete: Any = None
+        self.general: Any = None
+        self.ai: Any = None
+        if mode in ("complete", "complete-ai"):
+            self.complete = CompleteAI(seed_demo=True)
+            self.general = self.complete.general
+            self.ai = self.complete.finderbay
+        elif mode == "finderbay":
+            self.ai = CompleteNonLLMAI(seed_demo=True)
         else:
             self.general = GeneralNonLLMAI(seed_demo=True)
             self.ai = self.general.task_ai
 
 
-def serve_api(host: str = "127.0.0.1", port: int = 8787, *, mode: str = "general") -> ThreadingHTTPServer:
+def serve_api(host: str = "127.0.0.1", port: int = 8787, *, mode: str = "complete") -> ThreadingHTTPServer:
     state = APIState(mode=mode)
 
     class Handler(BaseHTTPRequestHandler):
@@ -68,16 +75,35 @@ def serve_api(host: str = "127.0.0.1", port: int = 8787, *, mode: str = "general
                         200,
                         {
                             "ok": True,
+                            "product": "Complete AI",
                             "version": __version__,
                             "mode": state.mode,
-                            "llm_at_runtime": False,
+                            "llm_at_runtime": bool(
+                                state.complete and state.complete.llm.available
+                            ),
                             "human_level_agi": False,
                         },
                     )
                 if path == "/status":
+                    if state.complete is not None:
+                        return self._json(200, state.complete.status())
                     if state.general is not None:
                         return self._json(200, state.general.status())
                     return self._json(200, state.ai.status())
+                if path == "/diagnostics":
+                    if state.complete is None:
+                        return self._json(503, {"error": "complete_ai_required"})
+                    return self._json(200, state.complete.diagnostics())
+                if path == "/session":
+                    if state.complete is None:
+                        return self._json(503, {"error": "complete_ai_required"})
+                    return self._json(
+                        200,
+                        {
+                            "turns": state.complete.session_transcript(),
+                            "memory": state.complete.memory_snapshot(),
+                        },
+                    )
                 if path == "/alerts":
                     project = (qs.get("project_id") or [None])[0]
                     return self._json(200, state.ai.alerts.summary(project_id=project))
@@ -121,15 +147,32 @@ def serve_api(host: str = "127.0.0.1", port: int = 8787, *, mode: str = "general
             path = parsed.path.rstrip("/") or "/"
             data = self._read_json()
             with state.lock:
-                if path in ("/ask", "/handle"):
+                if path in ("/ask", "/handle", "/complete"):
                     text = data.get("text") or data.get("message") or ""
                     if not text:
                         return self._json(400, {"error": "text_required"})
-                    if state.general is not None and data.get("route") != "finderbay":
+                    mode = data.get("mode") or "auto"
+                    if state.complete is not None and data.get("route") != "finderbay":
+                        out = state.complete.handle(text, mode=mode)
+                    elif state.general is not None and data.get("route") != "finderbay":
                         out = state.general.handle(text)
                     else:
                         out = state.ai.handle(text)
                     return self._json(200, out)
+                if path == "/session/reset":
+                    if state.complete is None:
+                        return self._json(503, {"error": "complete_ai_required"})
+                    state.complete.reset_session()
+                    return self._json(200, {"ok": True, "reset": True})
+                if path == "/memory":
+                    if state.complete is None:
+                        return self._json(503, {"error": "complete_ai_required"})
+                    key = data.get("key")
+                    value = data.get("value")
+                    if not key:
+                        return self._json(400, {"error": "key_required"})
+                    state.complete.remember(str(key), str(value or ""))
+                    return self._json(200, {"ok": True, "memory": state.complete.memory_snapshot()})
                 if path == "/login":
                     user = data.get("username")
                     pwd = data.get("password")
@@ -148,12 +191,19 @@ def serve_api(host: str = "127.0.0.1", port: int = 8787, *, mode: str = "general
                         return self._json(200, vision.status())
                     if not image:
                         return self._json(400, {"error": "image_path_required"})
-                    # Also accept natural-language ask through the full AI cycle
                     if data.get("ask"):
-                        out = state.ai.handle(str(data["ask"]))
+                        target = state.complete or state.ai
+                        out = target.handle(str(data["ask"]))
                         return self._json(200, out)
                     out = vision.analyze(image, task=task)
                     return self._json(200, out)
+                if path == "/tool":
+                    if state.complete is None:
+                        return self._json(503, {"error": "complete_ai_required"})
+                    name = data.get("name") or data.get("tool")
+                    if not name:
+                        return self._json(400, {"error": "tool_name_required"})
+                    return self._json(200, state.complete.tools.run(str(name), data.get("args") or {}))
             return self._json(404, {"error": "not_found", "path": path})
 
     httpd = ThreadingHTTPServer((host, port), Handler)
@@ -163,13 +213,20 @@ def serve_api(host: str = "127.0.0.1", port: int = 8787, *, mode: str = "general
 def main(argv: Optional[list[str]] = None) -> int:
     import argparse
 
-    p = argparse.ArgumentParser(description="Non-LLM AI REST API")
+    p = argparse.ArgumentParser(description="Complete AI REST API")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8787)
-    p.add_argument("--mode", choices=["general", "finderbay"], default="general")
+    p.add_argument(
+        "--mode",
+        choices=["complete", "complete-ai", "general", "finderbay"],
+        default="complete",
+    )
     args = p.parse_args(argv)
     httpd = serve_api(args.host, args.port, mode=args.mode)
-    print(f"API listening on http://{args.host}:{args.port}/  (v{__version__}, mode={args.mode})")
+    print(
+        f"Complete AI API http://{args.host}:{args.port}/  "
+        f"(v{__version__}, mode={args.mode}, human_level_agi=false)"
+    )
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

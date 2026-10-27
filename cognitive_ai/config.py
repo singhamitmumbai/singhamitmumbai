@@ -22,6 +22,10 @@ class SystemConfig:
     enable_speech_oracle: bool = True  # accept {"transcript": ...}
     enable_ocr_oracle: bool = True
     log_episodes: bool = True
+    # Complete AI v1.5+
+    enable_llm_chat: bool | None = None  # None = auto when API key present
+    max_tool_rounds: int = 3
+    session_limit: int = 100
     extra: dict[str, Any] = field(default_factory=dict)
 
     def storage(self) -> Path | None:

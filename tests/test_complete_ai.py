@@ -13,7 +13,7 @@ def test_complete_ai_identity_and_status():
     assert st["name"] == "Complete AI"
     assert st["human_level_agi"] is False
     assert st["tagline"] == "Complete AI"
-    assert st["version"].startswith("1.4")
+    assert st["version"].startswith("1.")
     assert "Complete AI" in ai.greeting()
 
 

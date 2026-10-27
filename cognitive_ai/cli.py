@@ -75,8 +75,9 @@ def build_parser() -> argparse.ArgumentParser:
             "code",
             "vision",
             "complete-ai",
+            "diagnostics",
         ],
-        help="Optional subcommand: complete-ai, os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
+        help="Optional subcommand: complete-ai, diagnostics, os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
     )
     p.add_argument(
         "--mode",
@@ -539,9 +540,16 @@ def main(argv: Optional[list[str]] = None) -> int:
 
         host = args.host if args.host != "0.0.0.0" else "127.0.0.1"
         port = 8787 if args.port == 8765 else args.port
-        mode = "finderbay" if (args.domain or "") in ("finderbay", "complete") else "general"
+        # Prefer Complete AI API; allow overrides via --mode / --domain
+        mode = (args.mode or "complete").lower()
+        if mode == "auto":
+            mode = "complete"
+        if (args.domain or "") == "finderbay":
+            mode = "finderbay"
+        elif (args.domain or "") == "general":
+            mode = "general"
         httpd = serve_api(host, port, mode=mode)
-        print(f"API http://{host}:{port}/  (v{__version__}, mode={mode}, human_level_agi=false)")
+        print(f"Complete AI API http://{host}:{port}/  (v{__version__}, mode={mode}, human_level_agi=false)")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
@@ -615,10 +623,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(json.dumps(result.get("structured") or {}, indent=2, default=str)[:3000])
         return 0
 
-    if args.command == "complete-ai":
+    if args.command in ("complete-ai", "diagnostics"):
         from .complete_ai import CompleteAI
 
         ai = CompleteAI(seed_demo=True)
+        if args.command == "diagnostics":
+            print(json.dumps(ai.diagnostics(), indent=2, default=str))
+            return 0 if ai.diagnostics()["ok"] else 1
         if args.ask:
             out = ai.handle(args.ask, mode=args.mode or "auto")
             print(out["text"])
@@ -626,6 +637,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         if args.demo or not sys.stdin.isatty():
             print(ai.greeting())
             print(json.dumps(ai.status(), indent=2, default=str)[:2500])
+            print(json.dumps({"diagnostics": ai.diagnostics()}, indent=2, default=str)[:2000])
             for q in (
                 "Who are you?",
                 "Show unpaid invoices for Project A",
@@ -640,7 +652,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             print("Complete AI demo done.")
             return 0
         print(ai.greeting())
-        print("Type quit to exit. Commands: /status /mode <auto|symbolic|llm|...>")
+        print("Type quit to exit. Commands: /status /diag /reset /mode <auto|symbolic|llm|...>")
         mode = args.mode or "auto"
         while True:
             try:
@@ -655,6 +667,13 @@ def main(argv: Optional[list[str]] = None) -> int:
                 break
             if line.lower() == "/status":
                 print(json.dumps(ai.status(), indent=2, default=str))
+                continue
+            if line.lower() in ("/diag", "/diagnostics"):
+                print(json.dumps(ai.diagnostics(), indent=2, default=str))
+                continue
+            if line.lower() == "/reset":
+                ai.reset_session()
+                print("session reset")
                 continue
             if line.lower().startswith("/mode "):
                 mode = line.split(None, 1)[1].strip()

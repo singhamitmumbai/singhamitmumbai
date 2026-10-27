@@ -1,4 +1,4 @@
-# Install — Complete AI v1.4.0
+# Install — Complete AI v1.5.0
 
 ## Requirements
 
@@ -9,12 +9,13 @@
 ## Quick install
 
 ```bash
-unzip Complete_Non_LLM_AI_v1.4.0.zip
+unzip Complete_Non_LLM_AI_v1.5.0.zip
 cd Complete_Non_LLM_AI
 pip install -e ".[dev]"
-export OPENAI_API_KEY=sk-...   # enables Complete AI general chat
+export OPENAI_API_KEY=sk-...   # enables Complete AI general chat + tools
 pytest -q
 python -m cognitive_ai complete-ai --demo
+python -m cognitive_ai diagnostics
 ```
 
 ## Optional extras
@@ -50,7 +51,7 @@ python scripts/demo_vision.py
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.4.0.zip
+# → dist/Complete_Non_LLM_AI_v1.5.0.zip
 ```
 
 ## ChatGPT-class general chat (Complete AI default open chat)

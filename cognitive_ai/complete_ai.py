@@ -1,32 +1,56 @@
-"""Complete AI — unified product.
+"""Complete AI — unified product (v1.5).
 
-Product name: **Complete AI** (no subtitle required).
+Product name: **Complete AI**
 
-Capabilities:
-  • ChatGPT-class general chat when OPENAI_API_KEY is set (primary open chat)
-  • Finderbay business tasks, YOLO vision, coding, SelfBrain agent (always)
-  • Symbolic open-domain fallback when no LLM key
+Upgrades in v1.5:
+  • Multi-turn session memory
+  • Tool-using chat (LLM can call finderbay/vision/coding/alerts/memory)
+  • Built-in diagnostics
+  • Stronger ChatGPT-class routing when an API key is present
 
-Modes:
-  auto      — tools for tasks/vision/coding; else LLM chat if available; else symbolic
-  llm       — force ChatGPT-class chat
-  symbolic  — never call LLM
-  finderbay / vision / coding / agent — force subsystem
-
-human_level_agi is always false (Complete AI ≠ claimed AGI).
+human_level_agi is always false.
 """
 
 from __future__ import annotations
 
-import os
+import json
+import time
+from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
 
 from .agent import FinderbayAgentSystem
-from .chat.llm_bridge import LLMChatBridge, llm_bridge_from_env
+from .chat.llm_bridge import DEFAULT_SYSTEM, LLMChatBridge, llm_bridge_from_env
+from .chat.tools import ToolRouter, extract_tool_calls, strip_tool_lines
 from .config import SystemConfig
 from .general.agent import GeneralNonLLMAI
 from .version import __version__
 from .vision import VisionSystem
+
+
+TOOL_AWARE_SYSTEM = (
+    DEFAULT_SYSTEM
+    + "\n\nYou may call local Complete AI tools by emitting one or more lines exactly like:\n"
+    'TOOL finderbay {"text": "Show unpaid invoices for Project A"}\n'
+    'TOOL vision {"task": "count_people", "image": "./crowd_people.jpg"}\n'
+    'TOOL coding {"text": "generate function add(a, b)"}\n'
+    'TOOL alerts {"project_id": "project_a"}\n'
+    'TOOL memory {"action": "remember", "key": "user_name", "value": "Alex"}\n'
+    'TOOL status {}\n'
+    "After tool results are provided, give the user a clear final answer. "
+    "Do not invent Finderbay numbers — use TOOL finderbay / alerts."
+)
+
+
+@dataclass
+class SessionTurn:
+    role: str
+    text: str
+    route: str = ""
+    meta: dict[str, Any] = field(default_factory=dict)
+    ts: float = field(default_factory=time.time)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 class CompleteAI:
@@ -41,6 +65,8 @@ class CompleteAI:
         config: Optional[SystemConfig] = None,
         enable_llm: Optional[bool] = None,
         llm: Optional[LLMChatBridge] = None,
+        max_tool_rounds: int = 3,
+        session_limit: int = 100,
     ) -> None:
         self.version = __version__
         self.general = GeneralNonLLMAI(config=config, seed_demo=seed_demo)
@@ -48,6 +74,10 @@ class CompleteAI:
         self.vision = self.finderbay.vision if hasattr(self.finderbay, "vision") else VisionSystem()
         self.agent = FinderbayAgentSystem(seed_demo=seed_demo)
         self.coding = self.agent.coding
+        self.max_tool_rounds = max_tool_rounds
+        self.session_limit = session_limit
+        self.session: list[SessionTurn] = []
+        self.user_memory: dict[str, str] = {}
         if llm is not None:
             self.llm = llm
             if enable_llm is not None:
@@ -56,6 +86,13 @@ class CompleteAI:
             self.llm = llm_bridge_from_env()
             if enable_llm is not None:
                 self.llm.enabled = enable_llm
+        # Prefer tool-aware system prompt for ChatGPT-class chat
+        if not getattr(self.llm, "_complete_ai_tools", False):
+            self.llm.system_prompt = TOOL_AWARE_SYSTEM
+            self.llm._complete_ai_tools = True  # type: ignore[attr-defined]
+        self.tools = ToolRouter(self)
+
+    # --- primary API ----------------------------------------------------------
 
     def ask(self, text: str, *, mode: str = "auto") -> str:
         return self.handle(text, mode=mode)["text"]
@@ -70,21 +107,28 @@ class CompleteAI:
     ) -> dict[str, Any]:
         text = payload if isinstance(payload, str) else str(payload or "")
         mode = (mode or "auto").lower().strip()
+        self._push("user", text, route=mode)
 
         if mode == "llm":
-            return self._finish_llm(self.llm.chat(text), route="llm")
+            out = self._llm_with_tools(text, default_route="llm")
+            self._push("assistant", out.get("text") or "", route=out.get("route") or "llm", meta=out)
+            return out
 
         if mode in ("auto", "coding") and (mode == "coding" or self._looks_coding(text)):
-            out = self.coding.handle(text)
-            return self._tag(out, route="coding", llm=False)
+            raw = self.coding.handle(text)
+            out = self._tag(raw, route="coding", llm=False)
+            self._push("assistant", out.get("text") or "", route="coding", meta=out)
+            return out
 
         if mode in ("auto", "vision") and (mode == "vision" or self._looks_vision(text)):
-            out = self.finderbay.handle(text, modality=modality, context=context)
-            return self._tag(out, route="vision", llm=False)
+            raw = self.finderbay.handle(text, modality=modality, context=context)
+            out = self._tag(raw, route="vision", llm=False)
+            self._push("assistant", out.get("text") or "", route="vision", meta=out)
+            return out
 
         if mode == "agent":
             report = self.agent.auto([text])
-            return self._tag(
+            out = self._tag(
                 {
                     "text": (
                         f"Agent run finished: succeeded={report.get('succeeded')} "
@@ -96,35 +140,158 @@ class CompleteAI:
                 route="agent",
                 llm=False,
             )
+            self._push("assistant", out["text"], route="agent", meta=out)
+            return out
 
         if mode == "finderbay" or (mode == "auto" and self._looks_finderbay(text)):
-            out = self.finderbay.handle(payload, modality=modality, context=context)
-            # If Finderbay unsupported and LLM available, fall through to general chat
-            if mode == "finderbay" or (out.get("frame") or {}).get("operation") != "unsupported":
-                if (out.get("frame") or {}).get("operation") != "unsupported":
-                    return self._tag(out, route="finderbay", llm=False)
+            raw = self.finderbay.handle(payload, modality=modality, context=context)
+            if (raw.get("frame") or {}).get("operation") != "unsupported":
+                out = self._tag(raw, route="finderbay", llm=False)
+                self._push("assistant", out.get("text") or "", route="finderbay", meta=out)
+                return out
 
         if mode == "symbolic":
-            out = self.general.handle(payload, modality=modality, context=context, force="auto")
-            return self._tag(out, route=out.get("route") or "symbolic", llm=False)
+            raw = self.general.handle(payload, modality=modality, context=context, force="auto")
+            out = self._tag(raw, route=raw.get("route") or "symbolic", llm=False)
+            self._push("assistant", out.get("text") or "", route=out["route"], meta=out)
+            return out
 
-        # --- General chat: ChatGPT-class first when available -----------------
+        # General chat: ChatGPT-class + tools when available
         if mode == "auto" and self.llm.available and not self._looks_finderbay(text):
-            llm_out = self.llm.chat(text)
-            if llm_out.get("ok"):
-                return self._finish_llm(llm_out, route="llm_chat")
+            out = self._llm_with_tools(text, default_route="llm_chat")
+            self._push("assistant", out.get("text") or "", route=out.get("route") or "llm_chat", meta=out)
+            return out
 
-        # Symbolic / Finderbay general path
-        out = self.general.handle(payload, modality=modality, context=context, force="auto")
-        route = out.get("route") or "general"
-        unsupported = self._is_unsupported(out)
+        raw = self.general.handle(payload, modality=modality, context=context, force="auto")
+        route = raw.get("route") or "general"
+        if self._is_unsupported(raw) and self.llm.available:
+            out = self._llm_with_tools(text, default_route="llm_fallback")
+            out.setdefault("structured", {})["prior_route"] = route
+            self._push("assistant", out.get("text") or "", route=out.get("route") or "llm_fallback", meta=out)
+            return out
 
-        if unsupported and self.llm.available:
-            llm_out = self.llm.chat(text)
-            if llm_out.get("ok"):
-                return self._finish_llm(llm_out, route="llm_fallback", prior=out)
+        out = self._tag(raw, route=route, llm=False)
+        self._push("assistant", out.get("text") or "", route=route, meta=out)
+        return out
 
-        return self._tag(out, route=route, llm=False)
+    def _llm_with_tools(self, text: str, *, default_route: str = "llm_chat") -> dict[str, Any]:
+        """ChatGPT-class chat with optional local TOOL round-trips."""
+        memory_hint = ""
+        if self.user_memory:
+            memory_hint = "\nKnown user memory: " + json.dumps(self.user_memory)
+        prompt = text + memory_hint
+        tool_trace: list[dict[str, Any]] = []
+        llm_out = self.llm.chat(prompt, system=TOOL_AWARE_SYSTEM)
+        if not llm_out.get("ok"):
+            return self._finish_llm(llm_out, route=default_route, tools=tool_trace)
+
+        reply = llm_out.get("text") or ""
+        for _ in range(self.max_tool_rounds):
+            calls = extract_tool_calls(reply)
+            if not calls:
+                break
+            observations: list[str] = []
+            for call in calls:
+                result = self.tools.run(call["name"], call.get("args") or {})
+                tool_trace.append({"call": call, "result": _shrink(result)})
+                observations.append(
+                    f"TOOL_RESULT {call['name']} "
+                    + json.dumps(_shrink(result), default=str)[:4000]
+                )
+            follow = (
+                "Tool results:\n"
+                + "\n".join(observations)
+                + "\n\nUsing only these results plus the user question, give the final answer. "
+                "Do not emit more TOOL lines unless absolutely required."
+            )
+            llm_out = self.llm.chat(follow, system=TOOL_AWARE_SYSTEM)
+            if not llm_out.get("ok"):
+                break
+            reply = llm_out.get("text") or ""
+
+        final_text = strip_tool_lines(reply) or reply
+        finished = self._finish_llm(
+            {**llm_out, "text": final_text},
+            route="llm_tools" if tool_trace else default_route,
+            tools=tool_trace,
+        )
+        return finished
+
+    # --- session / memory -----------------------------------------------------
+
+    def remember(self, key: str, value: str) -> None:
+        self.user_memory[str(key)] = str(value)
+
+    def recall(self, key: str) -> Optional[str]:
+        return self.user_memory.get(str(key))
+
+    def memory_snapshot(self) -> dict[str, str]:
+        return dict(self.user_memory)
+
+    def reset_session(self) -> None:
+        self.session.clear()
+        if hasattr(self.llm, "history"):
+            self.llm.history.clear()
+
+    def session_transcript(self) -> list[dict[str, Any]]:
+        return [t.to_dict() for t in self.session]
+
+    def _push(self, role: str, text: str, *, route: str = "", meta: Optional[dict] = None) -> None:
+        self.session.append(SessionTurn(role=role, text=text, route=route, meta=meta or {}))
+        if len(self.session) > self.session_limit:
+            self.session = self.session[-self.session_limit :]
+
+    # --- diagnostics ----------------------------------------------------------
+
+    def diagnostics(self) -> dict[str, Any]:
+        checks: list[dict[str, Any]] = []
+
+        def check(name: str, fn) -> None:
+            t0 = time.perf_counter()
+            try:
+                detail = fn()
+                checks.append(
+                    {
+                        "name": name,
+                        "ok": True,
+                        "detail": detail,
+                        "ms": round((time.perf_counter() - t0) * 1000, 2),
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001
+                checks.append(
+                    {
+                        "name": name,
+                        "ok": False,
+                        "error": str(exc),
+                        "ms": round((time.perf_counter() - t0) * 1000, 2),
+                    }
+                )
+
+        check("version", lambda: self.version)
+        check("finderbay_status", lambda: self.finderbay.handle("status")["frame"]["operation"])
+        check("vision_status", lambda: self.vision.status().get("engine"))
+        check("coding_status", lambda: self.coding.status().get("name") or "CodingSystem")
+        check("llm_bridge", lambda: self.llm.status())
+        check(
+            "open_domain",
+            lambda: self.general.chat.respond("Can penguins fly?").get("supported"),
+        )
+        check(
+            "tool_finderbay",
+            lambda: self.tools.run("finderbay", {"text": "status"}).get("ok"),
+        )
+        passed = sum(1 for c in checks if c["ok"])
+        return {
+            "product": self.PRODUCT_NAME,
+            "version": self.version,
+            "ok": passed == len(checks),
+            "passed": passed,
+            "total": len(checks),
+            "checks": checks,
+            "llm_at_runtime": bool(self.llm.available),
+            "human_level_agi": False,
+        }
 
     def status(self) -> dict[str, Any]:
         return {
@@ -134,31 +301,38 @@ class CompleteAI:
             "chatgpt_class_general_chat": self.llm.available,
             "llm_at_runtime": bool(self.llm.available),
             "human_level_agi": False,
+            "session_turns": len(self.session),
+            "user_memory_keys": list(self.user_memory.keys()),
+            "tools": list(self.tools.handlers.keys()),
             "modes": {
-                "general_chat": "llm" if self.llm.available else "symbolic",
+                "general_chat": "llm+tools" if self.llm.available else "symbolic",
                 "finderbay": True,
                 "vision": True,
                 "coding": True,
                 "agent": True,
                 "llm": self.llm.status(),
             },
-            "setup_general_chat": (
-                "export OPENAI_API_KEY=sk-...  # enables ChatGPT-class chat automatically"
-            ),
+            "setup_general_chat": "export OPENAI_API_KEY=sk-...",
             "limits": [
                 "human_level_agi=false",
                 "General chat is ChatGPT-class via your API when a key is set",
-                "Specialist engines (Finderbay/vision/coding) stay local/symbolic",
+                "Tools (finderbay/vision/coding) execute locally",
             ],
         }
 
     def greeting(self) -> str:
-        chat = "ChatGPT-class (API key detected)" if self.llm.available else "symbolic (set OPENAI_API_KEY for ChatGPT-class chat)"
+        chat = (
+            "ChatGPT-class + local tools"
+            if self.llm.available
+            else "symbolic (set OPENAI_API_KEY for ChatGPT-class chat)"
+        )
         return (
             f"{self.PRODUCT_NAME} v{self.version}\n"
             f"General chat: {chat}\n"
-            "Also: Finderbay tasks · computer vision · coding · autonomous agent\n\n"
-            "Try anything — casual chat, writing, explanations — or:\n"
+            "Tools: finderbay · vision · coding · alerts · memory · status\n"
+            "Also: autonomous agent\n\n"
+            "Try:\n"
+            "  • Write a short poem about rain\n"
             "  • Show unpaid invoices for Project A\n"
             "  • Count people in image ./crowd_people.jpg\n"
             "  • generate function add(a, b)\n"
@@ -188,6 +362,7 @@ class CompleteAI:
         *,
         route: str,
         prior: Optional[dict] = None,
+        tools: Optional[list] = None,
     ) -> dict[str, Any]:
         return {
             "text": llm_out.get("text"),
@@ -197,6 +372,7 @@ class CompleteAI:
                 "ok": llm_out.get("ok"),
                 "error": llm_out.get("error"),
                 "prior_route": (prior or {}).get("route"),
+                "tools": tools or [],
             },
             "faithful": bool(llm_out.get("ok")),
             "frame": {
@@ -210,6 +386,7 @@ class CompleteAI:
             "llm_at_runtime": bool(llm_out.get("ok") and self.llm.available),
             "human_level_agi": False,
             "method": llm_out.get("method"),
+            "tools": tools or [],
         }
 
     @staticmethod
@@ -220,9 +397,7 @@ class CompleteAI:
         if frame.get("supported") is False:
             return True
         text = (out.get("text") or "").lower()
-        if "could not map that" in text:
-            return True
-        return False
+        return "could not map that" in text
 
     @staticmethod
     def _looks_coding(text: str) -> bool:
@@ -284,6 +459,20 @@ class CompleteAI:
             "cement",
         )
         return any(h in lower for h in hooks)
+
+
+def _shrink(obj: Any, limit: int = 2500) -> Any:
+    try:
+        blob = json.dumps(obj, default=str)
+    except TypeError:
+        return str(obj)[:limit]
+    if len(blob) <= limit:
+        return obj
+    if isinstance(obj, dict):
+        keep = {k: obj[k] for k in list(obj)[:12]}
+        keep["_truncated"] = True
+        return keep
+    return blob[:limit]
 
 
 def create_complete_ai(**kwargs: Any) -> CompleteAI:
