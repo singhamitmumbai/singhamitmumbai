@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.24.0) — **stronger stable CodingSystem** + detailed computer control + think→plan + Chat UI. Still `human_level_agi=false`:
+**Complete AI** (v1.25.0) — **24/7 self-learning** + stronger CodingSystem + computer control + think→plan + Chat UI. Still `human_level_agi=false`:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
@@ -29,6 +29,12 @@ python -m cognitive_ai completeness
 export COMPLETE_AI_COMPUTER_CONTROL=1
 python -m cognitive_ai assistant --ask "computer open_url https://example.com"
 
+# 24/7 continuous self-learning (verified experience only; off by default)
+export COMPLETE_AI_CONTINUOUS_LEARNING=1
+python -m cognitive_ai learn --daemon --interval 60
+python -m cognitive_ai learn --ticks 3
+python -m cognitive_ai assistant --ask "learning status"
+
 # API + Chat UI
 python -m cognitive_ai api --mode assistant --port 8787
 python -m cognitive_ai chat --domain complete --port 8765
@@ -36,7 +42,24 @@ python -m cognitive_ai chat --domain complete --port 8765
 ```
 
 Product: **Complete AI** / **Finderbay Assistant** / **JARVIS tools**. `human_level_agi=false`.  
-Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.
+Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.  
+Continuous learning is **gated**; never promotes unverified self-labels.
+
+### What v1.25 adds — 24/7 self-learning
+
+| Piece | Role |
+|------|------|
+| `learning_sys/continuous.py` | ContinuousLearner daemon — drain → reinforce → consolidate → mine → dream → calibrate |
+| `learning_sys/journal.py` | Durable JSONL journal + snapshot under `data/complete_ai/continuous_learning/` |
+| Wiring | CompleteAI / Assistant / CLI observe every reply; `COMPLETE_AI_CONTINUOUS_LEARNING=1` |
+| Safety | Rejects `source in {model,self,unverified}` without `verified=True`; candidates ≠ facts |
+
+```bash
+export COMPLETE_AI_CONTINUOUS_LEARNING=1
+python -m cognitive_ai learn --ticks 3
+pytest tests/test_continuous_learning_v125.py -q
+# See SELF_LEARNING.md
+```
 
 ### What v1.24 adds — Stronger, more stable coding system
 
@@ -307,7 +330,7 @@ Tool contracts, job store, provenance memory, material shortage skill, voice PTT
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.24.0.zip
+# → dist/Complete_Non_LLM_AI_v1.25.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.

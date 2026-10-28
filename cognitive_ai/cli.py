@@ -6,6 +6,7 @@ import argparse
 import json
 import shlex
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -83,8 +84,10 @@ def build_parser() -> argparse.ArgumentParser:
             "jarvis",
             "agi-gap",
             "proto-agi",
+            "learn",
+            "learning",
         ],
-        help="Optional subcommand: jarvis, assistant, complete-ai, agi-gap, diagnostics, completeness, full-test, os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
+        help="Optional subcommand: jarvis, assistant, complete-ai, agi-gap, learn, diagnostics, completeness, full-test, os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
     )
     p.add_argument(
         "--mode",
@@ -167,6 +170,23 @@ def build_parser() -> argparse.ArgumentParser:
         "--eval",
         action="store_true",
         help="Run JARVIS evaluation suite (with jarvis subcommand)",
+    )
+    p.add_argument(
+        "--daemon",
+        action="store_true",
+        help="Run 24/7 continuous learning daemon (learn subcommand)",
+    )
+    p.add_argument(
+        "--ticks",
+        type=int,
+        default=None,
+        help="Number of learning ticks (learn subcommand; default forever/daemon)",
+    )
+    p.add_argument(
+        "--interval",
+        type=float,
+        default=60.0,
+        help="Seconds between continuous learning ticks (default 60)",
     )
     return p
 
@@ -742,6 +762,45 @@ def main(argv: Optional[list[str]] = None) -> int:
             else:
                 print(assist.ask(line))
         return 0
+
+    if args.command in ("learn", "learning"):
+        from .complete_ai import CompleteAI
+
+        ai = CompleteAI(seed_demo=True, persist_path="data/complete_ai/state.json", enable_llm=False)
+        # Feed a few observations so ticks have work
+        for q in (
+            "Explain gravity",
+            "Show unpaid invoices for Project A",
+            "generate function add(a, b)",
+            "Can penguins fly?",
+        ):
+            ai.handle(q)
+        learner = ai.continuous
+        learner.interval_sec = float(args.interval or 60.0)
+        learner.enable()
+        if args.ask and args.ask.lower() in ("status", "stop"):
+            if args.ask.lower() == "stop":
+                print(json.dumps(ai.stop_learning(), indent=2, default=str))
+                return 0
+            print(json.dumps(ai.learning_status(), indent=2, default=str))
+            return 0
+        if args.daemon:
+            print(json.dumps(ai.start_learning(interval_sec=learner.interval_sec), indent=2, default=str))
+            print("Continuous learning daemon running (Ctrl+C to stop). human_level_agi=false")
+            try:
+                while True:
+                    time.sleep(3600)
+            except KeyboardInterrupt:
+                print(json.dumps(ai.stop_learning(), indent=2, default=str))
+            return 0
+        ticks = args.ticks if args.ticks is not None else 3
+        # Fast ticks for CLI one-shot
+        old = learner.interval_sec
+        learner.interval_sec = 0.01
+        report = learner.run_forever(ticks=ticks)
+        learner.interval_sec = old
+        print(json.dumps({"status": learner.status(), "last_ticks": learner.ticks[-ticks:]}, indent=2, default=str))
+        return 0 if report.get("ok") else 1
 
     if args.command in ("complete-ai", "diagnostics", "completeness", "full-test", "full-suite"):
         from .complete_ai import CompleteAI

@@ -54,6 +54,7 @@ Session memory (Complete AI) lives under `data/complete_ai/`. Back it up before 
 | OCR + tables | Tesseract system pkgs + `.[perception]` | Layout OCR on invoices |
 | Real YOLO vision | `pip install -e ".[vision]"` | `vision status` shows ultralytics |
 | Computer control (detailed) | `export COMPLETE_AI_COMPUTER_CONTROL=1` (+ optional `COMPLETE_AI_COMPUTER_SHELL=1`) | `computer help` · see `COMPUTER_CONTROL.md` |
+| 24/7 self-learning | `export COMPLETE_AI_CONTINUOUS_LEARNING=1` | `learn --ticks 3` · see `SELF_LEARNING.md` |
 | Everything | `pip install -e ".[all]"` | diagnostics + full-test |
 
 Speech models (no LLM):
@@ -85,6 +86,7 @@ The product can improve **without** claiming AGI:
 | Correction | `correct: <wrong> → <right>` (review before release) |
 | Plan before act | `plan Show unpaid invoices for Project A` |
 | Proto skills / transfer | `python -m cognitive_ai agi-gap --ask "…"` |
+| Learn 24/7 automatically | `export COMPLETE_AI_CONTINUOUS_LEARNING=1` then `python -m cognitive_ai learn --daemon` (or Assistant: `start continuous learning`) |
 | Finderbay auth roles | `login acct1 password acct-pass` then payments / POs |
 
 Internal loop (bounded): **failure → review → candidate → evaluate → release**  

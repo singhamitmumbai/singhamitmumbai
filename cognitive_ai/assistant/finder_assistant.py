@@ -117,6 +117,57 @@ class FinderbayAssistant:
             return self.jarvis_handle(text, speak=speak)
         if lower in ("self check", "self-check", "assistant selfcheck"):
             return self._self_check()
+        if lower in (
+            "learning status",
+            "continuous learning status",
+            "self learning status",
+        ) or lower.startswith("learning status"):
+            st = self.complete.learning_status()
+            return self._tag(
+                {
+                    "text": (
+                        f"Continuous learning: enabled={st.get('enabled')} running={st.get('running')} "
+                        f"ticks={st.get('total_ticks')} inbox={st.get('inbox')} "
+                        f"(human_level_agi=false)"
+                    ),
+                    "structured": st,
+                },
+                route="continuous_learning",
+            )
+        if lower in (
+            "start learning",
+            "start continuous learning",
+            "enable continuous learning",
+            "learn 24/7",
+        ):
+            out = self.complete.start_learning()
+            detail = out.get("error") or f"interval={out.get('interval_sec')}s"
+            state = "started" if out.get("ok") else "failed"
+            return self._tag(
+                {
+                    "text": f"24/7 learning {state}: {detail}",
+                    "structured": out,
+                },
+                route="continuous_learning",
+            )
+        if lower in ("stop learning", "stop continuous learning"):
+            out = self.complete.stop_learning()
+            return self._tag(
+                {"text": "Continuous learning stopped.", "structured": out},
+                route="continuous_learning",
+            )
+        if lower in ("learning tick", "run learning tick"):
+            out = self.complete.learning_tick()
+            return self._tag(
+                {
+                    "text": (
+                        f"Learning tick {out.get('tick_id')}: jobs={out.get('jobs_run')} "
+                        f"consumed={out.get('observations_consumed')}"
+                    ),
+                    "structured": out,
+                },
+                route="continuous_learning",
+            )
 
         # Plan preview without execute
         if lower.startswith("plan ") or lower.startswith("how would you "):

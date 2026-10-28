@@ -220,6 +220,10 @@ def run_full_suite(*, allow_live_search: bool = False) -> dict[str, Any]:
         "computer_control",
         lambda: _computer_control_smoke(),
     )
+    add(
+        "continuous_learning",
+        lambda: _continuous_learning_smoke(),
+    )
 
     passed = sum(1 for r in results if r.get("ok"))
     failed = [r["name"] for r in results if not r.get("ok")]
@@ -399,3 +403,27 @@ def _computer_control_smoke() -> dict[str, Any]:
         "actions": len(ALLOWED),
         "version": cc.version,
     }
+
+
+def _continuous_learning_smoke() -> dict[str, Any]:
+    import tempfile
+    from pathlib import Path
+
+    from cognitive_ai.learning_sys.continuous import ContinuousLearner
+
+    with tempfile.TemporaryDirectory() as td:
+        cl = ContinuousLearner(store_dir=Path(td), enabled=True, interval_sec=5)
+        rejected = cl.observe(text="x", route="test", source="self", verified=False)
+        cl.observe(text="Explain gravity", route="open_domain", ok=True, source="session")
+        report = cl.tick()
+        st = cl.status()
+        return {
+            "ok": (
+                rejected.get("ok") is False
+                and report.get("observations_consumed", 0) >= 1
+                and "drain_inbox" in (report.get("jobs_run") or [])
+                and st.get("human_level_agi") is False
+            ),
+            "jobs": report.get("jobs_run"),
+            "ticks": st.get("total_ticks"),
+        }

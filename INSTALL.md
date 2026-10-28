@@ -1,4 +1,4 @@
-# Install — Complete AI v1.24.0 (strong coding + computer control + Chat UI)
+# Install — Complete AI v1.25.0 (24/7 self-learning + coding + computer control + Chat UI)
 
 Want to upgrade an existing install, optional engines, or in-app knowledge?  
 See **[UPGRADE.md](UPGRADE.md)**.
@@ -12,17 +12,19 @@ See **[UPGRADE.md](UPGRADE.md)**.
 ## Quick install
 
 ```bash
-unzip Complete_Non_LLM_AI_v1.24.0.zip
+unzip Complete_Non_LLM_AI_v1.25.0.zip
 cd Complete_Non_LLM_AI
 pip install -e ".[dev]"
 export OPENAI_API_KEY=sk-...   # enables Complete AI general chat + tools
 # optional TTS: pip install pyttsx3
 # optional computer control: export COMPLETE_AI_COMPUTER_CONTROL=1
+# optional 24/7 learning: export COMPLETE_AI_CONTINUOUS_LEARNING=1
 pytest -q
 python -m cognitive_ai jarvis --eval
 python -m cognitive_ai jarvis --demo
 python -m cognitive_ai assistant --demo
 python -m cognitive_ai complete-ai --demo
+python -m cognitive_ai learn --ticks 2
 python -m cognitive_ai diagnostics
 python -m cognitive_ai completeness
 ```
@@ -60,7 +62,7 @@ python scripts/demo_vision.py
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.24.0.zip
+# → dist/Complete_Non_LLM_AI_v1.25.0.zip
 ```
 
 ## ChatGPT-class general chat (Complete AI default open chat)

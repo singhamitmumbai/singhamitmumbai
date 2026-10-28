@@ -110,7 +110,14 @@ class CompleteAI:
         self.assistant = None  # optional FinderbayAssistant attached later
         self._proto_stack = None  # lazy ProtoAGIStack
         self._thinker = None  # lazy ThinkingSystem — always think→plan before answer
+        self._continuous = None  # lazy 24/7 ContinuousLearner
         self._restore()
+        # Auto-start continuous learning when env enabled
+        try:
+            if self.continuous.enabled:
+                self.continuous.start(daemon=True)
+        except Exception:  # noqa: BLE001
+            pass
 
     @property
     def proto_stack(self):
@@ -130,6 +137,30 @@ class CompleteAI:
 
         self.assistant = assistant
         attach_assistant_tools(self, assistant)
+
+    @property
+    def continuous(self):
+        """24/7 continuous self-learner (verified experience only)."""
+        if self._continuous is None:
+            from .learning_sys.continuous import get_continuous_learner
+
+            self._continuous = get_continuous_learner()
+        return self._continuous
+
+    def start_learning(self, *, interval_sec: Optional[float] = None) -> dict[str, Any]:
+        self.continuous.enable()
+        if interval_sec is not None:
+            self.continuous.interval_sec = max(5.0, float(interval_sec))
+        return self.continuous.start(daemon=True)
+
+    def stop_learning(self) -> dict[str, Any]:
+        return self.continuous.stop()
+
+    def learning_tick(self) -> dict[str, Any]:
+        return self.continuous.tick()
+
+    def learning_status(self) -> dict[str, Any]:
+        return self.continuous.status()
 
     # --- primary API ----------------------------------------------------------
 
@@ -398,6 +429,22 @@ class CompleteAI:
                 )
             except Exception:  # noqa: BLE001
                 pass
+        # 24/7 continuous learner inbox (always queue; daemon may be off)
+        if role == "assistant":
+            try:
+                faithful = True
+                if meta and meta.get("faithful") is False:
+                    faithful = False
+                self.continuous.observe(
+                    text=text,
+                    route=route or "unknown",
+                    ok=faithful,
+                    meta=slim_meta,
+                    source="session",
+                    verified=True,
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
     # --- diagnostics ----------------------------------------------------------
 
@@ -536,6 +583,7 @@ class CompleteAI:
                 "Proto-AGI gap stack advances learning/transfer/horizon — not AGI",
             ],
             "proto_agi_stack": True,
+            "continuous_learning": self.continuous.status(),
         }
 
     def greeting(self) -> str:
