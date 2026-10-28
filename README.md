@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.22.0) — **full-system upgrade** + `full-test` suite across thinking, KB, Finderbay auth/payments/contracts, speech/OCR, SCAN/transfer, proto-AGI. Still `human_level_agi=false`:
+**Complete AI** (v1.23.0) — **detailed full computer control** (gated, sandboxed, audited) + full-test suite + think→plan + Chat UI. Still `human_level_agi=false`:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
@@ -37,6 +37,24 @@ python -m cognitive_ai chat --domain complete --port 8765
 
 Product: **Complete AI** / **Finderbay Assistant** / **JARVIS tools**. `human_level_agi=false`.  
 Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.
+
+### What v1.23 adds — Detailed full computer control
+
+Allowlisted local desktop + filesystem automation (off by default):
+
+| Piece | Role |
+|------|------|
+| `assistant/computer.py` | 30+ actions: files, apps, screenshot, notify, input, shell |
+| `assistant/computer_policy.py` | Sandbox roots, forbidden paths, shell denylist |
+| `assistant/computer_nlu.py` | Natural language → action (`open https://…`, `list files in data`) |
+| Safety | No keylogging · no clipboard monitoring · confirm for destructive/input/shell |
+
+```bash
+export COMPLETE_AI_COMPUTER_CONTROL=1
+python -m cognitive_ai assistant --ask "computer help"
+pytest tests/test_computer_control_v123.py -q
+# See COMPUTER_CONTROL.md
+```
 
 ### What v1.22 adds — Full-code upgrade + full-test
 
@@ -273,7 +291,7 @@ Tool contracts, job store, provenance memory, material shortage skill, voice PTT
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.22.0.zip
+# → dist/Complete_Non_LLM_AI_v1.23.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.

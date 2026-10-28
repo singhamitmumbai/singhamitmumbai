@@ -392,8 +392,9 @@ class FinderbayAssistant:
             "Try: 'Prepare tomorrow's material shortage report for the selected site'\n"
             "     'Show unpaid invoices for Project A' · 'Count people in image ./crowd_people.jpg'\n"
             "     'remember that my warehouse is Central Store' · 'plan reserve 10 cement'\n"
-            "     'computer open_url https://example.com' (requires control enabled)\n"
-            "human_level_agi=false — optional LLM via API key only.\n"
+            "     'computer help' · 'computer open https://example.com' · 'computer screenshot'\n"
+            "     'computer list files in data' (requires COMPLETE_AI_COMPUTER_CONTROL=1)\n"
+            "human_level_agi=false — optional LLM via API key only. No keylogging.\n"
         )
 
     def jarvis_handle(self, text: str, *, speak: Optional[bool] = None) -> dict[str, Any]:
@@ -529,35 +530,32 @@ class FinderbayAssistant:
         return self._tag({"text": f"Recorded correction for review: {parts[1]} → {parts[2]}", "structured": out}, route="learning")
 
     def _computer_cmd(self, text: str) -> dict[str, Any]:
-        import shlex
-
-        raw = text.split(None, 1)[1] if " " in text.strip() else "status"
-        try:
-            parts = shlex.split(raw)
-        except ValueError:
-            parts = raw.split()
-        action = parts[0] if parts else "status"
-        args: dict[str, Any] = {}
-        if action == "open_url" and len(parts) > 1:
-            args["url"] = parts[1]
-        elif action == "open_path" and len(parts) > 1:
-            args["path"] = parts[1]
-        elif action == "notify":
-            args["title"] = "Finderbay Assistant"
-            args["message"] = " ".join(parts[1:]) or "Hello"
-        elif action == "screenshot":
-            args["path"] = parts[1] if len(parts) > 1 else "data/complete_ai/screenshot.png"
-        elif action == "run_command":
-            args["command"] = " ".join(parts[1:])
-            args["confirm"] = True
-        elif action == "type_text":
-            args["text"] = " ".join(parts[1:])
-            args["confirm"] = True
-        result = self.computer.run(action, **args)
+        result = self.computer.handle_text(text)
+        action = (result.get("parsed") or {}).get("action") or result.get("action") or "status"
         ok = result.get("ok")
+        detail = ""
+        if ok and isinstance(result.get("result"), dict):
+            r = result["result"]
+            if r.get("path"):
+                detail = f" → {r.get('path')}"
+            elif r.get("opened"):
+                detail = f" → {r.get('opened')}"
+            elif r.get("launched"):
+                detail = f" → {r.get('launched')}"
+            elif r.get("count") is not None:
+                detail = f" → {r.get('count')} items"
+            elif r.get("text") and action in ("read_file", "clipboard_get", "help"):
+                preview = str(r.get("text") or r.get("title") or "")[:240]
+                detail = f"\n{preview}"
+            elif action == "help":
+                detail = "\n" + "\n".join(f"  • {e}" for e in (r.get("examples") or [])[:8])
+            elif action == "status":
+                detail = f" enabled={r.get('enabled')} actions={len(r.get('allowed_actions') or [])}"
+        elif not ok:
+            detail = f" ({result.get('error') or (result.get('result') or {}).get('error')})"
         return self._tag(
             {
-                "text": f"Computer {action}: {'ok' if ok else result.get('error')}",
+                "text": f"Computer {action}: {'ok' if ok else 'failed'}{detail}",
                 "structured": result,
             },
             route="computer_control",

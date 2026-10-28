@@ -40,6 +40,7 @@ PARAPHRASES: list[tuple[re.Pattern[str], str]] = [
 
 DOMAIN_CUES: list[tuple[str, tuple[str, ...]]] = [
     ("finderbay", ("invoice", "payment", "delivery", "material", "warehouse", "purchase order", "vendor", "project", "shortage", "reserve")),
+    ("computer", ("computer ", "control ", "screenshot", "open_url", "clipboard", "launch calculator", "list files in")),
     ("vision", ("image", "photo", "detect", "thermal", "camera", "ocr", "yolo", "scene")),
     ("science", ("gravity", "photosynthesis", "atom", "planet", "speed of light", "boiling", "physics", "chemistry", "biology", "dna", "molecule", "newton")),
     ("computing", ("python", "sqlite", "algorithm", "internet", "ocr", "api", "javascript", "database", "programming", "code", "linux")),

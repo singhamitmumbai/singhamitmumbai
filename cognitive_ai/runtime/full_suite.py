@@ -216,6 +216,10 @@ def run_full_suite(*, allow_live_search: bool = False) -> dict[str, Any]:
         "ui_static_assets",
         lambda: _ui_assets_smoke(),
     )
+    add(
+        "computer_control",
+        lambda: _computer_control_smoke(),
+    )
 
     passed = sum(1 for r in results if r.get("ok"))
     failed = [r["name"] for r in results if not r.get("ok")]
@@ -370,4 +374,28 @@ def _ui_assets_smoke() -> dict[str, Any]:
     return {
         "ok": all(present.values()) and "thinking" in js.lower() and ".thinking" in css,
         "files": present,
+    }
+
+
+def _computer_control_smoke() -> dict[str, Any]:
+    from cognitive_ai.assistant.computer import ComputerControl, ALLOWED
+    from cognitive_ai.assistant.computer_nlu import parse_computer_command
+
+    cc = ComputerControl(allow=False)
+    gated = cc.run("open_url", url="https://example.com")
+    help_ok = cc.run("help")["ok"]
+    cc.enable()
+    opened = cc.run("open_url", url="https://example.com")
+    parsed = parse_computer_command("list files in data")
+    return {
+        "ok": (
+            gated.get("error") == "computer_control_disabled"
+            and help_ok
+            and opened.get("ok") is True
+            and parsed.get("action") == "list_dir"
+            and "list_dir" in ALLOWED
+            and cc.status().get("no_keylogging") is True
+        ),
+        "actions": len(ALLOWED),
+        "version": cc.version,
     }

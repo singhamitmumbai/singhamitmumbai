@@ -32,6 +32,8 @@ REQUIRED_MODULES = [
     "cognitive_ai.assistant.finder_assistant",
     "cognitive_ai.assistant.voice",
     "cognitive_ai.assistant.computer",
+    "cognitive_ai.assistant.computer_policy",
+    "cognitive_ai.assistant.computer_nlu",
     "cognitive_ai.assistant.memory_hub",
     "cognitive_ai.assistant.learning_bridge",
     "cognitive_ai.jarvis.pipeline",
@@ -140,6 +142,9 @@ REQUIRED_ATTRS = {
     "cognitive_ai.domains.finderbay.auth": ["AuthService"],
     "cognitive_ai.domains.finderbay.payments": ["PaymentService"],
     "cognitive_ai.domains.finderbay.contracts": ["ContractService"],
+    "cognitive_ai.assistant.computer": ["ComputerControl", "ALLOWED"],
+    "cognitive_ai.assistant.computer_policy": ["policy_snapshot", "resolve_in_sandbox", "APP_ALLOWLIST"],
+    "cognitive_ai.assistant.computer_nlu": ["parse_computer_command"],
 }
 
 

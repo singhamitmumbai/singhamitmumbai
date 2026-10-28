@@ -434,6 +434,13 @@ class ThinkingSystem:
                 "Sanity-check syntax when possible",
                 "Return code with brief explanation",
             ]
+        if strategy == "tool_computer" or frame.domain == "computer":
+            return [
+                "Confirm computer control is enabled (env gate)",
+                "Parse allowlisted action via computer NLU",
+                "Enforce sandbox / confirm for destructive or input actions",
+                "Execute, audit, and report result (no keylogging)",
+            ]
         if strategy == "long_horizon":
             return [
                 "Decompose into subgoals",

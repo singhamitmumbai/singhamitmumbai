@@ -53,7 +53,7 @@ Session memory (Complete AI) lives under `data/complete_ai/`. Back it up before 
 | Offline speech (EN/HI) | `pip install -e ".[perception]"` + Vosk models via `model_registry` | `list_models()` / Hindi factory |
 | OCR + tables | Tesseract system pkgs + `.[perception]` | Layout OCR on invoices |
 | Real YOLO vision | `pip install -e ".[vision]"` | `vision status` shows ultralytics |
-| Computer control | `export COMPLETE_AI_COMPUTER_CONTROL=1` | Assistant `computer …` (allowlisted) |
+| Computer control (detailed) | `export COMPLETE_AI_COMPUTER_CONTROL=1` (+ optional `COMPLETE_AI_COMPUTER_SHELL=1`) | `computer help` · see `COMPUTER_CONTROL.md` |
 | Everything | `pip install -e ".[all]"` | diagnostics + full-test |
 
 Speech models (no LLM):
