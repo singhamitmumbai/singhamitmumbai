@@ -1,7 +1,9 @@
-"""Safe structured file edits under a workspace root."""
+"""Safe structured file edits under a workspace root — atomic writes for stability."""
 
 from __future__ import annotations
 
+import os
+import tempfile
 from pathlib import Path
 from typing import Any, Optional
 
@@ -13,25 +15,66 @@ class CodeEditor:
         self.root = Path(root).resolve()
 
     def resolve(self, rel: str) -> Path:
-        path = (self.root / rel).resolve()
-        if not str(path).startswith(str(self.root)):
-            raise PermissionError(f"path_escapes_workspace:{rel}")
+        # Disallow absolute escapes
+        raw = Path(rel)
+        if raw.is_absolute():
+            path = raw.resolve()
+        else:
+            path = (self.root / rel).resolve()
+        try:
+            path.relative_to(self.root)
+        except ValueError as exc:
+            raise PermissionError(f"path_escapes_workspace:{rel}") from exc
         return path
 
     def read(self, rel: str) -> str:
         return self.resolve(rel).read_text(encoding="utf-8")
 
-    def write(self, rel: str, content: str, *, create_parents: bool = True) -> dict[str, Any]:
+    def write(
+        self,
+        rel: str,
+        content: str,
+        *,
+        create_parents: bool = True,
+        atomic: bool = True,
+        backup: bool = False,
+    ) -> dict[str, Any]:
         path = self.resolve(rel)
         if create_parents:
             path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
         analysis = analyze_source(content, path=str(path))
+        if not analysis.ok:
+            return {
+                "ok": False,
+                "path": str(path.relative_to(self.root)),
+                "error": analysis.error,
+                "analysis": analysis.to_dict(),
+            }
+        if backup and path.exists():
+            bak = path.with_suffix(path.suffix + ".bak")
+            bak.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+        if atomic:
+            fd, tmp_name = tempfile.mkstemp(prefix=path.name + ".", dir=str(path.parent))
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                    fh.write(content)
+                    fh.flush()
+                    os.fsync(fh.fileno())
+                os.replace(tmp_name, path)
+            except Exception:
+                try:
+                    os.unlink(tmp_name)
+                except OSError:
+                    pass
+                raise
+        else:
+            path.write_text(content, encoding="utf-8")
         return {
-            "ok": analysis.ok,
+            "ok": True,
             "path": str(path.relative_to(self.root)),
             "bytes": len(content.encode("utf-8")),
-            "analysis": analysis.to_dict() if analysis.ok else {"error": analysis.error},
+            "atomic": atomic,
+            "analysis": analysis.to_dict(),
         }
 
     def append(self, rel: str, content: str) -> dict[str, Any]:
@@ -51,6 +94,37 @@ class CodeEditor:
         replacement = new_text if new_text.endswith("\n") else new_text + "\n"
         new_lines = lines[:start] + [replacement] + lines[end:]
         return self.write(rel, "".join(new_lines))
+
+    def insert_after_symbol(self, rel: str, symbol: str, snippet: str) -> dict[str, Any]:
+        """Insert snippet after a top-level function/class definition."""
+        from .ast_tools import analyze_source
+
+        src = self.read(rel)
+        analysis = analyze_source(src)
+        if not analysis.ok:
+            return {"ok": False, "error": analysis.error}
+        target = next((s for s in analysis.symbols if s.name == symbol or s.name.endswith("." + symbol)), None)
+        if not target or not target.end_lineno:
+            return {"ok": False, "error": f"symbol_not_found:{symbol}"}
+        lines = src.splitlines(keepends=True)
+        idx = target.end_lineno
+        snippet = snippet if snippet.endswith("\n") else snippet + "\n"
+        new_src = "".join(lines[:idx]) + "\n" + snippet + "".join(lines[idx:])
+        return self.write(rel, new_src)
+
+    def format_source(self, rel: str) -> dict[str, Any]:
+        """Normalize via ast.parse + unparse (stable, no black dependency)."""
+        import ast
+
+        src = self.read(rel)
+        try:
+            tree = ast.parse(src)
+            out = ast.unparse(tree)
+            if not out.endswith("\n"):
+                out += "\n"
+        except SyntaxError as exc:
+            return {"ok": False, "error": str(exc)}
+        return self.write(rel, out)
 
     def rename_symbol(self, rel: str, old: str, new: str) -> dict[str, Any]:
         src = self.read(rel)

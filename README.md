@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.23.0) — **detailed full computer control** (gated, sandboxed, audited) + full-test suite + think→plan + Chat UI. Still `human_level_agi=false`:
+**Complete AI** (v1.24.0) — **stronger stable CodingSystem** + detailed computer control + think→plan + Chat UI. Still `human_level_agi=false`:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
@@ -37,6 +37,22 @@ python -m cognitive_ai chat --domain complete --port 8765
 
 Product: **Complete AI** / **Finderbay Assistant** / **JARVIS tools**. `human_level_agi=false`.  
 Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.
+
+### What v1.24 adds — Stronger, more stable coding system
+
+| Piece | Upgrade |
+|------|------|
+| Smart impls | `add`/`multiply`/`divide`/`clamp`/… get real bodies (not NotImplementedError) |
+| Verifier | AST + py_compile + soft lint + optional pure smoke-exec |
+| Editor | Atomic writes; refuse invalid syntax before save; `format` via ast.unparse |
+| Intents | `verify` · `explain` · `format` · `generate enum` · `implement function` |
+| Safety | Workspace path sandbox; banned imports in smoke-exec |
+
+```bash
+python -m cognitive_ai code --ask "generate function add(a, b)"
+python -m cognitive_ai code --ask "verify file generated/add.py"
+pytest tests/test_coding_strong_v124.py -q
+```
 
 ### What v1.23 adds — Detailed full computer control
 

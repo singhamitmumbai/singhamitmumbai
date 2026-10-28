@@ -1,4 +1,4 @@
-# Install — Complete AI v1.23.0 (computer control + full-system + Chat UI)
+# Install — Complete AI v1.24.0 (strong coding + computer control + Chat UI)
 
 Want to upgrade an existing install, optional engines, or in-app knowledge?  
 See **[UPGRADE.md](UPGRADE.md)**.
@@ -12,7 +12,7 @@ See **[UPGRADE.md](UPGRADE.md)**.
 ## Quick install
 
 ```bash
-unzip Complete_Non_LLM_AI_v1.23.0.zip
+unzip Complete_Non_LLM_AI_v1.24.0.zip
 cd Complete_Non_LLM_AI
 pip install -e ".[dev]"
 export OPENAI_API_KEY=sk-...   # enables Complete AI general chat + tools
