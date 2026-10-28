@@ -84,6 +84,12 @@ class MetaCognition:
         if re.search(r"\b(?:generate function|refactor|unit test|python code)\b", lower):
             return MetaDecision("tool_coding", 0.82, False, ["coding_cue"])
 
+        if re.search(
+            r"\b(?:computer\s+(?:open|help|status|screenshot|list)|launch calculator|open_url|type_text)\b",
+            lower,
+        ):
+            return MetaDecision("tool_computer", 0.85, False, ["computer_control_cue"], risk="medium")
+
         if re.search(r"\b(?:search the web|look up|wikipedia|latest|current news)\b", lower):
             return MetaDecision("web_search", 0.8, False, ["search_cue"], risk="medium")
 
