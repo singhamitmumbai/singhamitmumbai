@@ -56,6 +56,8 @@ python -m cognitive_ai diagnostics
 pytest tests/test_full_upgrade_v122.py -q
 ```
 
+**How to upgrade** (code, engines, or in-app knowledge): see [`UPGRADE.md`](UPGRADE.md).
+
 ### What v1.21 adds — Thinking on every entrypoint
 
 Same deliberator, now also wired into **FinderbayAssistant**, **JARVIS**, **GeneralNonLLMAI**, and **CompleteNonLLMAI** cycle (`think` stage). Plans include situation type, alternatives considered, next actions, and a reflect step.

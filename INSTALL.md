@@ -1,5 +1,8 @@
 # Install — Complete AI v1.22.0 (full-system upgrade + Chat UI)
 
+Want to upgrade an existing install, optional engines, or in-app knowledge?  
+See **[UPGRADE.md](UPGRADE.md)**.
+
 ## Requirements
 
 - Python 3.10+ (3.12 recommended)
