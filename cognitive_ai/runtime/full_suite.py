@@ -240,6 +240,10 @@ def run_full_suite(*, allow_live_search: bool = False) -> dict[str, Any]:
         "nlu_composition_v126",
         lambda: _nlu_composition_smoke(),
     )
+    add(
+        "message_search_vary",
+        lambda: _message_search_vary_smoke(),
+    )
 
     passed = sum(1 for r in results if r.get("ok"))
     failed = [r["name"] for r in results if not r.get("ok")]
@@ -535,4 +539,28 @@ def _nlu_composition_smoke() -> dict[str, Any]:
         ),
         "between_ops": [c.get("operator") for c in amts],
         "under_op": under_amts[0].get("operator") if under_amts else None,
+    }
+
+
+def _message_search_vary_smoke() -> dict[str, Any]:
+    from cognitive_ai.complete_ai import CompleteAI
+
+    ai = CompleteAI(seed_demo=False, enable_llm=False, autosave=False)
+    ai.handle("Explain gravity")
+    ai.handle("Show unpaid invoices for Project A")
+    found = ai.search_messages("invoice")
+    varied = ai.vary_message("Show unpaid invoices for Project A", n=4)
+    via_cmd = ai.handle("search messages for gravity")
+    return {
+        "ok": (
+            found.get("ok") is True
+            and found.get("total_hits", 0) >= 1
+            and varied.get("ok") is True
+            and len(varied.get("variations") or []) >= 2
+            and via_cmd.get("route") == "message_search"
+            and found.get("human_level_agi") is False
+        ),
+        "hits": found.get("total_hits"),
+        "variations": len(varied.get("variations") or []),
+        "query_variations": len(found.get("query_variations") or []),
     }

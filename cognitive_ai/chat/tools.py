@@ -19,7 +19,7 @@ from typing import Any, Callable, Optional
 
 
 TOOL_LINE = re.compile(
-    r"^\s*TOOL\s+(finderbay|vision|coding|status|alerts|memory|voice|computer|learn|plan)\s+(\{.*\})\s*$",
+    r"^\s*TOOL\s+(finderbay|vision|coding|status|alerts|memory|voice|computer|learn|plan|search_messages|vary_message)\s+(\{.*\})\s*$",
     re.I | re.M,
 )
 
@@ -52,6 +52,8 @@ class ToolRouter:
             "status": self._status,
             "alerts": self._alerts,
             "memory": self._memory,
+            "search_messages": self._search_messages,
+            "vary_message": self._vary_message,
         }
 
     def run(self, name: str, args: Optional[dict[str, Any]] = None) -> dict[str, Any]:
@@ -127,3 +129,27 @@ class ToolRouter:
             key = str(args.get("key") or "")
             return {"ok": True, "value": self.ai.recall(key)}
         return {"ok": True, "memory": self.ai.memory_snapshot()}
+
+    def _search_messages(self, args: dict[str, Any]) -> dict[str, Any]:
+        query = str(args.get("query") or args.get("text") or args.get("q") or "").strip()
+        if not query:
+            return {"ok": False, "error": "query_required"}
+        out = self.ai.search_messages(
+            query,
+            role=args.get("role"),
+            route=args.get("route"),
+            limit=int(args.get("limit") or 20),
+        )
+        return {"ok": True, **out}
+
+    def _vary_message(self, args: dict[str, Any]) -> dict[str, Any]:
+        text = str(args.get("text") or args.get("message") or "").strip()
+        if not text:
+            return {"ok": False, "error": "text_required"}
+        styles = args.get("styles")
+        out = self.ai.vary_message(
+            text,
+            styles=list(styles) if isinstance(styles, list) else None,
+            n=int(args["n"]) if args.get("n") is not None else None,
+        )
+        return {"ok": True, **out}

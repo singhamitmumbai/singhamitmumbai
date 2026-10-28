@@ -1,4 +1,4 @@
-# Install — Complete AI v1.26.0 (system upgrade + 24/7 learning + coding + computer control)
+# Install — Complete AI v1.27.0 (message search/vary + system upgrade + 24/7 learning)
 
 Want to upgrade an existing install, optional engines, or in-app knowledge?  
 See **[UPGRADE.md](UPGRADE.md)**.
@@ -12,7 +12,7 @@ See **[UPGRADE.md](UPGRADE.md)**.
 ## Quick install
 
 ```bash
-unzip Complete_Non_LLM_AI_v1.26.0.zip
+unzip Complete_Non_LLM_AI_v1.27.0.zip
 cd Complete_Non_LLM_AI
 pip install -e ".[dev]"
 export OPENAI_API_KEY=sk-...   # enables Complete AI general chat + tools
@@ -62,7 +62,7 @@ python scripts/demo_vision.py
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.26.0.zip
+# → dist/Complete_Non_LLM_AI_v1.27.0.zip
 ```
 
 ## ChatGPT-class general chat (Complete AI default open chat)

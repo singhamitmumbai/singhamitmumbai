@@ -169,6 +169,30 @@ class FinderbayAssistant:
                 route="continuous_learning",
             )
 
+        # Message search / variation
+        from ..chat.messages import parse_search_command, parse_vary_command
+
+        sq = parse_search_command(text)
+        if sq is not None:
+            out = self.complete.search_messages(sq)
+            return self._tag(
+                {"text": out.get("text"), "structured": out},
+                route="message_search",
+            )
+        vq = parse_vary_command(text)
+        if vq is not None:
+            target = vq
+            if target.lower().strip() in ("last", "last message", "this", "this message", "reply"):
+                for turn in reversed(self.complete.session):
+                    if turn.role == "assistant" and turn.text.strip():
+                        target = turn.text
+                        break
+            out = self.complete.vary_message(target)
+            return self._tag(
+                {"text": out.get("text"), "structured": out},
+                route="message_variation",
+            )
+
         # Plan preview without execute
         if lower.startswith("plan ") or lower.startswith("how would you "):
             return self.plan(text)

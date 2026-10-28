@@ -126,6 +126,8 @@ Do **not** treat optional LLM chat as “upgrading to AGI”. With a key you get
 | Hear / read documents better | `.[perception]` + models + Tesseract |
 | See objects in images | `.[vision]` |
 | Teach the business brain | remember / learn alias / correct / plan |
+| Search past chat turns | `search messages for invoice` · Chat UI sidebar search |
+| Rewrite / vary a message | `vary message: …` · **Vary** button in Chat UI |
 | Prove the upgrade worked | `diagnostics` · `completeness` · `full-test` · `pytest -q` |
 
 ```bash

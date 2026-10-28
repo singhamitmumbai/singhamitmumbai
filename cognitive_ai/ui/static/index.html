@@ -38,6 +38,19 @@
             <button type="button" data-prompt="multi-step research DNA then verify">Proto-AGI research</button>
             <button type="button" data-prompt="generate function add(a, b)">Generate code</button>
             <button type="button" data-prompt="Compare dog and cat">Compare dog &amp; cat</button>
+            <button type="button" data-prompt="vary message: Show unpaid invoices for Project A">Vary a message</button>
+            <button type="button" data-prompt="search messages for invoice">Search messages</button>
+          </div>
+        </section>
+
+        <section class="side-section">
+          <h2>Search messages</h2>
+          <form class="msg-search" id="msgSearchForm" autocomplete="off">
+            <input type="search" id="msgSearchInput" placeholder="Search chat…" aria-label="Search messages" />
+            <button type="submit" id="msgSearchBtn" title="Search">⌕</button>
+          </form>
+          <div class="search-results" id="searchResults">
+            <p class="muted empty-hist">Search this session</p>
           </div>
         </section>
 

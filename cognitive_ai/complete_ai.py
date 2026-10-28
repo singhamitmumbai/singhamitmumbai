@@ -43,6 +43,8 @@ TOOL_AWARE_SYSTEM = (
     'TOOL computer {"action": "open_url", "url": "https://example.com"}\n'
     'TOOL computer {"action": "list_dir", "path": "data"}\n'
     'TOOL computer {"action": "screenshot"}\n'
+    'TOOL search_messages {"query": "invoice"}\n'
+    'TOOL vary_message {"text": "Show unpaid invoices for Project A"}\n'
     'TOOL computer {"action": "help"}\n'
     'TOOL learn {"action": "alias", "former": "Warehouse B", "alias": "Central Store"}\n'
     'TOOL jarvis {"text": "Prepare tomorrow material shortage report for Site-7"}\n'
@@ -178,6 +180,13 @@ class CompleteAI:
         text = payload if isinstance(payload, str) else str(payload or "")
         mode = (mode or "auto").lower().strip()
         self._push("user", text, route=mode)
+
+        # Message search / variation — handled before heavy routing
+        msg_meta = self._maybe_message_tools(text)
+        if msg_meta is not None:
+            out = self._tag(msg_meta, route=msg_meta.get("route") or "message_tools", llm=False)
+            self._push("assistant", out.get("text") or "", route=out["route"], meta=out)
+            return out
 
         # Universal think→plan before any route
         deliberation = None
@@ -342,6 +351,44 @@ class CompleteAI:
 
     def session_transcript(self) -> list[dict[str, Any]]:
         return [t.to_dict() for t in self.session]
+
+    def search_messages(
+        self,
+        query: str,
+        *,
+        role: Optional[str] = None,
+        route: Optional[str] = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Search session transcript (+ light memory keys) by query + variants."""
+        from .chat.messages import MessageSearch, format_search_reply
+
+        searcher = MessageSearch()
+        rows = self.session_transcript()
+        # Include durable user_memory as pseudo-turns for recall
+        for k, v in self.user_memory.items():
+            rows.append({"role": "memory", "text": f"{k}: {v}", "route": "user_memory", "ts": 0})
+        result = searcher.search(rows, query, role=role, route=route, limit=limit)
+        result["text"] = format_search_reply(result)
+        result["route"] = "message_search"
+        result["human_level_agi"] = False
+        return result
+
+    def vary_message(
+        self,
+        text: str,
+        *,
+        styles: Optional[list[str]] = None,
+        n: Optional[int] = None,
+    ) -> dict[str, Any]:
+        """Produce alternate phrasings of a message."""
+        from .chat.messages import MessageVariation, format_vary_reply
+
+        result = MessageVariation().vary(text, styles=styles, n=n)
+        result["text"] = format_vary_reply(result)
+        result["route"] = "message_variation"
+        result["human_level_agi"] = False
+        return result
 
     def export_session(self, *, fmt: str = "markdown") -> str:
         if fmt == "json":
@@ -605,6 +652,48 @@ class CompleteAI:
         )
 
     # --- helpers --------------------------------------------------------------
+
+    def _maybe_message_tools(self, text: str) -> Optional[dict[str, Any]]:
+        """Intercept search-messages / vary-message natural commands."""
+        from .chat.messages import parse_search_command, parse_vary_command
+
+        q = parse_search_command(text)
+        if q is not None:
+            # Exclude the just-pushed user command from confusing the scan? Keep it —
+            # searching "invoice" still finds prior turns; the command itself rarely matches.
+            out = self.search_messages(q)
+            return {
+                "text": out.get("text"),
+                "structured": out,
+                "hits": out.get("hits"),
+                "query_variations": out.get("query_variations"),
+                "route": "message_search",
+                "faithful": True,
+            }
+        v = parse_vary_command(text)
+        if v is not None:
+            # If user says "vary last message" / "vary this", use last assistant or user turn
+            target = v
+            low = v.lower().strip()
+            if low in ("last", "last message", "this", "this message", "previous", "reply"):
+                target = ""
+                for turn in reversed(self.session[:-1]):  # skip the command we just pushed
+                    if turn.role in ("assistant", "user") and turn.text.strip():
+                        if low.startswith("reply") and turn.role != "assistant":
+                            continue
+                        target = turn.text
+                        break
+                if not target:
+                    target = v
+            out = self.vary_message(target)
+            return {
+                "text": out.get("text"),
+                "structured": out,
+                "variations": out.get("variations"),
+                "route": "message_variation",
+                "faithful": True,
+            }
+        return None
 
     def _tag(self, out: dict[str, Any], *, route: str, llm: bool) -> dict[str, Any]:
         result = dict(out)

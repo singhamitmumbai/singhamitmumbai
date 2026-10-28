@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.26.0) — **system upgrade**: audit trail · lifelong persist · stronger NLU composition · OCR→invoice export · CI gate + 24/7 learning. Still `human_level_agi=false`:
+**Complete AI** (v1.27.0) — **message search + variations** · audit trail · lifelong persist · 24/7 learning · coding · computer control. Still `human_level_agi=false`:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
@@ -44,6 +44,22 @@ python -m cognitive_ai chat --domain complete --port 8765
 Product: **Complete AI** / **Finderbay Assistant** / **JARVIS tools**. `human_level_agi=false`.  
 Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.  
 Continuous learning is **gated**; never promotes unverified self-labels.
+
+### What v1.27 adds — Search messages + vary messages
+
+| Piece | Role |
+|------|------|
+| `chat/messages.py` | `MessageSearch` (synonyms + query variations) · `MessageVariation` (formal/simple/short/polite/question/imperative/hinglish/email/bullet) |
+| NL commands | `search messages for invoice` · `vary message: …` · `vary last message` · `/search` · `/vary` |
+| Chat UI | Sidebar search · **Vary** / **Find** buttons · `/api/search_messages` · `/api/vary_message` |
+| Tools | `TOOL search_messages` · `TOOL vary_message` |
+
+```bash
+python -m cognitive_ai complete-ai --ask "Explain gravity"
+python -m cognitive_ai complete-ai --ask "search messages for gravity"
+python -m cognitive_ai complete-ai --ask "vary message: Show unpaid invoices for Project A"
+pytest tests/test_message_search_vary_v127.py -q
+```
 
 ### What v1.26 adds — Full system upgrade
 
@@ -347,7 +363,7 @@ Tool contracts, job store, provenance memory, material shortage skill, voice PTT
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.26.0.zip
+# → dist/Complete_Non_LLM_AI_v1.27.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.

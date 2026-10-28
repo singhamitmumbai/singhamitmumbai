@@ -14,6 +14,7 @@ REQUIRED_MODULES = [
     "cognitive_ai.general.agent",
     "cognitive_ai.chat.llm_bridge",
     "cognitive_ai.chat.tools",
+    "cognitive_ai.chat.messages",
     "cognitive_ai.vision.system",
     "cognitive_ai.vision.understand",
     "cognitive_ai.vision.knowledge",
@@ -95,6 +96,7 @@ REQUIRED_MODULES = [
 REQUIRED_ATTRS = {
     "cognitive_ai.complete_ai": ["CompleteAI", "create_complete_ai"],
     "cognitive_ai.chat.tools": ["ToolRouter", "extract_tool_calls"],
+    "cognitive_ai.chat.messages": ["MessageSearch", "MessageVariation"],
     "cognitive_ai.chat.llm_bridge": ["LLMChatBridge", "llm_bridge_from_env"],
     "cognitive_ai.vision.system": ["VisionSystem"],
     "cognitive_ai.vision.understand": ["VisionUnderstanding"],

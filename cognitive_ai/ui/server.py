@@ -368,6 +368,34 @@ def make_handler(session: ChatSession):
                     session.complete.reset_session()
                 self._json(200, {"ok": True, "reset": True})
                 return
+            if path == "/api/search_messages":
+                if session.complete is None:
+                    self._json(400, {"ok": False, "error": "complete_ai_required"})
+                    return
+                query = str(payload.get("query") or payload.get("message") or "").strip()
+                role = payload.get("role")
+                limit = int(payload.get("limit") or 20)
+                out = session.complete.search_messages(
+                    query, role=str(role) if role else None, limit=limit
+                )
+                out.setdefault("human_level_agi", False)
+                self._json(200, out)
+                return
+            if path == "/api/vary_message":
+                if session.complete is None:
+                    self._json(400, {"ok": False, "error": "complete_ai_required"})
+                    return
+                msg = str(payload.get("text") or payload.get("message") or "").strip()
+                styles = payload.get("styles")
+                n = payload.get("n")
+                out = session.complete.vary_message(
+                    msg,
+                    styles=list(styles) if isinstance(styles, list) else None,
+                    n=int(n) if n is not None else None,
+                )
+                out.setdefault("human_level_agi", False)
+                self._json(200, out)
+                return
             self._json(404, {"error": "not found"})
 
         def _serve_file(self, path: Path) -> None:

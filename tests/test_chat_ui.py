@@ -24,8 +24,12 @@ def test_static_assets_exist():
     assert ".thinking" in css
     js = (STATIC_DIR / "chat.js").read_text(encoding="utf-8")
     assert "/api/chat" in js
+    assert "/api/search_messages" in js
+    assert "/api/vary_message" in js
     assert "renderMarkdown" in js
     assert "thinkingMarkdown" in js or "thinking_markdown" in js
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    assert "msgSearchForm" in html or "Search messages" in html
 
 
 def test_chat_session_complete_mode():
@@ -91,6 +95,33 @@ def test_chat_ui_http_endpoints():
         assert status == 200
         comp = json.loads(raw.decode("utf-8"))
         assert "ok" in comp or "complete_code" in comp
+
+        # Message search + variation APIs
+        payload = json.dumps({"query": "penguin"}).encode()
+        conn.request(
+            "POST",
+            "/api/search_messages",
+            body=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        res = conn.getresponse()
+        search = json.loads(res.read().decode("utf-8"))
+        assert res.status == 200
+        assert search.get("ok") is True
+        assert search.get("human_level_agi") is False
+
+        payload = json.dumps({"text": "Show unpaid invoices for Project A", "n": 3}).encode()
+        conn.request(
+            "POST",
+            "/api/vary_message",
+            body=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        res = conn.getresponse()
+        vary = json.loads(res.read().decode("utf-8"))
+        assert res.status == 200
+        assert vary.get("ok") is True
+        assert len(vary.get("variations") or []) >= 1
     finally:
         httpd.shutdown()
         httpd.server_close()

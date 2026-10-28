@@ -13,6 +13,9 @@
   const modeSelect = $("modeSelect");
   const sidebar = $("sidebar");
   const backdrop = $("sidebarBackdrop");
+  const msgSearchForm = $("msgSearchForm");
+  const msgSearchInput = $("msgSearchInput");
+  const searchResults = $("searchResults");
 
   const state = {
     busy: false,
@@ -75,25 +78,43 @@
     label.textContent = role === "user" ? "You" : "Complete AI";
     who.appendChild(label);
 
-    if (role === "bot") {
-      const actions = document.createElement("div");
-      actions.className = "actions";
-      const copy = document.createElement("button");
-      copy.type = "button";
-      copy.textContent = "Copy";
-      copy.title = "Copy reply";
-      copy.addEventListener("click", async () => {
-        try {
-          await navigator.clipboard.writeText(text);
-          copy.textContent = "Copied";
-          setTimeout(() => (copy.textContent = "Copy"), 1200);
-        } catch {
-          copy.textContent = "Failed";
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.textContent = "Copy";
+    copy.title = "Copy message";
+    copy.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(text);
+        copy.textContent = "Copied";
+        setTimeout(() => (copy.textContent = "Copy"), 1200);
+      } catch {
+        copy.textContent = "Failed";
+      }
+    });
+    actions.appendChild(copy);
+    const vary = document.createElement("button");
+    vary.type = "button";
+    vary.textContent = "Vary";
+    vary.title = "Show message variations";
+    vary.addEventListener("click", () => varyMessage(text, el));
+    actions.appendChild(vary);
+    if (role === "user") {
+      const search = document.createElement("button");
+      search.type = "button";
+      search.textContent = "Find";
+      search.title = "Search similar messages";
+      search.addEventListener("click", () => {
+        if (msgSearchInput) {
+          msgSearchInput.value = text.slice(0, 80);
+          runMessageSearch(text.slice(0, 80));
+          openSidebar();
         }
       });
-      actions.appendChild(copy);
-      who.appendChild(actions);
+      actions.appendChild(search);
     }
+    who.appendChild(actions);
     el.appendChild(who);
 
     const body = document.createElement("div");
@@ -301,6 +322,18 @@
         renderHistory();
         showWelcome();
         addMsg("bot", "Session reset. Ready for a new conversation.");
+      } else if (/^\/search\s+/i.test(trimmed)) {
+        const q = trimmed.replace(/^\/search\s+/i, "").trim();
+        showTyping(false);
+        openSidebar();
+        if (msgSearchInput) msgSearchInput.value = q;
+        await runMessageSearch(q);
+        addMsg("bot", `Searched messages for **${q}** — see sidebar results.`);
+      } else if (/^\/vary\s+/i.test(trimmed)) {
+        const t = trimmed.replace(/^\/vary\s+/i, "").trim();
+        showTyping(false);
+        const el = addMsg("bot", `Varying: ${t.slice(0, 120)}`);
+        await varyMessage(t, el);
       } else {
         const data = await api("/api/chat", {
           message: trimmed,
@@ -351,6 +384,89 @@
   function closeSidebar() {
     sidebar.classList.remove("open");
     backdrop.hidden = true;
+  }
+
+  async function runMessageSearch(query) {
+    const q = (query || "").trim();
+    if (!searchResults) return;
+    if (!q) {
+      searchResults.innerHTML = `<p class="muted empty-hist">Search this session</p>`;
+      return;
+    }
+    searchResults.innerHTML = `<p class="muted empty-hist">Searching…</p>`;
+    try {
+      const data = await api("/api/search_messages", { query: q, limit: 12 });
+      const hits = data.hits || [];
+      if (!hits.length) {
+        const vars = (data.query_variations || []).slice(0, 3).join(" · ") || "—";
+        searchResults.innerHTML = `<p class="muted empty-hist">No hits. Tried: ${escapeHtml(vars)}</p>`;
+        return;
+      }
+      searchResults.innerHTML = "";
+      hits.forEach((h) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "search-hit";
+        b.innerHTML = `<div class="hit-meta">#${h.index} · ${escapeHtml(h.role)} · ${escapeHtml(
+          h.route || "—"
+        )} · ${Number(h.score || 0).toFixed(1)}</div>${escapeHtml((h.text || "").slice(0, 140))}`;
+        b.addEventListener("click", () => {
+          input.value = h.text || "";
+          autosize();
+          input.focus();
+          closeSidebar();
+        });
+        searchResults.appendChild(b);
+      });
+    } catch (e) {
+      searchResults.innerHTML = `<p class="muted empty-hist">Search error: ${escapeHtml(e.message)}</p>`;
+    }
+  }
+
+  async function varyMessage(text, hostEl) {
+    const raw = (text || "").trim();
+    if (!raw) return;
+    try {
+      const data = await api("/api/vary_message", { text: raw, n: 6 });
+      const vars = data.variations || [];
+      // Remove old panel under this message
+      if (hostEl) {
+        const old = hostEl.querySelector(".variation-panel");
+        if (old) old.remove();
+      }
+      const panel = document.createElement("div");
+      panel.className = "variation-panel";
+      panel.innerHTML = `<h4>Message variations (${vars.length})</h4>`;
+      if (!vars.length) {
+        panel.innerHTML += `<p class="muted">No variations produced.</p>`;
+      }
+      vars.forEach((v) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "variation-item";
+        b.innerHTML = `<span class="v-style">${escapeHtml(v.style || "")}</span>${escapeHtml(
+          v.text || ""
+        )}`;
+        b.addEventListener("click", () => {
+          input.value = v.text || "";
+          autosize();
+          input.focus();
+        });
+        panel.appendChild(b);
+      });
+      if (hostEl) hostEl.appendChild(panel);
+      else addMsg("bot", data.text || "Variations ready.");
+      messages.scrollTop = messages.scrollHeight;
+    } catch (e) {
+      addMsg("bot", `**Vary error:** ${e.message}`);
+    }
+  }
+
+  if (msgSearchForm) {
+    msgSearchForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      runMessageSearch(msgSearchInput && msgSearchInput.value);
+    });
   }
 
   form.addEventListener("submit", (e) => {
