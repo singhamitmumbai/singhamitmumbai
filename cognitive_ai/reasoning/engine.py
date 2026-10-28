@@ -323,10 +323,43 @@ class ReasoningEngine:
 
     def _reason_materials(self, state: WorkingState, frame: dict) -> ReasoningResult:
         rows = self.memory.get_records("material")
+        conditions = frame.get("conditions") or []
+        matched = []
+        for mat in rows:
+            ok = True
+            for cond in conditions:
+                field = cond.get("field")
+                op = cond.get("operator")
+                val = cond.get("value")
+                if field in ("ask_form", "aggregation", "output", "document_field"):
+                    continue
+                if field == "stock_qty":
+                    actual = mat.get("available")
+                elif field == "material_tag":
+                    tags = mat.get("tags") or []
+                    name = str(mat.get("name") or "").lower()
+                    if op == "ne":
+                        # Exclude materials whose name/tags contain the tag
+                        needle = str(val).lower()
+                        if needle in name or needle in [str(t).lower() for t in tags]:
+                            ok = False
+                            break
+                        continue
+                    actual = tags
+                elif field == "material_name":
+                    actual = str(mat.get("name") or "").lower()
+                    val = str(val).lower()
+                else:
+                    actual = mat.get(field)
+                if field != "material_tag" and not self._compare(actual, op, val):
+                    ok = False
+                    break
+            if ok:
+                matched.append(mat)
         return ReasoningResult(
-            method="lookup",
-            conclusions=[{"type": "materials", "items": rows}],
-            message=f"{len(rows)} material record(s).",
+            method="lookup+filters",
+            conclusions=[{"type": "materials", "items": matched}],
+            message=f"{len(matched)} material record(s).",
         )
 
     def _reason_tasks(self, state: WorkingState, frame: dict) -> ReasoningResult:

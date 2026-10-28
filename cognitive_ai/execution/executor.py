@@ -56,11 +56,13 @@ class Executor:
         self.alerts = None
         self.reports = None
         self.last_alerts = None
+        self.last_audit = None
         self.last_po = None
         self.last_report = None
         self.last_vision = None
         self.vision = None  # optional VisionSystem injected by CompleteNonLLMAI
         self.auth_token: Optional[str] = None
+        self.audit = None
 
     def run_plan(self, plan: PlanRecord, state: WorkingState) -> list[ActionResult]:
         results: list[ActionResult] = []
@@ -337,6 +339,31 @@ class Executor:
             self.last_payment = out
             result.external_receipt = out["payment"]["id"]
             return [{"payment_posted": True, **out}]
+
+        if op == "scan_audit_log":
+            audit = getattr(self, "audit", None)
+            if audit is None:
+                raise RuntimeError("audit_not_configured")
+            rows = audit.recent(limit=50)
+            summary = audit.summary()
+            self.last_audit = {**summary, "events": rows, "event_count": len(rows)}
+            self.last_table = {
+                "columns": ["ts", "action", "user_id", "resource", "ok"],
+                "rows": [
+                    {
+                        "ts": r.get("ts"),
+                        "action": r.get("action"),
+                        "user_id": r.get("user_id"),
+                        "resource": r.get("resource"),
+                        "ok": r.get("ok"),
+                    }
+                    for r in rows
+                ],
+                "row_count": len(rows),
+                "meta": summary,
+            }
+            result.external_receipt = f"audit:{len(rows)}"
+            return [{"audit_ready": True, "count": len(rows)}]
 
         if op == "scan_alerts":
             alerts = getattr(self, "alerts", None)

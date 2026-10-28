@@ -94,16 +94,24 @@ Internal loop (bounded): **failure → review → candidate → evaluate → rel
 
 ---
 
-## 4) Wish-list upgrades (next meaningful product steps)
+## 4) What v1.26 already upgraded
 
-If you want to **upgrade the system further**, prioritize in this order:
+Shipped from the prior wish-list:
 
-1. **Richer Finderbay workflows** — payments/contracts/PO edge cases, multi-user UI, audit logs  
-2. **Perception packs** — ship or script Hindi/EN model download; mic streaming in Chat UI  
-3. **OCR production path** — PDF multi-page + table export into invoice fields  
-4. **Stronger composition** — raise SCAN holdout accuracy (NLU slots for filters/exclusions)  
-5. **Lifelong memory defaults** — persist proto-AGI lifelong store across restarts out of the box  
-6. **Eval gates in CI** — run `full-test` on every PR  
+1. **Finderbay audit logs** — `domains/finderbay/audit.py` · `Show audit log`  
+2. **Lifelong memory defaults** — auto persist/load (`COMPLETE_AI_LIFELONG_PATH`, on by default)  
+3. **Stronger composition** — between-ranges, under≠overdue, stock qty, exclusions → SCAN ch9–ch11  
+4. **OCR→invoice export** — `LayoutOCR.export_invoice_fields`  
+5. **CI eval gate** — `.github/workflows/ci.yml`  
+6. **Perception bootstrap** — `scripts/ensure_perception_models.py`  
+
+## 5) Wish-list upgrades (next meaningful product steps)
+
+1. **Richer Finderbay UI** — multi-user Chat UI session tokens + audit viewer  
+2. **Perception packs** — mic streaming wired into Chat UI; model download UX  
+3. **OCR PDF path** — native multi-page PDF → invoice import into memory  
+4. **SCAN holdout ≥0.85** — more compositional operators (OR filters, nested exclusions)  
+5. **Continuous learning promotions** — human review queue for mined candidates  
 
 Do **not** treat optional LLM chat as “upgrading to AGI”. With a key you get ChatGPT-class *chat*; local engines stay non-LLM; honesty flag stays false.
 

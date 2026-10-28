@@ -178,6 +178,17 @@ INTENT_CUES: list[tuple[str, list[tuple[str, float]]]] = [
         ],
     ),
     (
+        "query_audit_log",
+        [
+            ("audit log", 3.0),
+            ("audit trail", 3.0),
+            ("show audit", 2.8),
+            ("security log", 2.5),
+            ("who logged in", 2.2),
+            ("activity log", 2.3),
+        ],
+    ),
+    (
         "query_alerts",
         [
             ("alert", 2.0),

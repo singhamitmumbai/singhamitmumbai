@@ -224,6 +224,22 @@ def run_full_suite(*, allow_live_search: bool = False) -> dict[str, Any]:
         "continuous_learning",
         lambda: _continuous_learning_smoke(),
     )
+    add(
+        "audit_log",
+        lambda: _audit_log_smoke(),
+    )
+    add(
+        "lifelong_persist",
+        lambda: _lifelong_persist_smoke(),
+    )
+    add(
+        "ocr_invoice_export",
+        lambda: _ocr_invoice_export_smoke(),
+    )
+    add(
+        "nlu_composition_v126",
+        lambda: _nlu_composition_smoke(),
+    )
 
     passed = sum(1 for r in results if r.get("ok"))
     failed = [r["name"] for r in results if not r.get("ok")]
@@ -427,3 +443,96 @@ def _continuous_learning_smoke() -> dict[str, Any]:
             "jobs": report.get("jobs_run"),
             "ticks": st.get("total_ticks"),
         }
+
+
+def _audit_log_smoke() -> dict[str, Any]:
+    from cognitive_ai.system import CompleteNonLLMAI
+
+    ai = CompleteNonLLMAI(seed_demo=True)
+    login = ai.handle("login acct1 password acct-pass")
+    audit = ai.handle("Show audit log")
+    rows = ai.audit.recent(limit=10)
+    op = (audit.get("frame") or {}).get("operation")
+    logged = bool(ai.auth.sessions) or "logged" in (login.get("text") or "").lower()
+    return {
+        "ok": logged and op == "query_audit_log" and any(r.get("action") == "login" for r in rows),
+        "audit_events": len(rows),
+        "route": op,
+    }
+
+
+def _lifelong_persist_smoke() -> dict[str, Any]:
+    import tempfile
+    from pathlib import Path
+
+    from cognitive_ai.agi_gap.stack import ProtoAGIStack
+
+    with tempfile.TemporaryDirectory() as td:
+        path = Path(td) / "life.json"
+        s1 = ProtoAGIStack(persist_path=path, auto_persist=True)
+        s1.lifelong.remember_interaction("persist-smoke", actions=[{"op": "test"}], outcome="success")
+        saved = s1.persist_lifelong()
+        s2 = ProtoAGIStack(persist_path=path, auto_persist=True)
+        return {
+            "ok": saved.get("ok") is True and path.exists() and s2.status().get("auto_persist") is True,
+            "path": str(path),
+            "episodes": s2.lifelong.summary().get("episodes"),
+        }
+
+
+def _ocr_invoice_export_smoke() -> dict[str, Any]:
+    from cognitive_ai.perception.ocr_layout import DocumentResult, LayoutOCR, PageResult
+
+    doc = DocumentResult(
+        pages=[
+            PageResult(
+                page_index=0,
+                text="Invoice No INV-9\nVendor Acme\nAmount due 118000",
+                fields={
+                    "invoice_number": "INV-9",
+                    "vendor": "Acme",
+                    "amount_due": "118000",
+                },
+                tables=[[["Item", "Qty", "Price"], ["Cement", "10", "500"]]],
+            )
+        ],
+        fields={"invoice_number": "INV-9", "vendor": "Acme", "amount_due": "118000"},
+        tables=[[["Item", "Qty", "Price"], ["Cement", "10", "500"]]],
+        text="Invoice No INV-9",
+        page_count=1,
+    )
+    out = LayoutOCR().export_invoice_fields(doc)
+    return {
+        "ok": out.get("ok") is True and out.get("invoice_number") == "INV-9" and out.get("amount_due") == 118000.0,
+        "line_items": len(out.get("line_items") or []),
+    }
+
+
+def _nlu_composition_smoke() -> dict[str, Any]:
+    from cognitive_ai.nlu.pipeline import LanguageUnderstanding
+
+    lu = LanguageUnderstanding()
+    between = lu.parse("Find paid invoices for Project C between ₹1 lakh and ₹3 lakh").to_dict()
+    under = lu.parse(
+        "Show overdue unpaid invoices for Project A under ₹50000 excluding cancelled"
+    ).to_dict()
+    stock = lu.parse("List materials below 20 units for Project A excluding scrap").to_dict()
+    conds_b = {c["field"]: c for c in between.get("conditions") or []}
+    amts = [c for c in (between.get("conditions") or []) if c.get("field") == "amount_inr"]
+    under_amts = [c for c in (under.get("conditions") or []) if c.get("field") == "amount_inr"]
+    stock_conds = [c for c in (stock.get("conditions") or []) if c.get("field") == "stock_qty"]
+    return {
+        "ok": (
+            between.get("operation") == "query_invoices"
+            and len(amts) >= 2
+            and under.get("project_id") == "project_a"
+            and len(under_amts) == 1
+            and under_amts[0].get("operator") == "lt"
+            and stock.get("operation") == "query_materials"
+            and stock_conds
+            and stock_conds[0].get("value") == 20.0
+            and "payment_status" in conds_b
+        ),
+        "between_ops": [c.get("operator") for c in amts],
+        "under_op": under_amts[0].get("operator") if under_amts else None,
+    }

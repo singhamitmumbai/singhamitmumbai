@@ -11,9 +11,10 @@ from .auth import AuthService
 
 
 class ContractService:
-    def __init__(self, memory: MemorySystem, auth: AuthService) -> None:
+    def __init__(self, memory: MemorySystem, auth: AuthService, audit: Any = None) -> None:
         self.memory = memory
         self.auth = auth
+        self.audit = audit
 
     def list_contracts(self, *, project_id: Optional[str] = None, status: Optional[str] = None) -> list[dict]:
         rows = self.memory.get_records("contract")
@@ -34,7 +35,7 @@ class ContractService:
         start_date: str,
         end_date: str,
     ) -> dict[str, Any]:
-        self.auth.require(token, "contract_write")
+        user = self.auth.require(token, "contract_write")
         cid = new_id("ctr")
         row = {
             "id": cid,
@@ -48,6 +49,15 @@ class ContractService:
             "created_at": utc_now(),
         }
         self.memory.upsert_record("contract", cid, row)
+        if self.audit is not None:
+            self.audit.record(
+                "create_contract",
+                user_id=user.user_id,
+                roles=list(user.roles),
+                resource=cid,
+                detail={"project_id": project_id, "value_inr": float(value_inr)},
+                ok=True,
+            )
         return row
 
     def link_invoice(self, *, token: Optional[str], contract_id: str, invoice_id: str) -> dict[str, Any]:

@@ -57,10 +57,14 @@ def _hash_password(password: str, salt: str) -> str:
 
 
 class AuthService:
-    def __init__(self) -> None:
+    def __init__(self, audit: Any = None) -> None:
         self.users: dict[str, User] = {}
         self.sessions: dict[str, dict[str, Any]] = {}
+        self.audit = audit
         self._seed()
+
+    def bind_audit(self, audit: Any) -> None:
+        self.audit = audit
 
     def _seed(self) -> None:
         self.create_user("viewer1", "Viewer One", ["viewer"], "view-pass")
@@ -84,8 +88,12 @@ class AuthService:
     def login(self, user_id: str, password: str) -> Optional[str]:
         user = self.users.get(user_id)
         if not user or not user.active:
+            if self.audit is not None:
+                self.audit.record("login", user_id=user_id, ok=False, detail={"reason": "inactive_or_missing"})
             return None
         if not hmac.compare_digest(user.password_hash, _hash_password(password, user.salt)):
+            if self.audit is not None:
+                self.audit.record("login", user_id=user_id, ok=False, detail={"reason": "bad_password"})
             return None
         token = secrets.token_hex(16)
         self.sessions[token] = {
@@ -93,10 +101,28 @@ class AuthService:
             "roles": list(user.roles),
             "created_at": utc_now(),
         }
+        if self.audit is not None:
+            self.audit.record(
+                "login",
+                user_id=user_id,
+                roles=list(user.roles),
+                ok=True,
+                resource="session",
+            )
         return token
 
     def logout(self, token: str) -> bool:
-        return self.sessions.pop(token, None) is not None
+        sess = self.sessions.pop(token, None)
+        ok = sess is not None
+        if self.audit is not None and sess:
+            self.audit.record(
+                "logout",
+                user_id=sess.get("user_id"),
+                roles=list(sess.get("roles") or []),
+                ok=True,
+                resource="session",
+            )
+        return ok
 
     def current_user(self, token: Optional[str]) -> Optional[User]:
         if not token or token not in self.sessions:

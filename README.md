@@ -1,6 +1,6 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.25.0) — **24/7 self-learning** + stronger CodingSystem + computer control + think→plan + Chat UI. Still `human_level_agi=false`:
+**Complete AI** (v1.26.0) — **system upgrade**: audit trail · lifelong persist · stronger NLU composition · OCR→invoice export · CI gate + 24/7 learning. Still `human_level_agi=false`:
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
@@ -44,6 +44,23 @@ python -m cognitive_ai chat --domain complete --port 8765
 Product: **Complete AI** / **Finderbay Assistant** / **JARVIS tools**. `human_level_agi=false`.  
 Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.  
 Continuous learning is **gated**; never promotes unverified self-labels.
+
+### What v1.26 adds — Full system upgrade
+
+| Piece | Upgrade |
+|------|------|
+| Finderbay audit | Multi-user `AuditLog` for login / payments / contracts / POs · `Show audit log` |
+| Lifelong persist | Proto-AGI lifelong store auto-loads/saves under `data/complete_ai/lifelong/` |
+| NLU composition | Fixed `overdue`≠`over`; `between X and Y`; stock qty; cancelled/scrap exclusions |
+| OCR→invoice | `LayoutOCR.export_invoice_fields` maps tables/fields → invoice dict + CSV |
+| CI gate | `.github/workflows/ci.yml` runs pytest + completeness + full-test |
+| Perception bootstrap | `scripts/ensure_perception_models.py` |
+
+```bash
+pytest tests/test_upgrade_v126.py -q
+python -m cognitive_ai full-test
+# Show audit log after: login acct1 password acct-pass
+```
 
 ### What v1.25 adds — 24/7 self-learning
 
@@ -330,7 +347,7 @@ Tool contracts, job store, provenance memory, material shortage skill, voice PTT
 
 ```bash
 python scripts/package_release.py
-# → dist/Complete_Non_LLM_AI_v1.25.0.zip
+# → dist/Complete_Non_LLM_AI_v1.26.0.zip
 ```
 
 See `INSTALL.md` for install steps after unzipping.

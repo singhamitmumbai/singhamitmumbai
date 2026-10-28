@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from typing import Any, Optional
 
 from ..memory.store import MemorySystem
@@ -16,13 +18,35 @@ from .metacognition import MetaCognition
 from .multimodal_hub import AlwaysOnMultimodalHub
 from .world_knowledge import WorldKnowledgeHub
 
+DEFAULT_LIFELONG_PATH = Path("data/complete_ai/lifelong/memory.json")
+
 
 class ProtoAGIStack:
     """Progress toward broader general intelligence — NOT human-level AGI."""
 
-    def __init__(self, memory: Optional[MemorySystem] = None) -> None:
+    def __init__(
+        self,
+        memory: Optional[MemorySystem] = None,
+        *,
+        persist_path: Optional[Path | str] = None,
+        auto_persist: Optional[bool] = None,
+    ) -> None:
         self.version = __version__
         self.memory = memory or MemorySystem()
+        env_path = os.environ.get("COMPLETE_AI_LIFELONG_PATH", "").strip()
+        self.persist_path = Path(
+            persist_path
+            or env_path
+            or DEFAULT_LIFELONG_PATH
+        )
+        if auto_persist is None:
+            auto_persist = os.environ.get("COMPLETE_AI_LIFELONG_PERSIST", "1").strip().lower() not in (
+                "0",
+                "false",
+                "no",
+                "off",
+            )
+        self.auto_persist = bool(auto_persist)
         self.world = WorldKnowledgeHub(expand=True)
         self.skills = GrowingSkillLibrary(self.memory)
         self.learner = GeneralLearner(self.memory, self.skills)
@@ -34,6 +58,12 @@ class ProtoAGIStack:
         self.align = AlignmentGuard()
         self._backends: dict[str, Any] = {}
         self._thinker = None  # lazy ThinkingSystem
+        # Restore lifelong store across restarts by default
+        if self.auto_persist and self.persist_path.exists():
+            try:
+                self.lifelong.load(self.persist_path)
+            except Exception:  # noqa: BLE001
+                pass
 
     def bind_backends(self, *, complete_ai: Any = None, chat: Any = None, web: Any = None) -> None:
         """Attach product backends so long-horizon / research steps can call real tools."""
@@ -108,11 +138,26 @@ class ProtoAGIStack:
             return len(obs) >= 20
         return True
 
+    def persist_lifelong(self) -> dict[str, Any]:
+        """Save lifelong memory to the default durable path."""
+        self.persist_path.parent.mkdir(parents=True, exist_ok=True)
+        return self.lifelong.persist(self.persist_path)
+
+    def _maybe_persist(self) -> None:
+        if not self.auto_persist:
+            return
+        try:
+            self.persist_lifelong()
+        except Exception:  # noqa: BLE001
+            pass
+
     def status(self) -> dict[str, Any]:
         return {
             "name": "ProtoAGIStack",
             "version": self.version,
             "human_level_agi": False,
+            "auto_persist": self.auto_persist,
+            "persist_path": str(self.persist_path),
             "modules": {
                 "world_knowledge": self.world.stats(),
                 "general_learning": self.learner.summary(),
@@ -127,8 +172,7 @@ class ProtoAGIStack:
                 "multimodal_session": len(self.multimodal.session_buffer),
             },
             "note": (
-                "v1.18 deepens + persists learning/open-world/transfer/horizon/multimodal/"
-                "lifelong/meta/alignment — still not AGI."
+                "v1.26 lifelong store auto-persists by default — still not AGI."
             ),
         }
 
@@ -273,6 +317,7 @@ class ProtoAGIStack:
             actions=[{"op": decision.strategy}],
             outcome="success" if ok else "partial",
         )
+        self._maybe_persist()
         return self._finish(body, decision, ow, verdict, debate, route=decision.strategy, ok=ok)
 
     def run_self_eval(self) -> dict[str, Any]:
@@ -282,6 +327,7 @@ class ProtoAGIStack:
         tick = self.skills.continual_tick()
         cons = self.lifelong.consolidate()
         dream = self.lifelong.dream(n=3)
+        self._maybe_persist()
         multi = self.multimodal.tick_all_health()
         fused = self.multimodal.fuse(
             [

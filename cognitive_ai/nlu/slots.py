@@ -37,8 +37,9 @@ class SlotBundle:
 
 
 COMPARISON_PATTERNS = [
-    (r"(?:above|over|greater than|more than|>\s*)\s*(.+)", "gt"),
-    (r"(?:below|under|less than|<\s*)\s*(.+)", "lt"),
+    # Word-bounded so "overdue" does not match "over"
+    (r"(?:above|greater than|more than|(?<![a-z])over(?![a-z])|>\s*)\s*(.+)", "gt"),
+    (r"(?:below|less than|(?<![a-z])under(?![a-z])|<\s*)\s*(.+)", "lt"),
     (r"(?:at least|>=\s*)\s*(.+)", "gte"),
     (r"(?:at most|<=\s*)\s*(.+)", "lte"),
 ]
@@ -89,13 +90,53 @@ def extract_slots(text: str, project_id: Optional[str] = None) -> SlotBundle:
         if "disputed" in phrase:
             bundle.conditions.append(Condition("dispute_status", "eq", "not_disputed"))
             bundle.unknown_policies["dispute_status"] = "report_separately"
+        if "cancelled" in phrase or "canceled" in phrase:
+            bundle.conditions.append(Condition("status", "ne", "cancelled"))
+        if "scrap" in phrase:
+            bundle.conditions.append(Condition("material_tag", "ne", "scrap"))
 
-    # Amount comparisons tied to money mentions
-    for pat, op in COMPARISON_PATTERNS:
-        for m in re.finditer(pat, lower):
-            amt = _parse_amount_token(m.group(1))
-            if amt is not None:
-                bundle.conditions.append(Condition("amount_inr", op, amt))
+    # Range: "between ₹1 lakh and ₹3 lakh" / "between 10 and 20"
+    m_between = re.search(
+        r"\bbetween\s+(.+?)\s+and\s+(.+?)(?:\s+for\s+|\s+excluding\s+|$|,|\.)",
+        lower,
+    )
+    if m_between:
+        lo = _parse_amount_token(m_between.group(1))
+        hi = _parse_amount_token(m_between.group(2))
+        if lo is not None and hi is not None:
+            field = "amount_inr"
+            if re.search(r"\b(?:units?|bags?|qty|quantity|stock)\b", lower):
+                field = "stock_qty"
+            bundle.conditions.append(Condition(field, "gte", min(lo, hi)))
+            bundle.conditions.append(Condition(field, "lte", max(lo, hi)))
+
+    # Stock / units comparisons (materials) — before generic amount_inr
+    m_units = re.search(
+        r"(?:above|over|greater than|more than|below|under|less than|at least|at most)\s+"
+        r"(\d+(?:\.\d+)?)\s*(?:units?|bags?|qty|quantity|in stock)",
+        lower,
+    )
+    if m_units:
+        qty = float(m_units.group(1))
+        if re.search(r"(?:below|under|less than|at most)", m_units.group(0)):
+            op_u = "lte" if "at most" in m_units.group(0) else "lt"
+        elif "at least" in m_units.group(0):
+            op_u = "gte"
+        else:
+            op_u = "gt"
+        bundle.conditions.append(Condition("stock_qty", op_u, qty))
+
+    # Amount comparisons tied to money mentions (skip if already captured as stock_qty)
+    if not m_units:
+        for pat, op in COMPARISON_PATTERNS:
+            for m in re.finditer(pat, lower):
+                token = m.group(1)
+                # Skip unit/stock phrases already handled
+                if re.search(r"\b(?:units?|bags?|qty|quantity|in stock)\b", token):
+                    continue
+                amt = _parse_amount_token(token)
+                if amt is not None:
+                    bundle.conditions.append(Condition("amount_inr", op, amt))
 
     # Reserve quantity: "reserve 15 bags of cement" / "reserve 10 cement"
     m_qty = re.search(

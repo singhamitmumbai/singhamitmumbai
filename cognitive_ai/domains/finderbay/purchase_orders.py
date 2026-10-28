@@ -11,9 +11,10 @@ from .auth import AuthService
 
 
 class PurchaseOrderService:
-    def __init__(self, memory: MemorySystem, auth: AuthService) -> None:
+    def __init__(self, memory: MemorySystem, auth: AuthService, audit: Any = None) -> None:
         self.memory = memory
         self.auth = auth
+        self.audit = audit
 
     def list_vendors(self) -> list[dict]:
         return self.memory.get_records("vendor")
@@ -45,7 +46,7 @@ class PurchaseOrderService:
         unit_price_inr: float,
         notes: str = "",
     ) -> dict[str, Any]:
-        self.auth.require(token, "po_write")
+        user = self.auth.require(token, "po_write")
         vendors = self.memory.get_records("vendor", id=vendor_id)
         if not vendors:
             raise ValueError(f"vendor_not_found:{vendor_id}")
@@ -78,6 +79,15 @@ class PurchaseOrderService:
                 project_id=project_id,
             )
         )
+        if self.audit is not None:
+            self.audit.record(
+                "create_po",
+                user_id=user.user_id,
+                roles=list(user.roles),
+                resource=pid,
+                detail={"project_id": project_id, "vendor_id": vendor_id, "total_inr": total},
+                ok=True,
+            )
         return {"purchase_order": row}
 
     def summarize(self, project_id: Optional[str] = None) -> dict[str, Any]:

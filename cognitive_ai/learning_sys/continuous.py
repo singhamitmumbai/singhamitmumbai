@@ -307,6 +307,14 @@ class ContinuousLearner:
             cons = self.lifelong.consolidate()
             report.consolidations += 1
             detail = cons.to_dict() if hasattr(cons, "to_dict") else dict(cons or {})
+            # Durable lifelong dump for cross-restart continuity
+            try:
+                life_path = self.store_dir / "lifelong_memory.json"
+                if hasattr(self.lifelong, "persist"):
+                    persisted = self.lifelong.persist(life_path)
+                    detail["persisted"] = persisted.get("path") if isinstance(persisted, dict) else str(life_path)
+            except Exception as exc:  # noqa: BLE001
+                detail["persist_error"] = str(exc)
             self.stats["consolidations"] += 1
             return detail
         return {"ok": False, "error": "no_consolidate"}

@@ -197,3 +197,71 @@ class LayoutOCR:
             "version": doc.version,
             "has_multi_page": doc.page_count > 1,
         }
+
+    def export_invoice_fields(self, doc: DocumentResult) -> dict[str, Any]:
+        """Map layout OCR fields + tables into a Finderbay-ready invoice dict.
+
+        Production path: multi-page OCR → structured invoice fields for import.
+        Does not claim perfect extraction — callers should verify.
+        """
+        fields = dict(doc.fields or {})
+        # Normalize common aliases
+        invoice = {
+            "invoice_number": fields.get("invoice_number") or fields.get("invoice_no") or fields.get("inv_no"),
+            "vendor": fields.get("vendor") or fields.get("supplier") or fields.get("from"),
+            "amount_due": _as_float(fields.get("amount_due") or fields.get("total") or fields.get("grand_total")),
+            "subtotal": _as_float(fields.get("subtotal") or fields.get("sub_total")),
+            "tax": _as_float(fields.get("tax") or fields.get("gst") or fields.get("vat")),
+            "currency": fields.get("currency") or "INR",
+            "due_date": fields.get("due_date") or fields.get("due"),
+            "invoice_date": fields.get("invoice_date") or fields.get("date"),
+            "project_hint": fields.get("project") or fields.get("project_id"),
+            "line_items": [],
+            "raw_fields": fields,
+            "page_count": doc.page_count,
+            "table_count": len(doc.tables),
+            "source_engine": doc.engine,
+            "version": "invoice_export_v1",
+            "human_level_agi": False,
+        }
+        # First table → line items when header-like
+        if doc.tables:
+            table = doc.tables[0]
+            if table and len(table) >= 2:
+                headers = [str(h).lower().strip() for h in table[0]]
+                for row in table[1:]:
+                    item: dict[str, Any] = {}
+                    for i, cell in enumerate(row):
+                        key = headers[i] if i < len(headers) else f"col_{i}"
+                        item[key] = cell
+                    if item:
+                        invoice["line_items"].append(item)
+        invoice["ok"] = bool(
+            invoice.get("invoice_number")
+            or invoice.get("amount_due") is not None
+            or invoice.get("line_items")
+        )
+        invoice["tables_csv"] = [_table_to_csv(t) for t in doc.tables[:3]]
+        return invoice
+
+
+def _as_float(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).replace(",", "").replace("₹", "").replace("rs", "").strip()
+    m = re.search(r"-?\d+(?:\.\d+)?", text, flags=re.I)
+    if not m:
+        return None
+    try:
+        return float(m.group(0))
+    except ValueError:
+        return None
+
+
+def _table_to_csv(table: list[list[str]]) -> str:
+    lines = []
+    for row in table:
+        lines.append(",".join('"' + str(c).replace('"', '""') + '"' for c in row))
+    return "\n".join(lines)

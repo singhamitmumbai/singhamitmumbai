@@ -103,6 +103,35 @@ CASES = [
         "reserve_stock",
         {"reserve_qty": 3.0, "project_id": "project_a"},
     ),
+    # v1.26 stronger composition: ranges, under≠overdue, exclusions, stock qty
+    ScanCase(
+        "ch9",
+        "compositional_holdout",
+        "Find paid invoices for Project C between ₹1 lakh and ₹3 lakh",
+        "query_invoices",
+        {"project_id": "project_c", "amount_inr_gte": 100000.0, "amount_inr_lte": 300000.0},
+    ),
+    ScanCase(
+        "ch10",
+        "compositional_holdout",
+        "Show overdue unpaid invoices for Project A under ₹50000 excluding cancelled",
+        "query_invoices",
+        {"project_id": "project_a", "amount_inr": 50000.0},
+    ),
+    ScanCase(
+        "ch11",
+        "compositional_holdout",
+        "List materials below 20 units for Project A excluding scrap",
+        "query_materials",
+        {"project_id": "project_a", "stock_qty": 20.0},
+    ),
+    ScanCase(
+        "tl6",
+        "train_like",
+        "Show audit log",
+        "query_audit_log",
+        {},
+    ),
 ]
 
 
@@ -124,13 +153,36 @@ def run_scan_benchmark(parse_fn: Callable[[str], Any]) -> dict[str, Any]:
         for k, v in case.expect_slots.items():
             if k == "project_id":
                 continue
+            # Range helpers: amount_inr_gte / amount_inr_lte map to conditions with ops
+            if k.endswith("_gte") or k.endswith("_lte") or k.endswith("_gt") or k.endswith("_lt"):
+                field, _, op_suffix = k.rpartition("_")
+                op_map = {"gte": "gte", "lte": "lte", "gt": "gt", "lt": "lt"}
+                want_op = op_map.get(op_suffix)
+                found = any(
+                    c.get("field") == field and c.get("operator") == want_op and c.get("value") == v
+                    for c in (d.get("conditions") or [])
+                )
+                if not found:
+                    ok = False
+                continue
             if k in conds and conds[k] != v:
                 ok = False
-            elif k not in conds and k in ("reserve_qty", "amount_inr", "task_title"):
+            elif k not in conds and k in ("reserve_qty", "amount_inr", "task_title", "stock_qty"):
                 # amount may be present; task_title may be in conditions
                 if k == "task_title":
                     ok = ok and any(
                         c.get("field") == "task_title" and str(c.get("value")).lower().find(str(v).lower()) >= 0
+                        for c in (d.get("conditions") or [])
+                    )
+                elif k == "stock_qty":
+                    ok = ok and any(
+                        c.get("field") == "stock_qty" and c.get("value") == v
+                        for c in (d.get("conditions") or [])
+                    )
+                elif k == "amount_inr":
+                    # under/above may use lt/gt — accept matching numeric value
+                    ok = ok and any(
+                        c.get("field") == "amount_inr" and c.get("value") == v
                         for c in (d.get("conditions") or [])
                     )
                 else:

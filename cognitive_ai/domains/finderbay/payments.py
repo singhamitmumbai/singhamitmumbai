@@ -9,11 +9,14 @@ from ...core.records import Claim, EvidenceStatus, utc_now
 from ...memory.store import MemorySystem
 from .auth import AuthService
 
+# Any kept for optional AuditLog without circular import
+
 
 class PaymentService:
-    def __init__(self, memory: MemorySystem, auth: AuthService) -> None:
+    def __init__(self, memory: MemorySystem, auth: AuthService, audit: Any = None) -> None:
         self.memory = memory
         self.auth = auth
+        self.audit = audit
 
     def list_payments(self, *, project_id: Optional[str] = None, invoice_id: Optional[str] = None) -> list[dict]:
         rows = self.memory.get_records("payment")
@@ -32,7 +35,7 @@ class PaymentService:
         method: str = "bank_transfer",
         reference: str = "",
     ) -> dict[str, Any]:
-        self.auth.require(token, "payment_write")
+        user = self.auth.require(token, "payment_write")
         invoices = self.memory.get_records("invoice", id=invoice_id)
         if not invoices:
             raise ValueError(f"invoice_not_found:{invoice_id}")
@@ -75,4 +78,14 @@ class PaymentService:
                 invoice_id,
                 {**inv, "payment_status": "partial", "paid_total": paid_total},
             )
-        return {"payment": row, "invoice_paid_total": paid_total, "invoice_amount": inv_amount}
+        out = {"payment": row, "invoice_paid_total": paid_total, "invoice_amount": inv_amount}
+        if self.audit is not None:
+            self.audit.record(
+                "record_payment",
+                user_id=user.user_id,
+                roles=list(user.roles),
+                resource=invoice_id,
+                detail={"payment_id": pid, "amount_inr": float(amount_inr)},
+                ok=True,
+            )
+        return out

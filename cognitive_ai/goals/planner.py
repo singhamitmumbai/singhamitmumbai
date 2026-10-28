@@ -328,6 +328,25 @@ class OperatorPlanner:
             state.set_plan(plan)
             return plan
 
+        if op_name == "query_audit_log":
+            steps = [
+                PlanStepRecord(
+                    operator="scan_audit_log",
+                    args={},
+                    verification=["audit_ready"],
+                ),
+                PlanStepRecord(operator="respond", args={}, verification=["claims_match_structure"]),
+            ]
+            plan = PlanRecord(
+                goal_id=goal.goal_id,
+                steps=steps,
+                outcome="feasible",
+                explanation="Multi-user audit trail query.",
+                cost=2.0,
+            )
+            state.set_plan(plan)
+            return plan
+
         if op_name == "query_vendors":
             steps = [
                 PlanStepRecord(

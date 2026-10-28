@@ -229,6 +229,19 @@ class ResponseGenerator:
                 if ov is not None:
                     text += f" Open PO value ₹{ov:,.0f}."
             structured = {"count": n, "listed": True}
+        elif op == "query_audit_log":
+            audit = getattr(executor, "last_audit", None) or {}
+            events = audit.get("events") if isinstance(audit.get("events"), list) else []
+            count = len(events)
+            by = audit.get("by_action") or {}
+            top = ", ".join(f"{k}={v}" for k, v in list(by.items())[:5]) or "none"
+            text = f"Audit trail: {count} recent event(s). By action: {top}."
+            structured = {
+                "count": count,
+                "listed": True,
+                "by_action": by,
+                "events": events[-10:],
+            }
         elif op == "query_alerts":
             alerts = executor.last_alerts or {}
             n = alerts.get("count", 0)

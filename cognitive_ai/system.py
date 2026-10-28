@@ -105,10 +105,13 @@ class CompleteNonLLMAI:
             allow_inventory_write=self.config.allow_inventory_write,
         )
         self.executor.vision = self.vision
-        self.auth = AuthService()
-        self.payments = PaymentService(self.memory, self.auth)
-        self.contracts = ContractService(self.memory, self.auth)
-        self.purchase_orders = PurchaseOrderService(self.memory, self.auth)
+        from .domains.finderbay.audit import AuditLog
+
+        self.audit = AuditLog()
+        self.auth = AuthService(audit=self.audit)
+        self.payments = PaymentService(self.memory, self.auth, audit=self.audit)
+        self.contracts = ContractService(self.memory, self.auth, audit=self.audit)
+        self.purchase_orders = PurchaseOrderService(self.memory, self.auth, audit=self.audit)
         self.alerts = ProactiveMonitor(self.memory)
         self.reports = ReportExporter(self.memory, self.alerts)
         self.executor.auth = self.auth
@@ -117,6 +120,7 @@ class CompleteNonLLMAI:
         self.executor.purchase_orders = self.purchase_orders
         self.executor.alerts = self.alerts
         self.executor.reports = self.reports
+        self.executor.audit = self.audit
         self.responder = ResponseGenerator()
         self.learner = LearningSystem(self.memory, dataset_dir=self.config.dataset_dir)
         self.improvement = ImprovementLoop()
@@ -308,6 +312,7 @@ class CompleteNonLLMAI:
             "query_contracts",
             "record_payment",
             "query_alerts",
+            "query_audit_log",
             "query_purchase_orders",
             "create_purchase_order",
             "query_vendors",
