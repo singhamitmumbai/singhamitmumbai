@@ -1,0 +1,12 @@
+{
+  "note": "No mass deletion in this pass. Multiple overlapping entrypoints exist (Brain REPL, CompleteAI, Assistant, JARVIS, ProtoAGI). MotherBrain coordinates rather than deleting them.",
+  "overlapping_runtimes": [
+    "Brain",
+    "CompleteAI",
+    "FinderbayAssistant",
+    "JARVIS",
+    "ProtoAGIStack",
+    "MotherBrain"
+  ],
+  "human_level_agi": false
+}

@@ -1,14 +1,23 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.27.0) — **message search + variations** · audit trail · lifelong persist · 24/7 learning · coding · computer control. Still `human_level_agi=false`.
+**Complete AI** (v1.28.0) — **Finderbay Mother AI** (NL REPL fixed + cognitive loop) · message search/vary · audit · lifelong persist · 24/7 learning. Still `human_level_agi=false`.
+
+### Mother AI (start here)
+
+```bash
+python -m cognitive_ai mother
+# or just: python -m cognitive_ai
+Mother> hii
+Mother> how are you
+Mother> inspect this project and find what is broken
+```
+
+See **[MOTHER_AI_RUN_GUIDE.md](MOTHER_AI_RUN_GUIDE.md)** · **[MOTHER_AI_UPGRADE_REPORT.md](MOTHER_AI_UPGRADE_REPORT.md)**.
 
 ### Download full code
 
-- **Packaged zip:** [releases/Complete_Non_LLM_AI_v1.27.0.zip](releases/Complete_Non_LLM_AI_v1.27.0.zip)  
-- **Direct link:** https://github.com/singhamitmumbai/singhamitmumbai/raw/cursor/complete-non-llm-ai-v04/releases/Complete_Non_LLM_AI_v1.27.0.zip  
+- Rebuild zip: `python scripts/package_release.py` → `dist/Complete_Non_LLM_AI_v1.28.0.zip`
 - See **[DOWNLOAD.md](DOWNLOAD.md)** for install steps.
-
-Perception → structured understanding → knowledge/memory → reasoning → planning →
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no

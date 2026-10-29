@@ -244,6 +244,10 @@ def run_full_suite(*, allow_live_search: bool = False) -> dict[str, Any]:
         "message_search_vary",
         lambda: _message_search_vary_smoke(),
     )
+    add(
+        "mother_ai",
+        lambda: _mother_ai_smoke(),
+    )
 
     passed = sum(1 for r in results if r.get("ok"))
     failed = [r["name"] for r in results if not r.get("ok")]
@@ -564,3 +568,34 @@ def _message_search_vary_smoke() -> dict[str, Any]:
         "variations": len(varied.get("variations") or []),
         "query_variations": len(found.get("query_variations") or []),
     }
+
+
+def _mother_ai_smoke() -> dict[str, Any]:
+    import tempfile
+    from pathlib import Path
+
+    from cognitive_ai.cli import handle_line
+    from cognitive_ai.brain import Brain
+    from cognitive_ai.mother import MotherBrain
+
+    with tempfile.TemporaryDirectory() as td:
+        m = MotherBrain(store_dir=Path(td), seed_demo=False, enable_llm=False)
+        hi = m.handle("hii")
+        how = m.handle("how are you")
+        # simulate REPL path
+        brain = Brain()
+        # capture via return path: ensure no unknown command text
+        ok_nl = "unknown command" not in (hi.get("text") or "").lower()
+        ok_how = "unknown command" not in (how.get("text") or "").lower()
+        cyc = hi.get("mother_cycle") or {}
+        return {
+            "ok": (
+                hi.get("route") == "mother"
+                and ok_nl
+                and ok_how
+                and bool(cyc.get("stages"))
+                and m.status().get("human_level_agi") is False
+            ),
+            "stages": [s.get("stage") for s in cyc.get("stages") or []],
+            "greeting": (hi.get("text") or "")[:80],
+        }

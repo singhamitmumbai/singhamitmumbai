@@ -35,7 +35,11 @@ Commands:
   load <path>                  Load knowledge base
   lessons                      Show recent learning lessons
   thoughts                     Show recent thoughts
+  status / diagnose / benchmark Mother AI observability
   quit / exit                  Leave REPL
+
+Natural language (Mother AI — no more "Unknown command"):
+  hi · how are you · who are you · inspect this project …
 """.strip()
 
 
@@ -86,8 +90,12 @@ def build_parser() -> argparse.ArgumentParser:
             "proto-agi",
             "learn",
             "learning",
+            "mother",
+            "diagnose",
+            "benchmark",
+            "status",
         ],
-        help="Optional subcommand: jarvis, assistant, complete-ai, agi-gap, learn, diagnostics, completeness, full-test, os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
+        help="Optional subcommand: mother, diagnose, benchmark, status, jarvis, assistant, complete-ai, agi-gap, learn, diagnostics, completeness, full-test, os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
     )
     p.add_argument(
         "--mode",
@@ -248,11 +256,27 @@ def run_demo(brain: Optional[Brain] = None) -> int:
     return 0
 
 
-def handle_line(brain: Brain, line: str) -> bool:
-    """Handle one REPL line. Returns False to exit."""
+def handle_line(brain: Brain, line: str, *, mother=None) -> bool:
+    """Handle one REPL line. Returns False to exit.
+
+    Explicit symbolic commands remain available. Everything else is routed
+    through Finderbay Mother AI / natural dialogue — never "Unknown command"
+    for greetings or free-form chat.
+    """
     line = line.strip()
     if not line:
         return True
+
+    # Fast-path natural language before shlex (so "how are you" isn't a command)
+    from .mother.gateway import InputGateway
+
+    gw = InputGateway()
+    first = line.split(None, 1)[0].lower()
+    if first in ("quit", "exit", "q"):
+        return False
+    if not gw.is_explicit_command(line):
+        return _mother_or_dialogue(brain, line, mother=mother)
+
     try:
         parts = shlex.split(line)
     except ValueError as e:
@@ -265,6 +289,18 @@ def handle_line(brain: Brain, line: str) -> bool:
         return False
     if cmd == "help":
         print(HELP)
+        print("\nMother AI also accepts natural language (hi, how are you, inspect …).")
+        return True
+    if cmd == "status" and mother is not None:
+        print(json.dumps(mother.status(), indent=2, default=str))
+        return True
+    if cmd == "diagnose" and mother is not None:
+        print(mother.diagnose()["text"])
+        return True
+    if cmd == "benchmark" and mother is not None:
+        from .mother.benchmark import run_finderbench
+
+        print(json.dumps(run_finderbench(mother), indent=2, default=str))
         return True
     if cmd == "domain":
         if not args:
@@ -331,7 +367,10 @@ def handle_line(brain: Brain, line: str) -> bool:
         return True
     if cmd == "ask":
         q = line[len(parts[0]) :].strip().strip('"').strip("'")
-        print(brain.ask(q))
+        if mother is not None:
+            print(mother.ask(q))
+        else:
+            print(brain.ask(q))
         return True
     if cmd == "why":
         if len(args) < 3:
@@ -390,22 +429,69 @@ def handle_line(brain: Brain, line: str) -> bool:
             print(f"- [{t.kind}] {t.content}")
         return True
 
-    print(f"Unknown command '{cmd}'. Type 'help'.")
-    return True
+    # Unknown symbolic verb → still treat as natural language, never dead-end
+    return _mother_or_dialogue(brain, line, mother=mother)
 
 
-def repl(brain: Brain) -> int:
-    print(f"cognitive_ai {__version__} — symbolic brain REPL (no LLM)")
-    print("Type 'help' for commands, 'demo' via: python -m cognitive_ai --demo")
+def _mother_or_dialogue(brain: Brain, line: str, *, mother=None) -> bool:
+    """Route free-form text to MotherBrain (preferred) or symbolic dialogue."""
+    if mother is not None:
+        out = mother.handle(line)
+        print(out.get("text") or "")
+        return True
+    # Lazy mother for default REPL
+    try:
+        from .mother import MotherBrain
+
+        # Attach ephemeral mother on brain for session continuity
+        if not hasattr(brain, "_mother") or brain._mother is None:  # type: ignore[attr-defined]
+            brain._mother = MotherBrain(seed_demo=True, enable_llm=False)  # type: ignore[attr-defined]
+        out = brain._mother.handle(line)  # type: ignore[attr-defined]
+        print(out.get("text") or "")
+        return True
+    except Exception:
+        print(brain.ask(line))
+        return True
+
+
+def repl(brain: Brain, *, mother=None) -> int:
+    print(f"Finderbay Mother AI / cognitive_ai {__version__} — integrated runtime (no required LLM)")
+    print("Natural language enabled. Type 'help' for symbolic commands. human_level_agi=false")
     if brain.kb.domain and brain.kb.domain != "empty":
         print(f"Domain: {brain.kb.domain} ({len(brain.kb)} facts)")
+    if mother is None:
+        from .mother import MotherBrain
+
+        mother = MotherBrain(seed_demo=True, enable_llm=False)
+        print(mother.greeting().split("\n")[0])
     while True:
         try:
-            line = input("brain> ")
+            line = input("Mother> ")
         except (EOFError, KeyboardInterrupt):
             print()
             break
-        if not handle_line(brain, line):
+        if not handle_line(brain, line, mother=mother):
+            break
+    return 0
+
+
+def mother_repl() -> int:
+    from .mother import MotherBrain
+
+    mother = MotherBrain(seed_demo=True, enable_llm=False)
+    brain = mother.symbolic
+    print("=" * 60)
+    print(f"Finderbay Mother AI v{__version__}")
+    print(mother.greeting())
+    print("=" * 60)
+    print("human_level_agi=false")
+    while True:
+        try:
+            line = input("Mother> ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        if not handle_line(brain, line, mother=mother):
             break
     return 0
 
@@ -486,6 +572,26 @@ def main(argv: Optional[list[str]] = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    # Finderbay Mother AI — integrated cognitive runtime
+    if args.command in ("mother", "diagnose", "benchmark", "status"):
+        from .mother import MotherBrain
+        from .mother.benchmark import run_finderbench
+
+        mother = MotherBrain(seed_demo=True, enable_llm=False)
+        if args.command == "status":
+            print(json.dumps(mother.status(), indent=2, default=str))
+            return 0
+        if args.command == "diagnose":
+            print(mother.diagnose()["text"])
+            return 0
+        if args.command == "benchmark":
+            print(json.dumps(run_finderbench(mother), indent=2, default=str))
+            return 0
+        if args.ask:
+            print(mother.handle(args.ask)["text"])
+            return 0
+        return mother_repl()
 
     # Complete Finderbay system
     if args.command in ("finderbay", "complete"):
@@ -935,13 +1041,20 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(json.dumps(report.to_dict(), indent=2))
         return 0
 
-    # Default: REPL (or demo if stdin is not a TTY and no flags)
+    # Default: Mother AI REPL (natural language + symbolic commands)
     if args.repl or args.command == "repl" or sys.stdin.isatty():
-        return repl(brain)
+        if args.command == "repl":
+            # Explicit classic symbolic REPL still available via: python -m cognitive_ai repl
+            # but NL fallback remains enabled inside handle_line.
+            return repl(brain)
+        return mother_repl()
 
-    # Non-interactive stdin: treat lines as commands
+    # Non-interactive stdin: Mother-backed natural language / commands
+    from .mother import MotherBrain
+
+    mother = MotherBrain(seed_demo=True, enable_llm=False)
     for line in sys.stdin:
-        if not handle_line(brain, line):
+        if not handle_line(brain, line, mother=mother):
             break
     return 0
 

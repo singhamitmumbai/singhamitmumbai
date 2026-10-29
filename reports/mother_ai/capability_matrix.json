@@ -1,0 +1,84 @@
+{
+  "dialogue_nl": {
+    "implemented": true,
+    "connected": true,
+    "executed": true,
+    "measured": true,
+    "generalizes": "partial",
+    "production_ready": "partial",
+    "notes": "Mother gateway + REPL fix; greetings/Hinglish smoke pass"
+  },
+  "goals_persistent": {
+    "implemented": true,
+    "connected": true,
+    "executed": true,
+    "measured": true,
+    "generalizes": "partial",
+    "production_ready": "partial"
+  },
+  "beliefs": {
+    "implemented": true,
+    "connected": true,
+    "executed": true,
+    "measured": true,
+    "generalizes": "partial",
+    "production_ready": "partial"
+  },
+  "workspace": {
+    "implemented": true,
+    "connected": true,
+    "executed": true,
+    "measured": true,
+    "generalizes": "partial",
+    "production_ready": "partial"
+  },
+  "proposer_critic_verifier": {
+    "implemented": true,
+    "connected": true,
+    "executed": true,
+    "measured": "smoke",
+    "generalizes": "partial",
+    "production_ready": false
+  },
+  "complete_ai_tools": {
+    "implemented": true,
+    "connected": true,
+    "executed": true,
+    "measured": true,
+    "generalizes": "partial",
+    "production_ready": "partial"
+  },
+  "coding": {
+    "implemented": true,
+    "connected": true,
+    "executed": true,
+    "measured": true,
+    "generalizes": "partial",
+    "production_ready": "partial"
+  },
+  "vision": {
+    "implemented": true,
+    "connected": true,
+    "executed": "optional",
+    "measured": "limited",
+    "generalizes": false,
+    "production_ready": false
+  },
+  "continuous_learning": {
+    "implemented": true,
+    "connected": true,
+    "executed": true,
+    "measured": true,
+    "generalizes": "partial",
+    "production_ready": "gated"
+  },
+  "agi": {
+    "implemented": false,
+    "connected": false,
+    "executed": false,
+    "measured": false,
+    "generalizes": false,
+    "production_ready": false,
+    "notes": "human_level_agi=false"
+  }
+}
