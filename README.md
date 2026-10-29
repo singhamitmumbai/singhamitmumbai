@@ -1,6 +1,14 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-**Complete AI** (v1.27.0) — **message search + variations** · audit trail · lifelong persist · 24/7 learning · coding · computer control. Still `human_level_agi=false`:
+**Complete AI** (v1.27.0) — **message search + variations** · audit trail · lifelong persist · 24/7 learning · coding · computer control. Still `human_level_agi=false`.
+
+### Download full code
+
+- **Packaged zip:** [releases/Complete_Non_LLM_AI_v1.27.0.zip](releases/Complete_Non_LLM_AI_v1.27.0.zip)  
+- **Direct link:** https://github.com/singhamitmumbai/singhamitmumbai/raw/cursor/complete-non-llm-ai-v04/releases/Complete_Non_LLM_AI_v1.27.0.zip  
+- See **[DOWNLOAD.md](DOWNLOAD.md)** for install steps.
+
+Perception → structured understanding → knowledge/memory → reasoning → planning →
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
