@@ -1,14 +1,22 @@
-"""Complete non-LLM cognitive AI — symbolic brain + Finderbay assistant.
+"""Complete AI — full stack product.
 
-No pretrained general-purpose LLM at runtime. Neural specialists for speech/OCR
-may be plugged in with audited provenance; this package ships symbolic /
-algorithmic cognition plus measurable perception stubs.
+Core: Finderbay tasks, vision, coding, SelfBrain agent, speech/OCR, open-domain chat
+(symbolic / non-LLM). Optional: ChatGPT-class general chat via LLM bridge when enabled.
+
+Honest limits: human_level_agi=false. LLM is OFF by default (llm_at_runtime=false).
 """
 
 from .brain import Brain
 from .version import __version__
 
-__all__ = ["Brain", "CompleteNonLLMAI", "__version__", "CognitiveOS"]
+__all__ = [
+    "Brain",
+    "CompleteAI",
+    "CompleteNonLLMAI",
+    "GeneralNonLLMAI",
+    "__version__",
+    "CognitiveOS",
+]
 
 
 def __getattr__(name: str):
@@ -16,8 +24,16 @@ def __getattr__(name: str):
         from .os.system import CognitiveOS
 
         return CognitiveOS
+    if name == "CompleteAI":
+        from .complete_ai import CompleteAI
+
+        return CompleteAI
     if name == "CompleteNonLLMAI":
         from .system import CompleteNonLLMAI
 
         return CompleteNonLLMAI
+    if name == "GeneralNonLLMAI":
+        from .general.agent import GeneralNonLLMAI
+
+        return GeneralNonLLMAI
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

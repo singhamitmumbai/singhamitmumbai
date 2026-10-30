@@ -47,8 +47,18 @@ INTENT_CUES: list[tuple[str, list[tuple[str, float]]]] = [
             ("material", 2.0),
             ("stock", 1.8),
             ("inventory", 1.8),
-            ("reserve", 1.5),
             ("warehouse", 1.2),
+            ("available", 0.8),
+            ("kitna stock", 2.0),
+        ],
+    ),
+    (
+        "reserve_stock",
+        [
+            ("reserve", 2.5),
+            ("book stock", 2.0),
+            ("hold", 1.0),
+            ("allocate", 1.5),
         ],
     ),
     (
@@ -59,6 +69,10 @@ INTENT_CUES: list[tuple[str, list[tuple[str, float]]]] = [
             ("reminder", 1.5),
             ("deadline", 1.2),
             ("assign", 1.0),
+            ("create task", 2.5),
+            ("add task", 2.5),
+            ("list tasks", 2.2),
+            ("naya kaam", 2.0),
         ],
     ),
     (
@@ -69,7 +83,10 @@ INTENT_CUES: list[tuple[str, list[tuple[str, float]]]] = [
             ("scan", 1.2),
             ("ocr", 1.5),
             ("from this", 1.0),
-            ("table", 0.8),
+            ("amount due", 2.0),
+            ("invoice scan", 2.0),
+            ("what is the", 0.8),
+            ("field", 1.0),
         ],
     ),
     (
@@ -120,6 +137,235 @@ INTENT_CUES: list[tuple[str, list[tuple[str, float]]]] = [
             ("help", 1.0),
         ],
     ),
+    (
+        "query_payments",
+        [
+            ("payment", 2.0),
+            ("payments", 2.2),
+            ("paid amount", 1.5),
+            ("settlement", 1.8),
+            ("neft", 1.2),
+        ],
+    ),
+    (
+        "record_payment",
+        [
+            ("record payment", 4.5),
+            ("post payment", 4.5),
+            ("mark paid", 3.5),
+            ("receive payment", 3.5),
+            ("log payment", 4.0),
+            ("enter payment", 4.0),
+            ("payment of", 2.0),
+        ],
+    ),
+    (
+        "query_contracts",
+        [
+            ("contract", 2.0),
+            ("contracts", 2.2),
+            ("agreement", 1.8),
+            ("supplier agreement", 2.0),
+        ],
+    ),
+    (
+        "login",
+        [
+            ("login", 2.5),
+            ("log in", 2.5),
+            ("sign in", 2.0),
+            ("authenticate", 2.0),
+        ],
+    ),
+    (
+        "query_audit_log",
+        [
+            ("audit log", 3.0),
+            ("audit trail", 3.0),
+            ("show audit", 2.8),
+            ("security log", 2.5),
+            ("who logged in", 2.2),
+            ("activity log", 2.3),
+        ],
+    ),
+    (
+        "query_alerts",
+        [
+            ("alert", 2.0),
+            ("alerts", 2.2),
+            ("overdue", 1.5),
+            ("low stock", 2.5),
+            ("expiring", 1.8),
+            ("what needs attention", 2.5),
+            ("proactive", 1.5),
+            ("monitor", 1.2),
+        ],
+    ),
+    (
+        "query_purchase_orders",
+        [
+            ("purchase order", 2.5),
+            ("purchase orders", 2.7),
+            ("po list", 2.2),
+            ("show pos", 2.0),
+            ("open pos", 2.0),
+        ],
+    ),
+    (
+        "create_purchase_order",
+        [
+            ("create purchase order", 4.5),
+            ("create po", 4.0),
+            ("new purchase order", 4.0),
+            ("raise po", 3.5),
+            ("raise purchase order", 4.0),
+        ],
+    ),
+    (
+        "query_vendors",
+        [
+            ("vendor", 2.0),
+            ("vendors", 2.2),
+            ("supplier list", 2.0),
+            ("show suppliers", 2.0),
+        ],
+    ),
+    (
+        "export_report",
+        [
+            ("export report", 3.5),
+            ("export csv", 3.5),
+            ("download report", 3.0),
+            ("generate report", 2.5),
+            ("csv report", 3.0),
+        ],
+    ),
+    (
+        "understand_scene",
+        [
+            ("understand the scene", 5.0),
+            ("understand this image", 5.0),
+            ("understand the image", 5.0),
+            ("understand objects", 4.5),
+            ("what do you see", 4.5),
+            ("what is in this image", 4.5),
+            ("what's in this image", 4.5),
+            ("see analyze understand", 5.0),
+            ("analyze and understand", 4.5),
+            ("look at this image", 4.0),
+            ("describe this image", 4.0),
+            ("describe the scene", 4.0),
+            ("search the object", 4.0),
+            ("identify objects", 4.0),
+            ("perceive image", 4.0),
+            ("thermal image", 4.5),
+            ("analyze thermal", 5.0),
+            ("thermal scan", 4.5),
+            ("infrared image", 4.5),
+            ("night vision", 4.0),
+            ("flir", 4.0),
+        ],
+    ),
+    (
+        "thermal_analyze",
+        [
+            ("thermal analyze", 5.0),
+            ("analyze thermal image", 5.0),
+            ("thermal hotspot", 4.5),
+            ("heat map analysis", 4.5),
+            ("thermography", 4.5),
+            ("find hotspots", 4.0),
+            ("infrared thermal", 4.5),
+        ],
+    ),
+    (
+        "detect_objects",
+        [
+            ("detect objects", 4.5),
+            ("object detection", 4.0),
+            ("what objects", 3.0),
+            ("yolo detect", 4.0),
+            ("run vision", 3.5),
+            ("analyze image", 3.5),
+            ("computer vision", 3.5),
+        ],
+    ),
+    (
+        "detect_vehicles",
+        [
+            ("detect vehicles", 4.5),
+            ("vehicle detection", 4.0),
+            ("count cars", 3.5),
+            ("count vehicles", 4.0),
+            ("track vehicles", 3.5),
+            ("cars in image", 3.0),
+            ("traffic detection", 3.5),
+        ],
+    ),
+    (
+        "count_people",
+        [
+            ("count people", 4.5),
+            ("people counter", 4.0),
+            ("how many people", 4.0),
+            ("person count", 3.5),
+            ("crowd count", 3.5),
+            ("count persons", 4.0),
+        ],
+    ),
+    (
+        "detect_fire",
+        [
+            ("detect fire", 4.5),
+            ("fire detection", 4.0),
+            ("smoke detection", 4.0),
+            ("is there fire", 3.5),
+            ("fire alert", 3.5),
+        ],
+    ),
+    (
+        "scan_document_vision",
+        [
+            ("document scanner", 4.5),
+            ("scan this page", 4.0),
+            ("perspective scan", 4.0),
+            ("warp document", 4.0),
+            ("scan this document with opencv", 5.0),
+            ("cv document scan", 4.5),
+            ("deskew document", 4.0),
+            ("scan page edges", 4.0),
+        ],
+    ),
+    (
+        "vision_status",
+        [
+            ("vision status", 4.5),
+            ("yolo status", 4.0),
+            ("vision projects", 4.0),
+            ("computer vision status", 4.5),
+            ("list vision", 3.5),
+            ("cv capabilities", 3.5),
+        ],
+    ),
+    (
+        "ppe_compliance",
+        [
+            ("ppe compliance", 4.5),
+            ("hard hat", 3.0),
+            ("safety vest", 3.0),
+            ("ppe check", 4.0),
+            ("safety compliance", 3.5),
+        ],
+    ),
+    (
+        "estimate_queue",
+        [
+            ("estimate queue", 4.5),
+            ("queue wait", 4.0),
+            ("wait time", 3.0),
+            ("queue length", 3.5),
+        ],
+    ),
 ]
 
 
@@ -135,6 +381,15 @@ def rank_intents(text: str, top_k: int = 3) -> list[IntentHit]:
                 evidence.append(cue)
         if score > 0:
             hits.append(IntentHit(intent=intent, score=score, evidence=evidence))
+    # Prefer write actions over read queries when explicit record/post verbs appear
+    if re.search(r"\b(record|post|log|enter)\s+payment\b|\bmark\s+paid\b", lower):
+        for h in hits:
+            if h.intent == "record_payment":
+                h.score += 3.0
+                h.evidence.append("write_payment_boost")
+            elif h.intent in {"query_invoices", "query_payments"}:
+                h.score -= 1.5
+                h.evidence.append("write_payment_penalty")
     hits.sort(key=lambda h: -h.score)
     return hits[:top_k]
 

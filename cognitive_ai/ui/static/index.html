@@ -2,62 +2,137 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Cognitive OS — Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Complete AI — Chat</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/chat.css" />
 </head>
 <body>
-  <div class="atmosphere" aria-hidden="true"></div>
-  <div class="app">
-    <header class="brand">
-      <div class="brand-mark" aria-hidden="true"></div>
-      <div class="brand-text">
-        <h1>Cognitive OS</h1>
-        <p class="tagline">Symbolic brain · offline · no LLM</p>
+  <div class="app" id="app">
+    <!-- Mobile backdrop -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar" aria-label="Sidebar">
+      <div class="sidebar-top">
+        <button type="button" class="btn-new" id="btnNewChat" title="New chat">
+          <span class="icon">＋</span> New chat
+        </button>
+        <button type="button" class="icon-btn sidebar-close" id="btnCloseSidebar" aria-label="Close sidebar">✕</button>
       </div>
-      <div class="status-pill" id="statusPill">booting…</div>
-    </header>
 
-    <main class="layout">
-      <aside class="rail" id="rail">
-        <section>
-          <h2>Mind</h2>
-          <dl id="mindStats"></dl>
-        </section>
-        <section>
-          <h2>Quick</h2>
-          <div class="chips">
+      <div class="sidebar-scroll">
+        <section class="side-section">
+          <h2>Quick prompts</h2>
+          <div class="prompt-list" id="promptList">
             <button type="button" data-prompt="Who are you?">Who are you?</button>
-            <button type="button" data-prompt="What do you know?">What do you know?</button>
-            <button type="button" data-prompt="What are you trying to do?">Goals</button>
-            <button type="button" data-prompt="How do you think?">How think?</button>
-            <button type="button" data-cmd="think">Think ×3</button>
-            <button type="button" data-cmd="reason">Reason</button>
+            <button type="button" data-prompt="Explain gravity in simple terms">Explain gravity</button>
+            <button type="button" data-prompt="Can penguins fly?">Can penguins fly?</button>
+            <button type="button" data-prompt="Show unpaid invoices for Project A">Unpaid invoices</button>
+            <button type="button" data-prompt="Search the web for photosynthesis">Web: photosynthesis</button>
+            <button type="button" data-prompt="Write a poem about Mars">Poem about Mars</button>
+            <button type="button" data-prompt="Calculate 15% of 240">Calculate 15% of 240</button>
+            <button type="button" data-prompt="multi-step research DNA then verify">Proto-AGI research</button>
+            <button type="button" data-prompt="generate function add(a, b)">Generate code</button>
+            <button type="button" data-prompt="Compare dog and cat">Compare dog &amp; cat</button>
+            <button type="button" data-prompt="vary message: Show unpaid invoices for Project A">Vary a message</button>
+            <button type="button" data-prompt="search messages for invoice">Search messages</button>
           </div>
         </section>
-        <section>
-          <h2>Domains</h2>
-          <div class="chips">
-            <button type="button" data-domain="animals">animals</button>
-            <button type="button" data-domain="blocks">blocks</button>
-            <button type="button" data-domain="kitchen">kitchen</button>
-          </div>
-        </section>
-      </aside>
 
-      <section class="chat-panel">
+        <section class="side-section">
+          <h2>Search messages</h2>
+          <form class="msg-search" id="msgSearchForm" autocomplete="off">
+            <input type="search" id="msgSearchInput" placeholder="Search chat…" aria-label="Search messages" />
+            <button type="submit" id="msgSearchBtn" title="Search">⌕</button>
+          </form>
+          <div class="search-results" id="searchResults">
+            <p class="muted empty-hist">Search this session</p>
+          </div>
+        </section>
+
+        <section class="side-section">
+          <h2>History</h2>
+          <div class="history-list" id="historyList">
+            <p class="muted empty-hist">No saved turns yet</p>
+          </div>
+        </section>
+
+        <section class="side-section">
+          <h2>System</h2>
+          <div class="sys-actions">
+            <button type="button" data-cmd="/status">Status</button>
+            <button type="button" data-cmd="/diag">Diagnostics</button>
+            <button type="button" data-cmd="/completeness">Completeness</button>
+            <button type="button" data-cmd="/reset">Reset session</button>
+          </div>
+        </section>
+      </div>
+
+      <div class="sidebar-foot">
+        <div class="pill-row">
+          <span class="pill" id="agiPill">agi=false</span>
+          <span class="pill" id="llmPill">llm:…</span>
+        </div>
+        <p class="muted tiny" id="versionLabel">Complete AI</p>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <div class="main">
+      <header class="topbar">
+        <button type="button" class="icon-btn" id="btnOpenSidebar" aria-label="Open menu">☰</button>
+        <div class="brand">
+          <div class="logo" aria-hidden="true"></div>
+          <div>
+            <h1>Complete AI</h1>
+            <p class="subtitle" id="statusLine">booting…</p>
+          </div>
+        </div>
+        <div class="top-actions">
+          <label class="mode-wrap" title="Routing mode">
+            <span class="sr-only">Mode</span>
+            <select id="modeSelect" aria-label="Chat mode">
+              <option value="auto">auto</option>
+              <option value="symbolic">symbolic</option>
+              <option value="proto">proto-agi</option>
+              <option value="finderbay">finderbay</option>
+              <option value="coding">coding</option>
+              <option value="vision">vision</option>
+              <option value="llm">llm</option>
+            </select>
+          </label>
+          <button type="button" class="icon-btn" id="btnTheme" title="Toggle theme" aria-label="Toggle theme">◐</button>
+        </div>
+      </header>
+
+      <section class="chat" aria-label="Conversation">
         <div class="messages" id="messages" role="log" aria-live="polite"></div>
-        <form class="composer" id="composer">
-          <label class="sr-only" for="input">Message</label>
-          <textarea id="input" rows="1" placeholder="Ask the brain, or: assert s p o · goal desc | s p o · why s p o · think"></textarea>
-          <button type="submit" id="send">Send</button>
-        </form>
-        <p class="hint">Try <code>assert rover is_a dog</code> · <code>goal Feed tweety | tweety fed true</code> · <code>why tweety can fly</code></p>
+
+        <div class="composer-wrap">
+          <div class="suggestions" id="suggestions"></div>
+          <form class="composer" id="composer">
+            <textarea
+              id="input"
+              rows="1"
+              placeholder="Message Complete AI… (Enter to send, Shift+Enter for newline)"
+              autocomplete="off"
+            ></textarea>
+            <button type="submit" id="send" aria-label="Send">
+              <span class="send-label">Send</span>
+              <span class="send-icon" aria-hidden="true">↑</span>
+            </button>
+          </form>
+          <p class="footer-hint">
+            Offline non-LLM brain + optional ChatGPT-class API.
+            <code>human_level_agi=false</code>
+          </p>
+        </div>
       </section>
-    </main>
+    </div>
   </div>
   <script src="/static/chat.js"></script>
 </body>

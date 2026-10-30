@@ -1,32 +1,464 @@
 # Complete Non-LLM AI (Finderbay + Symbolic Cognitive OS)
 
-A runnable **complete non-LLM AI** built from the engineering blueprint:
+**Complete AI** (v1.28.0) — **Finderbay Mother AI** (NL REPL fixed + cognitive loop) · message search/vary · audit · lifelong persist · 24/7 learning. Still `human_level_agi=false`.
+
+### Mother AI (start here)
+
+```bash
+python -m cognitive_ai mother
+# or just: python -m cognitive_ai
+Mother> hii
+Mother> how are you
+Mother> inspect this project and find what is broken
+```
+
+See **[MOTHER_AI_RUN_GUIDE.md](MOTHER_AI_RUN_GUIDE.md)** · **[MOTHER_AI_UPGRADE_REPORT.md](MOTHER_AI_UPGRADE_REPORT.md)**.
+
+### Download full code
+
+- Rebuild zip: `python scripts/package_release.py` → `dist/Complete_Non_LLM_AI_v1.28.0.zip`
+- See **[DOWNLOAD.md](DOWNLOAD.md)** for install steps.
 
 perception → structured understanding → knowledge/memory → reasoning → planning →
 learning → action → verification — with a shared typed working state and **no
-pretrained general-purpose LLM at runtime**.
+pretrained general-purpose LLM required at runtime** (optional LLM via API key).
 
-Non-LLM does **not** mean non-neural: specialist speech/OCR models may be plugged
-in. This repo ships measurable stubs plus full symbolic / algorithmic cognition
-and the **Finderbay** domain (invoices, deliveries, materials, tasks).
+### Complete AI / Finderbay Assistant / JARVIS — start here
+
+```bash
+# JARVIS non-LLM controller (tool contracts · jobs · provenance · shortage skill)
+python -m cognitive_ai jarvis --demo
+python -m cognitive_ai jarvis --eval
+python -m cognitive_ai jarvis --ask "Prepare tomorrow's material shortage report for Site-7"
+
+# Finderbay Assistant (voice · memory · vision · planning · computer · learning · JARVIS)
+python -m cognitive_ai assistant --demo
+python -m cognitive_ai assistant --ask "remember that my warehouse is Central Store"
+python -m cognitive_ai assistant --ask "plan Show unpaid invoices for Project A"
+
+# ChatGPT-class general chat + local tools (auto-on when key is set)
+export OPENAI_API_KEY=sk-...
+python -m cognitive_ai complete-ai --ask "Write a short poem about Mars"
+python -m cognitive_ai diagnostics
+python -m cognitive_ai completeness
+
+# Enable local computer control (allowlisted; off by default)
+export COMPLETE_AI_COMPUTER_CONTROL=1
+python -m cognitive_ai assistant --ask "computer open_url https://example.com"
+
+# 24/7 continuous self-learning (verified experience only; off by default)
+export COMPLETE_AI_CONTINUOUS_LEARNING=1
+python -m cognitive_ai learn --daemon --interval 60
+python -m cognitive_ai learn --ticks 3
+python -m cognitive_ai assistant --ask "learning status"
+
+# API + Chat UI
+python -m cognitive_ai api --mode assistant --port 8787
+python -m cognitive_ai chat --domain complete --port 8765
+# → open http://127.0.0.1:8765/
+```
+
+Product: **Complete AI** / **Finderbay Assistant** / **JARVIS tools**. `human_level_agi=false`.  
+Computer control is **gated** (no keylogging); enable explicitly. LLM is optional.  
+Continuous learning is **gated**; never promotes unverified self-labels.
+
+### What v1.27 adds — Search messages + vary messages
+
+| Piece | Role |
+|------|------|
+| `chat/messages.py` | `MessageSearch` (synonyms + query variations) · `MessageVariation` (formal/simple/short/polite/question/imperative/hinglish/email/bullet) |
+| NL commands | `search messages for invoice` · `vary message: …` · `vary last message` · `/search` · `/vary` |
+| Chat UI | Sidebar search · **Vary** / **Find** buttons · `/api/search_messages` · `/api/vary_message` |
+| Tools | `TOOL search_messages` · `TOOL vary_message` |
+
+```bash
+python -m cognitive_ai complete-ai --ask "Explain gravity"
+python -m cognitive_ai complete-ai --ask "search messages for gravity"
+python -m cognitive_ai complete-ai --ask "vary message: Show unpaid invoices for Project A"
+pytest tests/test_message_search_vary_v127.py -q
+```
+
+### What v1.26 adds — Full system upgrade
+
+| Piece | Upgrade |
+|------|------|
+| Finderbay audit | Multi-user `AuditLog` for login / payments / contracts / POs · `Show audit log` |
+| Lifelong persist | Proto-AGI lifelong store auto-loads/saves under `data/complete_ai/lifelong/` |
+| NLU composition | Fixed `overdue`≠`over`; `between X and Y`; stock qty; cancelled/scrap exclusions |
+| OCR→invoice | `LayoutOCR.export_invoice_fields` maps tables/fields → invoice dict + CSV |
+| CI gate | `.github/workflows/ci.yml` runs pytest + completeness + full-test |
+| Perception bootstrap | `scripts/ensure_perception_models.py` |
+
+```bash
+pytest tests/test_upgrade_v126.py -q
+python -m cognitive_ai full-test
+# Show audit log after: login acct1 password acct-pass
+```
+
+### What v1.25 adds — 24/7 self-learning
+
+| Piece | Role |
+|------|------|
+| `learning_sys/continuous.py` | ContinuousLearner daemon — drain → reinforce → consolidate → mine → dream → calibrate |
+| `learning_sys/journal.py` | Durable JSONL journal + snapshot under `data/complete_ai/continuous_learning/` |
+| Wiring | CompleteAI / Assistant / CLI observe every reply; `COMPLETE_AI_CONTINUOUS_LEARNING=1` |
+| Safety | Rejects `source in {model,self,unverified}` without `verified=True`; candidates ≠ facts |
+
+```bash
+export COMPLETE_AI_CONTINUOUS_LEARNING=1
+python -m cognitive_ai learn --ticks 3
+pytest tests/test_continuous_learning_v125.py -q
+# See SELF_LEARNING.md
+```
+
+### What v1.24 adds — Stronger, more stable coding system
+
+| Piece | Upgrade |
+|------|------|
+| Smart impls | `add`/`multiply`/`divide`/`clamp`/… get real bodies (not NotImplementedError) |
+| Verifier | AST + py_compile + soft lint + optional pure smoke-exec |
+| Editor | Atomic writes; refuse invalid syntax before save; `format` via ast.unparse |
+| Intents | `verify` · `explain` · `format` · `generate enum` · `implement function` |
+| Safety | Workspace path sandbox; banned imports in smoke-exec |
+
+```bash
+python -m cognitive_ai code --ask "generate function add(a, b)"
+python -m cognitive_ai code --ask "verify file generated/add.py"
+pytest tests/test_coding_strong_v124.py -q
+```
+
+### What v1.23 adds — Detailed full computer control
+
+Allowlisted local desktop + filesystem automation (off by default):
+
+| Piece | Role |
+|------|------|
+| `assistant/computer.py` | 30+ actions: files, apps, screenshot, notify, input, shell |
+| `assistant/computer_policy.py` | Sandbox roots, forbidden paths, shell denylist |
+| `assistant/computer_nlu.py` | Natural language → action (`open https://…`, `list files in data`) |
+| Safety | No keylogging · no clipboard monitoring · confirm for destructive/input/shell |
+
+```bash
+export COMPLETE_AI_COMPUTER_CONTROL=1
+python -m cognitive_ai assistant --ask "computer help"
+pytest tests/test_computer_control_v123.py -q
+# See COMPUTER_CONTROL.md
+```
+
+### What v1.22 adds — Full-code upgrade + full-test
+
+| Piece | Upgrade |
+|------|------|
+| Common-sense KB | More tech/business/science facts + 18 inference rules |
+| SCAN / transfer | Extra payment/contract/composition cases; retail/farm/construction schemas |
+| Speech | Hindi / English / Indian-English factories + model registry |
+| OCR | `LayoutOCR.analyze_layout()` multi-page summary |
+| Auth | Multi-user directory, session info, permission listing |
+| `runtime/full_suite.py` | End-to-end pillar runner |
+| CLI | `python -m cognitive_ai full-test` |
+
+```bash
+python -m cognitive_ai full-test
+python -m cognitive_ai diagnostics
+pytest tests/test_full_upgrade_v122.py -q
+```
+
+**How to upgrade** (code, engines, or in-app knowledge): see [`UPGRADE.md`](UPGRADE.md).
+
+### What v1.21 adds — Thinking on every entrypoint
+
+Same deliberator, now also wired into **FinderbayAssistant**, **JARVIS**, **GeneralNonLLMAI**, and **CompleteNonLLMAI** cycle (`think` stage). Plans include situation type, alternatives considered, next actions, and a reflect step.
+
+```bash
+python -m cognitive_ai assistant --ask "Explain OCR simply"
+python -m cognitive_ai jarvis --ask "are you ready"
+pytest tests/test_thinking_v120.py -q
+```
+
+### What v1.20 adds — Universal thinking & planning
+
+Every situation / question runs a non-LLM deliberator **before** answering:
+
+| Piece | Role |
+|------|------|
+| `thinking/deliberator.py` | Perceive → safety → goal → strategy → alternatives → plan → risks → reflect |
+| `thinking/attach.py` | Shared `think_or_abstain` / `merge_thinking` for any handler |
+| CompleteAI / OpenDomainChat / ProtoAGIStack | Always call `ThinkingSystem.think()` first; attach `thinking` + `thinking_markdown` |
+| Chat UI | Expandable **Thinking** panel on every bot reply |
+| `/api/chat` | Returns `thinking`, `thinking_brief`, `thinking_markdown` |
+
+```bash
+python -m cognitive_ai complete-ai --ask "How do I reserve cement?"
+# reply includes thinking plan steps
+pytest tests/test_thinking_v120.py -q
+```
+
+### What v1.19 adds — Modern Chat UI frontend
+
+| Piece | Role |
+|------|------|
+| `ui/static/index.html` | ChatGPT-style layout: sidebar, history, mode select, welcome grid |
+| `ui/static/chat.css` | Light/dark theme, responsive mobile drawer |
+| `ui/static/chat.js` | Markdown-lite replies, typing indicator, copy, suggestions |
+| `ui/server.py` | Richer `/api/chat` (mode, route, suggestions) + `/api/completeness` |
+
+```bash
+python -m cognitive_ai chat --domain complete --port 8765
+# open http://127.0.0.1:8765/
+pytest tests/test_chat_ui.py -q
+```
+
+### What v1.18 adds — Persist, multi-goal, arbitrate, scorecard
+
+| Pillar | Upgrade |
+|------|------|
+| General learning | Session outcomes feed `GeneralLearner` when proto stack is active |
+| Open-world | Chat uses expanded world hub before fallback |
+| Deep transfer | New `lab` + `logistics` domain schemas |
+| Long-horizon | `enqueue_goal` / `run_queue` multi-goal autonomy |
+| Multimodality | Session buffer + `arbitrate()` winner selection |
+| Lifelong memory | `persist()` / `load()` continuity across restarts |
+| Metacognition | Calibration retained from v1.17 |
+| Alignment/evals | Pillar **scorecard** in `run_agi_grade_eval` |
+
+```bash
+python -m cognitive_ai agi-gap --eval
+pytest tests/test_agi_gap_v118.py -q
+```
+
+### What v1.17 adds — Product integration + AGI-grade eval suite
+
+| Piece | Role |
+|------|------|
+| `agi_gap/eval_suite.py` | Cross-pillar AGI-grade-flavored eval (`run_agi_grade_eval`) |
+| SmartRouter `proto_agi` | Routes multi-step / transfer / open-world asks to gap stack |
+| CompleteAI `proto_stack` | Lazy stack + `bind_backends` for real chat/web actuators |
+| Assistant route | `proto_agi` handled before general Complete AI |
+| Metacognition | Outcome calibration rates per strategy |
+
+```bash
+python -m cognitive_ai agi-gap --eval
+python -m cognitive_ai complete-ai --ask "multi-step research photosynthesis then verify"
+python -m cognitive_ai assistant --ask "multi-step research DNA then verify"
+pytest tests/test_agi_gap_v117.py -q
+```
+
+### What v1.16 adds — Deepened proto-AGI gap stack (still not AGI)
+
+| Pillar | Upgrade |
+|------|------|
+| General learning | `general_learning.py` — curriculum, replay, verified multi-source updates |
+| Open-world | Mega world facts, hypotheses, relation hints, probe generator |
+| Deep transfer | `compose_transfer` multi-hop + structural overlap |
+| Long-horizon | Failure→replan recovery subgoals + verify |
+| Multimodality | Confidence-weighted `fuse()` across channels |
+| Lifelong memory | Importance scoring + `dream()` spaced replay |
+| Metacognition | Strategy debate + post-hoc `critique()` |
+| Alignment/evals | Constitutional check + red-team battery; harder novel bench (15 cases) |
+
+```bash
+python -m cognitive_ai agi-gap --eval
+python -m cognitive_ai agi-gap --ask "multi-step research photosynthesis then verify"
+pytest tests/test_agi_gap_v116.py tests/test_agi_gap_v115.py -q
+```
+
+### What v1.15 adds — Proto-AGI gap upgrades (not AGI)
+
+| Piece | Role |
+|------|------|
+| `agi_gap/world_knowledge.py` | Much larger combinatorial world/commonsense + open-world frames |
+| `agi_gap/continual_skills.py` | Continual learning + auto-growing verified skill library |
+| `agi_gap/deep_transfer.py` | Cross-domain schema transfer + analogy |
+| `agi_gap/long_horizon.py` | Bounded long-horizon act→verify→reflect loops |
+| `agi_gap/multimodal_hub.py` | Always-on speech/OCR/vision channel orchestration |
+| `agi_gap/lifelong_memory.py` | Episodic consolidation into semantic/procedural memory |
+| `agi_gap/metacognition.py` | Strategy selection, abstain, self-model limits |
+| `agi_gap/alignment.py` | Product alignment guard + honesty badge |
+| `benchmarks/hard_novel.py` | Hard evals on novel tasks **outside Finderbay** |
+
+```bash
+python -m cognitive_ai agi-gap --demo
+python -m cognitive_ai agi-gap --eval
+python -m cognitive_ai agi-gap --ask "multi-step research photosynthesis then verify"
+python -m cognitive_ai bench
+pytest tests/test_agi_gap_v115.py -q
+```
+
+> These modules **narrow the gap** toward broader intelligence. They do **not** achieve AGI.
+
+### What v1.14 adds — ChatGPT-level non-LLM chat
+
+| Piece | Role |
+|------|------|
+| `response/chatgpt_style.py` | Natural prose: overview, bullets, steps, yes/no, follow-ups |
+| `nlu/smart_questions.py` | Dialogue acts, style (eli5/detailed), creative + math intents |
+| `search/web_intel.py` | Query expansion, richer local KB, ChatGPT-style cited answers |
+| `OpenDomainChat` | Poem/email/outline/brainstorm/math + smarter search escalation |
+| Tests | Broad ChatGPT-style question battery (`test_chatgpt_level.py`) |
+
+```bash
+python -m cognitive_ai assistant --ask "Explain gravity in simple terms"
+python -m cognitive_ai assistant --ask "Write a poem about Mars"
+python -m cognitive_ai assistant --ask "Calculate 15% of 240"
+python -m cognitive_ai assistant --ask "Search the web for photosynthesis"
+pytest tests/test_chatgpt_level.py tests/test_smart_questions_and_search.py -q
+```
+
+> Still `human_level_agi=false`. For unrestricted cloud ChatGPT models, set `OPENAI_API_KEY` (auto-enables the LLM bridge). Offline, the non-LLM brain now answers in a ChatGPT-like helpful style.
+
+### What v1.13 adds — Smarter questions + intelligent internet search
+
+| Piece | Role |
+|------|------|
+| `nlu/smart_questions.py` | Paraphrase normalize, domain tag, answer policy |
+| `nlu/questions.py` | Stronger WH/ask-form (search, inline WH, Hinglish) |
+| `search/web_intel.py` | Rewrite → local KB → DuckDuckGo/Wikipedia → cite |
+| OpenDomainChat | Uses smart frames + web escalation on KB miss |
+| JARVIS `web.search` | Typed research tool with sources |
+
+```bash
+python -m cognitive_ai assistant --ask "What is gravity?"
+python -m cognitive_ai assistant --ask "Search the web for photosynthesis"
+pytest tests/test_smart_questions_and_search.py -q
+```
+
+### What v1.12 adds — Full-code strength upgrade
+
+| Piece | Role |
+|------|------|
+| `intelligence/router.py` | Multi-signal SmartRouter (jarvis/vision/thermal/finderbay/coding/…) |
+| `intelligence/confidence.py` | Honest confidence bands on answers |
+| `intelligence/hardening.py` | Input harden + SelfCheck battery |
+| JARVIS interpret | Hybrid regex + TF-IDF classifier |
+| BM25 retrieval | Fuzzy + character n-gram boost (Hinglish/typos) |
+| Verifier | More vision/report/payment checks |
+| Assistant | Router-first dispatch + `self check` |
+
+```bash
+python -m cognitive_ai assistant --ask "self check"
+python -m cognitive_ai diagnostics
+```
+
+### What v1.11 adds — Smarter vision + thermal & other modalities
+
+| Piece | Role |
+|------|------|
+| `vision/modalities.py` | Detect RGB / **thermal** / IR / night / X-ray / depth / document / … |
+| `vision/thermal.py` | Hotspots, cold spots, relative heat map, alerts |
+| `vision/smart.py` | Scene type, risks, recommendations, follow-ups |
+| Pipeline | modality → thermal (if IR) → see → analyze → understand → search → smart |
+
+```bash
+python -m cognitive_ai vision --task understand_scene --image ./warehouse_thermal_flir.jpg
+python -m cognitive_ai vision --task thermal_analyze --image ./panel_thermal.jpg
+python -m cognitive_ai vision --task detect_modality --image ./gate_night_vision.jpg
+```
+
+### What v1.10 adds — Vision understand loop
+
+See→analyze→understand + object search; NLU `understand_scene`; vision tools.
+
+### What v1.9 adds — complete JARVIS full code
+
+| Piece | Role |
+|------|------|
+| `JarvisSystem` | Full facade: NLU + SQLite/FTS5 + policy + docs + dialogue + learning + voice |
+| `nlu.py` | TF-IDF intent classifier + Hinglish slot extraction |
+| `sqlite_memory.py` | SQLite facts + FTS5 BM25 document search |
+| `learning.py` | Corrections → offline train → held-out eval → activate / rollback |
+| `policy.py` | Trusted grants; planner cannot self-approve |
+| `documents.py` | Create/verify report artifacts; decimal money |
+| `dialogue.py` | Follow-ups (“other site”, “change the date”) |
+| `adapters.py` | Files, Finderbay inventory, ASR/OCR bridges |
+| Docs | `docs/JARVIS.md` · `FILE_INDEX.md` (full source listing) |
+
+### What v1.8 added — JARVIS Tools & System Blueprint
+
+Tool contracts, job store, provenance memory, material shortage skill, voice PTT, eval suite, CLI/API.
+
+### Release zip
+
+```bash
+python scripts/package_release.py
+# → dist/Complete_Non_LLM_AI_v1.27.0.zip
+```
+
+See `INSTALL.md` for install steps after unzipping.
+
+### What v1.2 adds — Computer vision (YOLO_Projects)
+
+Vendored from [Nawaf-Rayhan585/YOLO_Projects](https://github.com/Nawaf-Rayhan585/YOLO_Projects) (MIT):
+
+| Piece | Role |
+|------|------|
+| `cognitive_ai/vision/` | VisionSystem + YOLO engine (Ultralytics or stub) + task adapters |
+| `third_party/YOLO_Projects/` | Source projects (vehicles, people, fire, PPE, document scan, …) |
+| NLU / planner / executor | Intents: detect objects/vehicles/people/fire, scan document, vision status |
+| CLI | `python -m cognitive_ai vision --task vision_status` · `--image path.jpg` |
+
+CNN detectors are specialist **perception** (blueprint §5C) — not a general LLM.
+
+### What v1.1 adds — SelfBrain agent + coding system
+
+| Piece | Role |
+|------|------|
+| `SelfBrainAgent` | Autonomous queue: take Finderbay tasks → plan → act → verify → retry |
+| `FinderbayAgentSystem` | Bridge so Finderbay AI assigns work the SelfBrain executes |
+| `CodingSystem` | Advanced **non-LLM** coding: AST analysis, symbol index, templates, edits, pytest |
+| CLI | `python -m cognitive_ai agent --demo` · `python -m cognitive_ai code --ask "..."` |
+
+### What v1.0 completes (blueprint alignment)
+
+| Blueprint theme | Implementation |
+|------|---------|
+| Shared operating cycle | Inspectable `cycle` trace on every request (perceive→…→respond) |
+| Uncertainty routing | Separate kinds → clarify / compare / refresh / abstain / qualify |
+| Conflict detection | Conflicting claims & invoice↔payment mismatches exposed |
+| Case-based reasoning | Reuse verified episodes as plan hints |
+| Improvement process | Failure → reviewed candidate → release (no self-labeling) |
+| Program induction | Learn operator sequences from reviewed examples |
+| Blueprint audit | `python -m cognitive_ai blueprint` component inventory |
+
+Also includes v0.9 question understanding, v0.8 alerts/POs/API, speech/OCR, 2000+ CS KB.
+
+**Honest limits (still):** not human-level AGI; open-domain coverage is finite/explicit; not unrestricted LLM chat.
 
 ## Quick start
 
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[dev,perception]"
+# optional real YOLO CNN inference:
+# pip install -e ".[vision]"
+# system OCR: tesseract-ocr tesseract-ocr-eng tesseract-ocr-hin
 
-# Full Finderbay assistant demo (blueprint example)
+# General AI (Finderbay + open-domain)
+python -m cognitive_ai general --demo
+python -m cognitive_ai general --ask "Can penguins fly?"
+
+# Finderbay-only
 python -m cognitive_ai finderbay --demo
-# or
-python scripts/demo_finderbay.py
 
-# One-shot
-python -m cognitive_ai finderbay --ask "Show unpaid invoices above ₹1 lakh for Project A, excluding disputed ones."
+# Computer vision (stub without ultralytics; real CNN with [vision] extra)
+python -m cognitive_ai vision --task vision_status
+python -m cognitive_ai finderbay --ask "Count people in image ./crowd_people.jpg"
+python -m cognitive_ai finderbay --ask "Detect vehicles in image ./traffic_cars.jpg"
+python -m cognitive_ai vision --image ./photo.jpg --task detect_objects
 
-# Independent evaluation suite
+# Chat UI (general router by default)
+python -m cognitive_ai chat --domain general
+# open http://127.0.0.1:8765/
+
 python -m cognitive_ai eval
+python -m cognitive_ai bench
+python -m cognitive_ai blueprint
+python -m cognitive_ai api --port 8787
+# GET /health /status /alerts /reports?kind=invoices  POST /ask
 pytest -q
 ```
+
+Speech models (optional, for live ASR): place Vosk packs under `models/`
+(`vosk-model-small-en-us-0.15`, `vosk-model-small-hi-0.22`, `vosk-model-small-en-in-0.4`).
+They are gitignored; the model registry reports install status.
 
 ## What “complete” means here
 
@@ -100,7 +532,7 @@ Runtime: **Python 3.10+ stdlib only**. Dev: `pytest`. No ML/LLM packages require
 
 ## Provenance note
 
-Speech and OCR modules expose full pipeline stages and metrics hooks. Bundled
-implementations are stubs/oracles for offline testing. Production checkpoints
-must be inventoried for LLM contamination if your policy requires “no LLM
-anywhere in the lifecycle.”
+Speech uses **Vosk** (offline ASR; EN pack vendored, HI/EN-IN via registry download).
+OCR uses **Tesseract** (+ layout/table heuristics). No pretrained general-purpose
+LLM is loaded at runtime. Acoustic/OCR checkpoints should still be inventoried
+for LLM contamination if your policy requires “no LLM anywhere in the lifecycle.”

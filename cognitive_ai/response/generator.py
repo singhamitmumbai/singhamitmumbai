@@ -7,6 +7,73 @@ from typing import Any, Optional
 from ..core.working_state import WorkingState
 from ..execution.executor import Executor
 from ..reasoning.engine import ReasoningResult
+from .hindi import (
+    prefer_hindi,
+    realize_alerts_hi,
+    realize_invoice_hi,
+    realize_materials_hi,
+    realize_payment_hi,
+    realize_pending_hi,
+    realize_reserve_hi,
+    realize_status_hi,
+    realize_task_hi,
+    realize_vision_hi,
+)
+
+
+def _ask_meta(frame: dict) -> dict:
+    q = frame.get("question") or {}
+    cond = {c.get("field"): c.get("value") for c in (frame.get("conditions") or [])}
+    return {
+        "ask_form": cond.get("ask_form") or q.get("ask_form"),
+        "aggregation": cond.get("aggregation") or q.get("aggregation"),
+        "expected_answer": q.get("expected_answer") or frame.get("output"),
+        "wh_type": q.get("wh_type"),
+        "is_question": bool(q.get("is_question")),
+    }
+
+
+def _reshape_for_question(
+    text: str,
+    structured: dict,
+    table: Optional[dict],
+    ask: dict,
+    frame: dict,
+) -> tuple[str, dict]:
+    """Prefer short answers for count/sum/exists questions."""
+    form = ask.get("ask_form")
+    agg = ask.get("aggregation")
+    expected = ask.get("expected_answer")
+    count = structured.get("count")
+    if count is None and table is not None:
+        count = table.get("row_count")
+    total = structured.get("total_inr")
+    if total is None and table is not None:
+        total = (table.get("meta") or {}).get("total_inr")
+
+    if form == "count" or agg == "count" or expected in ("number", "numeric_answer"):
+        if agg == "sum" or form == "sum":
+            if total is not None:
+                structured = {**structured, "answer": float(total), "answer_kind": "sum"}
+                return f"{_format_inr(float(total))}.", structured
+        if count is not None and form != "sum" and agg != "sum":
+            structured = {**structured, "answer": int(count), "answer_kind": "count"}
+            focus = [f for f in ((frame.get("question") or {}).get("focus") or []) if f not in ("those", "them", "that", "it")]
+            label = focus[0] if focus else "matching items"
+            if form == "count" or agg == "count":
+                return f"{int(count)} {label}.", structured
+
+    if form == "sum" or agg == "sum":
+        if total is not None:
+            structured = {**structured, "answer": float(total), "answer_kind": "sum"}
+            return f"Total {_format_inr(float(total))}.", structured
+
+    if form == "exists" or expected == "yes_no":
+        exists = bool(count and count > 0)
+        structured = {**structured, "answer": exists, "answer_kind": "exists"}
+        return ("Yes." if exists else "No."), structured
+
+    return text, structured
 
 
 def _format_inr(amount: float) -> str:
@@ -71,14 +138,21 @@ class ResponseGenerator:
             state.last_answer = answer
             return answer
 
+        lang = frame.get("language") or "en"
         if op == "status":
+            text = (
+                "I am Complete AI — a complete non-LLM task engine for Finderbay "
+                "(optional ChatGPT-class LLM chat can be enabled separately). "
+                "Supported: invoices, deliveries, materials, tasks, documents, payments, "
+                "contracts, vendors/POs, proactive alerts, CSV reports, auth, follow-up drafts "
+                "(without sending), and computer vision (YOLO object/vehicle/people/fire + "
+                "document scan via vendored YOLO_Projects). "
+                "human_level_agi=false. I keep unknown ≠ false, predicted ≠ observed, attempted ≠ confirmed."
+            )
+            if prefer_hindi(lang):
+                text = realize_status_hi()
             answer = {
-                "text": (
-                    "I am a complete non-LLM assistant for Finderbay. "
-                    "Supported: invoice queries, delivery pending lists, material lookup, "
-                    "task notes and follow-up drafts (without sending). "
-                    "I keep unknown ≠ false, predicted ≠ observed, attempted ≠ confirmed."
-                ),
+                "text": text,
                 "structured": state.summary(),
                 "faithful": True,
             }
@@ -96,19 +170,149 @@ class ResponseGenerator:
             if draft:
                 break
 
+        ask = _ask_meta(frame)
         if op == "query_invoices":
             text, structured = self._realize_invoices(reasoning, table)
+            if prefer_hindi(lang):
+                text = realize_invoice_hi(structured)
         elif op in ("query_deliveries", "prepare_followup"):
             text, structured = self._realize_deliveries(reasoning, table, draft, op)
+            if prefer_hindi(lang) and op != "prepare_followup":
+                text = realize_pending_hi(structured, draft)
         elif op == "query_materials":
             text, structured = self._realize_materials(table)
+            if prefer_hindi(lang):
+                text = realize_materials_hi(structured)
+        elif op == "reserve_stock":
+            text, structured = self._realize_reserve(executor.last_reservation)
+            if prefer_hindi(lang):
+                text = realize_reserve_hi(structured)
+        elif op == "manage_task":
+            text, structured = self._realize_task(executor, table)
+            if prefer_hindi(lang):
+                text = realize_task_hi(structured)
+        elif op == "document_qa":
+            text, structured = self._realize_document(executor.last_document)
+        elif op == "learn_alias":
+            alias = executor.last_alias or {}
+            text = (
+                f"Learned alias: '{alias.get('former')}' is now also known as "
+                f"'{alias.get('alias')}' → canonical '{alias.get('canonical')}'."
+            )
+            structured = {**alias, "learned": True}
+        elif op == "login":
+            text = "Login successful." if executor.auth_token else "Login failed."
+            structured = {"logged_in": bool(executor.auth_token)}
+        elif op == "record_payment":
+            pay = executor.last_payment or {}
+            p = pay.get("payment") or {}
+            text = (
+                f"Recorded payment {p.get('id')} of ₹{p.get('amount_inr')} "
+                f"for {p.get('invoice_id')}. Invoice paid total ₹{pay.get('invoice_paid_total')}."
+            )
+            structured = {"payment_posted": True, **pay}
+            if prefer_hindi(lang):
+                text = realize_payment_hi(structured)
+        elif op in ("query_payments", "query_contracts", "query_purchase_orders", "query_vendors"):
+            n = table.get("row_count", 0) if table else 0
+            kind = {
+                "query_payments": "payment",
+                "query_contracts": "contract",
+                "query_purchase_orders": "purchase order",
+                "query_vendors": "vendor",
+            }[op]
+            text = f"{n} {kind}(s) found."
+            if table and table.get("meta", {}).get("active_value_inr") is not None:
+                text += f" Active contract value ₹{table['meta']['active_value_inr']:,.0f}."
+            if reasoning and reasoning.conclusions:
+                ov = reasoning.conclusions[0].get("open_value_inr")
+                if ov is not None:
+                    text += f" Open PO value ₹{ov:,.0f}."
+            structured = {"count": n, "listed": True}
+        elif op == "query_audit_log":
+            audit = getattr(executor, "last_audit", None) or {}
+            events = audit.get("events") if isinstance(audit.get("events"), list) else []
+            count = len(events)
+            by = audit.get("by_action") or {}
+            top = ", ".join(f"{k}={v}" for k, v in list(by.items())[:5]) or "none"
+            text = f"Audit trail: {count} recent event(s). By action: {top}."
+            structured = {
+                "count": count,
+                "listed": True,
+                "by_action": by,
+                "events": events[-10:],
+            }
+        elif op == "query_alerts":
+            alerts = executor.last_alerts or {}
+            n = alerts.get("count", 0)
+            by = alerts.get("by_severity") or {}
+            text = (
+                f"{n} alert(s) as of {alerts.get('as_of')}: "
+                f"{by.get('critical', 0)} critical, {by.get('warn', 0)} warn, {by.get('info', 0)} info."
+            )
+            structured = {"count": n, "alerts": alerts.get("alerts") or [], "by_severity": by}
+            if prefer_hindi(lang):
+                text = realize_alerts_hi(structured)
+        elif op == "create_purchase_order":
+            po = (executor.last_po or {}).get("purchase_order") or {}
+            text = (
+                f"Created purchase order {po.get('id')} for {po.get('item')} "
+                f"qty {po.get('qty')} @ ₹{po.get('unit_price_inr')} "
+                f"(total ₹{po.get('total_inr')}) via {po.get('vendor_name')}."
+            )
+            structured = {"po_created": True, **(executor.last_po or {})}
+        elif op == "export_report":
+            rep = executor.last_report or {}
+            text = (
+                f"Exported {rep.get('kind')} report with {rep.get('count', 0)} row(s) "
+                f"as {rep.get('format')}."
+            )
+            structured = {"report_ready": True, **rep}
+        elif op in (
+            "understand_scene",
+            "thermal_analyze",
+            "detect_objects",
+            "detect_vehicles",
+            "count_people",
+            "detect_fire",
+            "scan_document_vision",
+            "vision_status",
+            "ppe_compliance",
+            "estimate_queue",
+        ):
+            text, structured = self._realize_vision(executor.last_vision or {}, op)
+            if prefer_hindi(lang):
+                text = realize_vision_hi(structured, op)
         else:
             text = reasoning.message if reasoning else "Done."
             structured = {"reasoning": reasoning.to_dict() if reasoning else None}
 
+        # Compact numeric / yes-no answers when question analysis requested them
+        # (skip for vision — adapters already realize counts with the right labels)
+        if op not in (
+            "understand_scene",
+            "thermal_analyze",
+            "detect_objects",
+            "detect_vehicles",
+            "count_people",
+            "detect_fire",
+            "scan_document_vision",
+            "vision_status",
+            "ppe_compliance",
+            "estimate_queue",
+        ):
+            text, structured = _reshape_for_question(text, structured, table, ask, frame)
+
         # Validation: claims in text must match structure
         faithful = self._validate(text, structured)
-        answer = {"text": text, "structured": structured, "faithful": faithful, "table": table}
+        answer = {
+            "text": text,
+            "structured": structured,
+            "faithful": faithful,
+            "table": table,
+            "language": lang,
+            "question": frame.get("question"),
+        }
         state.last_answer = answer
         return answer
 
@@ -190,8 +394,162 @@ class ResponseGenerator:
 
     def _realize_materials(self, table: Optional[dict]) -> tuple[str, dict]:
         n = table.get("row_count", 0) if table else 0
-        text = f"{n} material record(s) available."
-        return text, {"count": n}
+        lines = [f"{n} material record(s) available."]
+        if table and table.get("rows"):
+            for row in table["rows"]:
+                lines.append(
+                    f"- {row.get('name') or row.get('id')}: available={row.get('available')}, "
+                    f"reserved={row.get('reserved')} {row.get('unit') or ''}".strip()
+                )
+        return "\n".join(lines), {"count": n, "items": (table or {}).get("rows") or []}
+
+    def _realize_reserve(self, reservation: Optional[dict]) -> tuple[str, dict]:
+        if not reservation:
+            return "Reservation failed.", {"reserved": False}
+        qty = reservation.get("qty_reserved")
+        text = (
+            f"Reserved {qty} of {reservation.get('name') or reservation.get('item')}. "
+            f"Available now {reservation.get('available')}, "
+            f"reserved balance {reservation.get('reserved_balance')}."
+        )
+        return text, {
+            "item": reservation.get("item"),
+            "qty_reserved": qty,
+            "available": reservation.get("available"),
+            "reserved_balance": reservation.get("reserved_balance"),
+            "reserved": True,
+        }
+
+    def _realize_task(self, executor: Executor, table: Optional[dict]) -> tuple[str, dict]:
+        if executor.last_task:
+            t = executor.last_task
+            text = f"Created task '{t.get('title')}' ({t.get('id')}) for {t.get('project_id') or 'no project'}."
+            return text, {"task_id": t.get("id"), "title": t.get("title"), "created": True}
+        n = table.get("row_count", 0) if table else 0
+        text = f"{n} task(s) listed."
+        if table and table.get("rows"):
+            for row in table["rows"]:
+                text += f"\n- [{row.get('status')}] {row.get('title')} ({row.get('id')})"
+        return text, {"count": n, "listed": True}
+
+    def _realize_document(self, doc_result: Optional[dict]) -> tuple[str, dict]:
+        if not doc_result:
+            return "No document available to read.", {"ok": False}
+        field = doc_result.get("field")
+        value = doc_result.get("value")
+        parsed = doc_result.get("parsed") or {}
+        issues = parsed.get("issues") or []
+        if field:
+            if value is None and issues:
+                text = (
+                    f"I can read the document, but the field '{field}' is ambiguous or invalid "
+                    f"({'; '.join(issues)})."
+                )
+            else:
+                text = f"Document field '{field}' = {value!r}."
+        else:
+            fields = parsed.get("fields") or {}
+            text = "Extracted fields: " + ", ".join(f"{k}={v}" for k, v in fields.items())
+        if issues and field is None:
+            text += f" Issues: {'; '.join(issues)}."
+        return text, {
+            "field": field,
+            "value": value,
+            "fields": parsed.get("fields"),
+            "issues": issues,
+            "ok": True,
+        }
+
+    @staticmethod
+    def _realize_vision(vision: dict, op: str) -> tuple[str, dict]:
+        if op == "vision_status":
+            projects = vision.get("projects") or {}
+            n = len(projects)
+            eng = vision.get("engine", "stub")
+            text = (
+                f"Computer vision ready via YOLO_Projects (MIT). "
+                f"Engine={eng}; {n} project adapters registered. "
+                f"No LLM used for detection."
+            )
+            return text, {**vision, "count": n, "ok": True}
+
+        if op == "scan_document_vision":
+            text_out = vision.get("text") or ""
+            has_quad = vision.get("has_document_quad")
+            if text_out:
+                preview = text_out[:200].replace("\n", " ")
+                text = f"Document scan extracted text ({len(text_out)} chars): {preview}"
+            elif has_quad:
+                text = "Found a document quadrilateral; OCR text empty (install tesseract for text)."
+            else:
+                err = vision.get("error") or "no_document_quad"
+                text = f"Document scan incomplete ({err})."
+            return text, {**vision, "ok": not vision.get("error"), "count": 1 if has_quad or text_out else 0}
+
+        counts = vision.get("counts_by_label") or {}
+        count = int(vision.get("count") or vision.get("people_count") or vision.get("vehicle_count") or 0)
+        engine = vision.get("engine", "stub")
+        if op == "count_people":
+            pc = int(vision.get("people_count") or count)
+            text = f"Counted {pc} person(s) (engine={engine})."
+            return text, {**vision, "count": pc, "ok": True}
+        if op == "detect_vehicles":
+            vc = int(vision.get("vehicle_count") or count)
+            text = f"Detected {vc} vehicle(s) (engine={engine})."
+            if counts:
+                text += " " + ", ".join(f"{k}={v}" for k, v in counts.items()) + "."
+            return text, {**vision, "count": vc, "ok": True}
+        if op == "detect_fire":
+            alert = bool(vision.get("alert"))
+            text = (
+                f"Fire/smoke alert: {'YES' if alert else 'no'} "
+                f"({count} detection(s), engine={engine})."
+            )
+            return text, {**vision, "count": count, "ok": True}
+        if op == "estimate_queue":
+            wait = vision.get("estimated_wait_minutes")
+            pc = int(vision.get("people_count") or count)
+            text = f"Queue estimate: {pc} people, ~{wait} minutes wait (engine={engine})."
+            return text, {**vision, "count": pc, "ok": True}
+        if op == "ppe_compliance":
+            pc = int(vision.get("people_count") or count)
+            text = (
+                f"PPE check: {pc} person(s) visible. "
+                f"{vision.get('note') or 'Custom PPE weights needed for hat/vest/mask.'}"
+            )
+            return text, {**vision, "count": pc, "ok": True}
+        if op == "understand_scene":
+            summary = vision.get("text") or (vision.get("understand") or {}).get("summary") or ""
+            und = (vision.get("understand") or {}).get("understood_count", 0)
+            unk = (vision.get("understand") or {}).get("unknown_count", 0)
+            searches = (vision.get("understand") or {}).get("search_count", 0)
+            mod = vision.get("modality") or {}
+            mod_name = mod.get("modality") if isinstance(mod, dict) else mod
+            scene = (vision.get("smart") or {}).get("scene_type")
+            if not summary:
+                summary = f"Saw {count} object(s); understood={und}, unknown={unk}, searches={searches}."
+            else:
+                summary = f"{summary} (understood={und}, unknown={unk}, searches={searches}, engine={engine})."
+            if mod_name:
+                summary = f"[{mod_name}] {summary}"
+            if scene:
+                summary += f" Scene={scene}."
+            return summary, {**vision, "count": count, "ok": True}
+        if op == "thermal_analyze":
+            summary = vision.get("text") or vision.get("summary") or "Thermal analysis complete."
+            alert = " ALERT." if vision.get("alert") else ""
+            return f"{summary}{alert}", {**vision, "count": count, "ok": True}
+
+        # detect_objects default
+        if counts:
+            detail = ", ".join(f"{k}={v}" for k, v in counts.items())
+            text = f"Detected {count} object(s): {detail} (engine={engine})."
+        else:
+            text = f"Detected {count} object(s) (engine={engine})."
+        note = vision.get("note")
+        if note and engine == "stub":
+            text += f" Note: {note}."
+        return text, {**vision, "count": count, "ok": True}
 
     @staticmethod
     def _num_word(n: int) -> str:

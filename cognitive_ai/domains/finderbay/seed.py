@@ -144,6 +144,131 @@ def seed_memory(memory: MemorySystem | None = None) -> MemorySystem:
         "task_1",
         {"project_id": "project_a", "title": "Site inspection", "status": "open"},
     )
+
+    # Contracts
+    memory.upsert_record(
+        "contract",
+        "ctr_1",
+        {
+            "project_id": "project_a",
+            "title": "Cement supply agreement",
+            "supplier": "BuildCo",
+            "value_inr": 5000000,
+            "start_date": "2025-01-01",
+            "end_date": "2026-12-31",
+            "status": "active",
+        },
+    )
+    memory.upsert_record(
+        "contract",
+        "ctr_2",
+        {
+            "project_id": "project_b",
+            "title": "Paint supply agreement",
+            "supplier": "ColorWorks",
+            "value_inr": 800000,
+            "start_date": "2025-06-01",
+            "end_date": "2026-06-01",
+            "status": "active",
+        },
+    )
+
+    # Link some invoices to contracts
+    inv42 = memory.get_records("invoice", id="inv_42")
+    if inv42:
+        memory.upsert_record("invoice", "inv_42", {**inv42[0], "contract_id": "ctr_1"})
+
+    # Existing payment example
+    memory.upsert_record(
+        "payment",
+        "pay_1",
+        {
+            "invoice_id": "inv_51",
+            "project_id": "project_a",
+            "amount_inr": 90000,
+            "method": "bank_transfer",
+            "reference": "NEFT901",
+            "status": "posted",
+            "paid_at": "2025-02-01T00:00:00+00:00",
+        },
+    )
+
+    # Vendors + purchase orders
+    memory.upsert_record(
+        "vendor",
+        "vendor_buildco",
+        {"name": "BuildCo", "category": "cement", "status": "active", "city": "mumbai"},
+    )
+    memory.upsert_record(
+        "vendor",
+        "vendor_colorworks",
+        {"name": "ColorWorks", "category": "paint", "status": "active", "city": "pune"},
+    )
+    memory.upsert_record(
+        "purchase_order",
+        "po_1",
+        {
+            "project_id": "project_a",
+            "vendor_id": "vendor_buildco",
+            "vendor_name": "BuildCo",
+            "item": "Cement bags",
+            "qty": 100,
+            "unit_price_inr": 450,
+            "total_inr": 45000,
+            "status": "open",
+            "created_at": "2026-03-01T00:00:00+00:00",
+        },
+    )
+    memory.upsert_record(
+        "purchase_order",
+        "po_2",
+        {
+            "project_id": "project_b",
+            "vendor_id": "vendor_colorworks",
+            "vendor_name": "ColorWorks",
+            "item": "Exterior paint",
+            "qty": 20,
+            "unit_price_inr": 1200,
+            "total_inr": 24000,
+            "status": "received",
+            "created_at": "2026-02-15T00:00:00+00:00",
+        },
+    )
+
+    # Sample invoice scan / document for OCR QA
+    memory.upsert_record(
+        "document",
+        "doc_inv_scan_1",
+        {
+            "project_id": "project_a",
+            "page_id": "page_1",
+            "text": "INVOICE 99\nVendor: BuildCo\nSubtotal 100000\nTax 18000\nAmount Due 118000",
+            "fields": {
+                "invoice_number": "99",
+                "vendor": "BuildCo",
+                "subtotal": "100000",
+                "tax": "18000",
+                "amount_due": "118000",
+            },
+            "tables": [],
+            "regions": [{"id": "r1", "text": "Amount Due 118000"}],
+            "source": "scan_register",
+        },
+    )
+    # Ambiguous handwritten-style amount for capability messaging tests
+    memory.upsert_record(
+        "document",
+        "doc_inv_scan_2",
+        {
+            "project_id": "project_a",
+            "page_id": "page_2",
+            "text": "Amount Due twenty-five?",
+            "fields": {"amount_due": "twenty-five?"},
+            "tables": [],
+            "regions": [],
+            "source": "handwritten_note",
+        },
+    )
     return memory
 
 

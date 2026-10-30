@@ -1,0 +1,49 @@
+{
+  "product": "Finderbay Mother AI",
+  "version": "1.28.0",
+  "human_level_agi": false,
+  "baseline": {
+    "pytest_passed": 320,
+    "pytest_failed": 0,
+    "completeness_ok": true,
+    "source": "reports/mother_ai/baseline_tests.log"
+  },
+  "after_upgrade": {
+    "pytest_passed": 327,
+    "pytest_failed": 0,
+    "new_tests": "tests/test_mother_ai_v128.py"
+  },
+  "critical_fix_fixed": {
+    "issue": "REPL Unknown command for natural language",
+    "repro_before": ["hii", "how are you"],
+    "after": "routed through MotherBrain dialogue",
+    "verified": true
+  },
+  "mother_loop_stages": [
+    "understand",
+    "recall",
+    "objective",
+    "metacognition",
+    "plan",
+    "execute",
+    "compare",
+    "learn"
+  ],
+  "entrypoints": {
+    "default": "python -m cognitive_ai  → Mother AI REPL",
+    "mother": "python -m cognitive_ai mother",
+    "diagnose": "python -m cognitive_ai diagnose",
+    "benchmark": "python -m cognitive_ai benchmark",
+    "status": "python -m cognitive_ai status"
+  },
+  "persistence": {
+    "goals": "data/complete_ai/mother/goals.json",
+    "beliefs": "data/complete_ai/mother/beliefs.json"
+  },
+  "capability_matrix": "reports/mother_ai/capability_matrix.json",
+  "notes": [
+    "Integration upgrade over existing CompleteAI/Brain/dialogue modules",
+    "Proposer/critic/verifier are heuristic coordinators, not AGI subsystems",
+    "FinderBench is smoke-scale, not a full general intelligence proof"
+  ]
+}

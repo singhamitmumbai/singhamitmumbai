@@ -20,21 +20,63 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 class ChatSession:
-    """One brain instance shared by the UI server."""
+    """One brain / complete-AI instance shared by the UI server."""
 
     def __init__(self, domain: str = "animals") -> None:
         self.lock = threading.RLock()
-        self.brain = Brain(name="ChatBrain")
-        self.brain.load_domain(domain)
-        self.brain.mark_booted()
-        self.brain.reason()
+        self.domain = domain
+        self.mode = (
+            "general"
+            if domain in ("finderbay", "complete", "general")
+            else "symbolic"
+        )
+        self.complete = None
+        self.general = None
+        self.brain = None
+        if self.mode == "general":
+            # Prefer Complete AI facade when domain is complete/general/finderbay
+            try:
+                from ..complete_ai import CompleteAI
+
+                self.complete = CompleteAI(seed_demo=True)
+                self.general = self.complete.general
+            except Exception:  # noqa: BLE001
+                from ..general.agent import GeneralNonLLMAI
+
+                self.general = GeneralNonLLMAI(seed_demo=True)
+        else:
+            self.brain = Brain(name="ChatBrain")
+            self.brain.load_domain(domain)
+            self.brain.mark_booted()
+            self.brain.reason()
 
     def status(self) -> dict[str, Any]:
         with self.lock:
+            if self.complete is not None:
+                return self.complete.status()
+            if self.general is not None:
+                return self.general.status()
+            assert self.brain is not None
             return self.brain.status()
 
     def greeting(self) -> str:
         with self.lock:
+            if self.complete is not None:
+                return self.complete.greeting()
+            if self.general is not None:
+                return (
+                    f"Complete AI ready (v{__version__}).\n"
+                    "Finderbay tasks + open-domain chat + vision + coding.\n"
+                    "Optional ChatGPT-class LLM chat when COMPLETE_AI_ENABLE_LLM=1.\n\n"
+                    "Try:\n"
+                    "  • Show unpaid invoices above ₹1 lakh for Project A, excluding disputed ones.\n"
+                    "  • Can penguins fly?\n"
+                    "  • Explain gravity simply\n"
+                    "  • Count people in image ./crowd_people.jpg\n"
+                    "  • Are you ChatGPT?\n\n"
+                    "Not human-level AGI."
+                )
+            assert self.brain is not None
             st = self.brain.status()
             return (
                 f"Cognitive OS chat ready (v{__version__}).\n"
@@ -47,9 +89,91 @@ class ChatSession:
                 "I am symbolic — no language model behind this chat."
             )
 
-    def handle_message(self, message: str) -> str:
+    def handle_message(self, message: str, *, mode: str = "auto") -> dict[str, Any]:
         with self.lock:
-            return self._dispatch(message.strip())
+            if self.complete is not None:
+                result = self.complete.handle(message.strip(), mode=mode or "auto")
+                suggestions = []
+                style = result.get("style") or {}
+                if isinstance(style, dict) and style.get("follow_ups"):
+                    suggestions = list(style.get("follow_ups") or [])[:4]
+                smart = result.get("smart") or {}
+                if not suggestions and isinstance(smart, dict):
+                    ents = smart.get("entities") or []
+                    if ents:
+                        suggestions = [
+                            f"Explain {ents[0]} simply",
+                            f"Search the web for {ents[0]}",
+                        ]
+                conf = None
+                if isinstance(result.get("confidence"), (int, float)):
+                    conf = float(result["confidence"])
+                elif isinstance(result.get("confidence"), dict):
+                    conf = result["confidence"].get("score")
+                thinking = result.get("thinking")
+                thinking_md = None
+                if isinstance(thinking, dict):
+                    # Prefer pre-rendered markdown when available
+                    thinking_md = result.get("thinking_markdown")
+                    if not thinking_md:
+                        try:
+                            from ..thinking import Deliberation, ThoughtStep
+
+                            thoughts = []
+                            for t in thinking.get("thoughts") or []:
+                                if isinstance(t, dict):
+                                    thoughts.append(
+                                        ThoughtStep(
+                                            t.get("stage") or "step",
+                                            t.get("content") or "",
+                                            float(t.get("confidence") or 0.5),
+                                        )
+                                    )
+                            d = Deliberation(
+                                situation=str(thinking.get("situation") or ""),
+                                goal=str(thinking.get("goal") or ""),
+                                thoughts=thoughts,
+                                plan=list(thinking.get("plan") or []),
+                                strategy=str(thinking.get("strategy") or ""),
+                                risks=list(thinking.get("risks") or []),
+                                unknowns=list(thinking.get("unknowns") or []),
+                                success_criteria=list(thinking.get("success_criteria") or []),
+                                confidence=float(thinking.get("confidence") or 0.5),
+                            )
+                            thinking_md = d.as_markdown()
+                        except Exception:  # noqa: BLE001
+                            thinking_md = result.get("thinking_brief")
+                return {
+                    "reply": str(result.get("text") or ""),
+                    "route": result.get("route"),
+                    "llm_at_runtime": bool(result.get("llm_at_runtime")),
+                    "human_level_agi": False,
+                    "product": result.get("product") or "Complete AI",
+                    "proto_agi": bool(result.get("proto_agi")),
+                    "confidence": conf,
+                    "suggestions": suggestions,
+                    "thinking": thinking,
+                    "thinking_brief": result.get("thinking_brief"),
+                    "thinking_markdown": thinking_md,
+                    "version": __version__,
+                }
+            if self.general is not None:
+                result = self.general.handle(message.strip())
+                return {
+                    "reply": str(result.get("text") or ""),
+                    "route": result.get("route"),
+                    "llm_at_runtime": False,
+                    "human_level_agi": False,
+                    "suggestions": [],
+                    "version": __version__,
+                }
+            return {
+                "reply": self._dispatch(message.strip()),
+                "route": "symbolic",
+                "human_level_agi": False,
+                "suggestions": [],
+                "version": __version__,
+            }
 
     def _dispatch(self, msg: str) -> str:
         if not msg:
@@ -200,6 +324,20 @@ def make_handler(session: ChatSession):
             if path == "/api/hello":
                 self._json(200, {"greeting": session.greeting(), "version": __version__})
                 return
+            if path == "/api/diagnostics":
+                if session.complete is not None:
+                    self._json(200, session.complete.diagnostics())
+                else:
+                    self._json(200, {"ok": True, "note": "symbolic_mode"})
+                return
+            if path == "/api/completeness":
+                if session.complete is not None and hasattr(session.complete, "completeness"):
+                    self._json(200, session.complete.completeness())
+                else:
+                    from ..runtime.completeness import run_completeness_check
+
+                    self._json(200, run_completeness_check())
+                return
             self._json(404, {"error": "not found"})
 
         def do_POST(self) -> None:  # noqa: N802
@@ -214,11 +352,49 @@ def make_handler(session: ChatSession):
 
             if path == "/api/chat":
                 message = str(payload.get("message", ""))
+                mode = str(payload.get("mode") or "auto")
                 try:
-                    reply = session.handle_message(message)
-                    self._json(200, {"reply": reply, "status": session.status()})
+                    out = session.handle_message(message, mode=mode)
+                    if isinstance(out, str):
+                        out = {"reply": out}
+                    out["status"] = session.status()
+                    out.setdefault("human_level_agi", False)
+                    self._json(200, out)
                 except Exception as exc:  # noqa: BLE001
                     self._json(500, {"error": str(exc)})
+                return
+            if path == "/api/reset":
+                if session.complete is not None:
+                    session.complete.reset_session()
+                self._json(200, {"ok": True, "reset": True})
+                return
+            if path == "/api/search_messages":
+                if session.complete is None:
+                    self._json(400, {"ok": False, "error": "complete_ai_required"})
+                    return
+                query = str(payload.get("query") or payload.get("message") or "").strip()
+                role = payload.get("role")
+                limit = int(payload.get("limit") or 20)
+                out = session.complete.search_messages(
+                    query, role=str(role) if role else None, limit=limit
+                )
+                out.setdefault("human_level_agi", False)
+                self._json(200, out)
+                return
+            if path == "/api/vary_message":
+                if session.complete is None:
+                    self._json(400, {"ok": False, "error": "complete_ai_required"})
+                    return
+                msg = str(payload.get("text") or payload.get("message") or "").strip()
+                styles = payload.get("styles")
+                n = payload.get("n")
+                out = session.complete.vary_message(
+                    msg,
+                    styles=list(styles) if isinstance(styles, list) else None,
+                    n=int(n) if n is not None else None,
+                )
+                out.setdefault("human_level_agi", False)
+                self._json(200, out)
                 return
             self._json(404, {"error": "not found"})
 
@@ -247,8 +423,10 @@ def serve_chat(
     session = ChatSession(domain=domain)
     handler = make_handler(session)
     httpd = ThreadingHTTPServer((host, port), handler)
-    print(f"Cognitive OS chat UI → http://127.0.0.1:{port}/  (domain={domain})")
-    print("Symbolic brain only — no LLM. Ctrl+C to stop.")
+    mode = session.mode
+    print(f"Complete AI chat UI → http://127.0.0.1:{port}/  (domain={domain}, mode={mode}, v{__version__})")
+    print("Open that URL in a browser. Ctrl+C to stop.")
+    print("Set OPENAI_API_KEY for ChatGPT-class chat. human_level_agi=false")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -262,10 +440,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     import sys
 
     argv = argv if argv is not None else sys.argv[1:]
-    p = argparse.ArgumentParser(description="Launch Cognitive OS chat UI")
+    p = argparse.ArgumentParser(description="Launch non-LLM chat UI")
     p.add_argument("--host", default="0.0.0.0")
     p.add_argument("--port", type=int, default=8765)
-    p.add_argument("--domain", default="animals")
+    p.add_argument(
+        "--domain",
+        default="complete",
+        help="animals|blocks|kitchen|finderbay|complete|general",
+    )
     args = p.parse_args(argv)
     serve_chat(host=args.host, port=args.port, domain=args.domain)
     return 0

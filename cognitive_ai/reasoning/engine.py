@@ -57,6 +57,87 @@ class ReasoningEngine:
             return self._reason_deliveries(state, frame)
         if op == "query_materials":
             return self._reason_materials(state, frame)
+        if op == "manage_task":
+            return self._reason_tasks(state, frame)
+        if op == "document_qa":
+            return ReasoningResult(
+                method="document_passthrough",
+                success=True,
+                message="Document fields handled by OCR extract operator.",
+            )
+        if op == "reserve_stock":
+            return ReasoningResult(
+                method="world_model",
+                success=True,
+                message="Reservation handled by world-model transition.",
+            )
+        if op == "query_payments":
+            rows = self.memory.get_records("payment")
+            pid = frame.get("project_id")
+            if pid:
+                rows = [r for r in rows if r.get("project_id") == pid]
+            return ReasoningResult(
+                method="lookup",
+                conclusions=[{"type": "payments", "items": rows, "count": len(rows)}],
+                message=f"{len(rows)} payment(s).",
+            )
+        if op == "query_contracts":
+            rows = self.memory.get_records("contract")
+            pid = frame.get("project_id")
+            if pid:
+                rows = [r for r in rows if r.get("project_id") == pid]
+            total = sum(float(r.get("value_inr") or 0) for r in rows if r.get("status") == "active")
+            return ReasoningResult(
+                method="lookup",
+                conclusions=[{
+                    "type": "contracts",
+                    "items": rows,
+                    "count": len(rows),
+                    "active_value_inr": total,
+                }],
+                message=f"{len(rows)} contract(s); active value INR {total:.0f}.",
+            )
+        if op == "query_purchase_orders":
+            rows = self.memory.get_records("purchase_order")
+            pid = frame.get("project_id")
+            if pid:
+                rows = [r for r in rows if r.get("project_id") == pid]
+            open_value = sum(float(r.get("total_inr") or 0) for r in rows if r.get("status") == "open")
+            return ReasoningResult(
+                method="lookup",
+                conclusions=[{
+                    "type": "purchase_orders",
+                    "items": rows,
+                    "count": len(rows),
+                    "open_value_inr": open_value,
+                }],
+                message=f"{len(rows)} purchase order(s); open value INR {open_value:.0f}.",
+            )
+        if op == "query_vendors":
+            rows = self.memory.get_records("vendor")
+            return ReasoningResult(
+                method="lookup",
+                conclusions=[{"type": "vendors", "items": rows, "count": len(rows)}],
+                message=f"{len(rows)} vendor(s).",
+            )
+        if op == "query_alerts":
+            return ReasoningResult(
+                method="proactive_monitor",
+                success=True,
+                message="Alerts produced by proactive monitor operator.",
+            )
+        if op == "export_report":
+            return ReasoningResult(
+                method="report_export",
+                success=True,
+                message="Report export handled by exporter operator.",
+            )
+        if op == "create_purchase_order":
+            return ReasoningResult(
+                method="purchase_order_write",
+                success=True,
+                message="Purchase order creation handled by PO service.",
+            )
         return ReasoningResult(
             method="passthrough",
             success=True,
@@ -76,12 +157,21 @@ class ReasoningEngine:
         unresolved = []
         today = date.today().isoformat()
 
+        META_FIELDS = {
+            "aggregation",
+            "ask_form",
+            "report_kind",
+            "output",
+            "clause_index",
+        }
         for inv in invoices:
             ok = True
             for cond in conditions:
                 field = cond["field"]
                 op = cond["operator"]
                 val = cond["value"]
+                if field in META_FIELDS:
+                    continue
                 if field == "overdue":
                     due = inv.get("due_date")
                     status = inv.get("payment_status")
@@ -233,10 +323,54 @@ class ReasoningEngine:
 
     def _reason_materials(self, state: WorkingState, frame: dict) -> ReasoningResult:
         rows = self.memory.get_records("material")
+        conditions = frame.get("conditions") or []
+        matched = []
+        for mat in rows:
+            ok = True
+            for cond in conditions:
+                field = cond.get("field")
+                op = cond.get("operator")
+                val = cond.get("value")
+                if field in ("ask_form", "aggregation", "output", "document_field"):
+                    continue
+                if field == "stock_qty":
+                    actual = mat.get("available")
+                elif field == "material_tag":
+                    tags = mat.get("tags") or []
+                    name = str(mat.get("name") or "").lower()
+                    if op == "ne":
+                        # Exclude materials whose name/tags contain the tag
+                        needle = str(val).lower()
+                        if needle in name or needle in [str(t).lower() for t in tags]:
+                            ok = False
+                            break
+                        continue
+                    actual = tags
+                elif field == "material_name":
+                    actual = str(mat.get("name") or "").lower()
+                    val = str(val).lower()
+                else:
+                    actual = mat.get(field)
+                if field != "material_tag" and not self._compare(actual, op, val):
+                    ok = False
+                    break
+            if ok:
+                matched.append(mat)
+        return ReasoningResult(
+            method="lookup+filters",
+            conclusions=[{"type": "materials", "items": matched}],
+            message=f"{len(matched)} material record(s).",
+        )
+
+    def _reason_tasks(self, state: WorkingState, frame: dict) -> ReasoningResult:
+        rows = self.memory.get_records("task")
+        pid = frame.get("project_id")
+        if pid:
+            rows = [r for r in rows if r.get("project_id") == pid]
         return ReasoningResult(
             method="lookup",
-            conclusions=[{"type": "materials", "items": rows}],
-            message=f"{len(rows)} material record(s).",
+            conclusions=[{"type": "tasks", "items": rows, "count": len(rows)}],
+            message=f"{len(rows)} task(s).",
         )
 
     @staticmethod

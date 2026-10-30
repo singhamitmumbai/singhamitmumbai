@@ -22,7 +22,7 @@ RESPONSE_TEMPLATES = {
 @dataclass
 class FinderbayPackage:
     name: str = "finderbay"
-    version: str = "1.0.0"
+    version: str = "1.1.0"
 
     def ontology(self):
         return finderbay_ontology()
@@ -78,6 +78,55 @@ class FinderbayPackage:
                 input_text="What are your capabilities?",
                 expected={"contains": "non-LLM"},
                 tags=["meta"],
+            ),
+            EvalCase(
+                case_id="list_materials",
+                task="query_materials",
+                input_text="Show material stock and inventory",
+                expected={"count": 1, "contains": "Cement"},
+                tags=["materials"],
+            ),
+            EvalCase(
+                case_id="reserve_cement",
+                task="reserve_stock",
+                input_text="Reserve 15 bags of cement",
+                expected={"reserved": True, "qty_reserved": 15.0},
+                tags=["materials", "world_model", "execution"],
+            ),
+            EvalCase(
+                case_id="create_task",
+                task="manage_task",
+                input_text="Create task for Project A: Order safety helmets",
+                expected={"created": True, "contains": "Order safety helmets"},
+                tags=["tasks"],
+            ),
+            EvalCase(
+                case_id="document_amount_due",
+                task="document_qa",
+                input_text="What is the amount due on the invoice scan document?",
+                expected={"value": 118000.0, "contains": "amount_due"},
+                tags=["ocr", "documents"],
+            ),
+            EvalCase(
+                case_id="list_tasks",
+                task="manage_task",
+                input_text="List tasks for Project A",
+                expected={"listed": True, "contains": "Site inspection"},
+                tags=["tasks"],
+            ),
+            EvalCase(
+                case_id="learn_warehouse_alias",
+                task="learn_alias",
+                input_text="Warehouse B is now called Central Store.",
+                expected={"learned": True, "contains": "Central Store"},
+                tags=["memory", "alias"],
+            ),
+            EvalCase(
+                case_id="overdue_invoices",
+                task="query_invoices",
+                input_text="Show overdue invoices for Project A",
+                expected={"contains": "invoice"},
+                tags=["invoices", "rules"],
             ),
         ]
 

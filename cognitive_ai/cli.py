@@ -6,6 +6,7 @@ import argparse
 import json
 import shlex
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -34,7 +35,11 @@ Commands:
   load <path>                  Load knowledge base
   lessons                      Show recent learning lessons
   thoughts                     Show recent thoughts
+  status / diagnose / benchmark Mother AI observability
   quit / exit                  Leave REPL
+
+Natural language (Mother AI — no more "Unknown command"):
+  hi · how are you · who are you · inspect this project …
 """.strip()
 
 
@@ -58,8 +63,57 @@ def build_parser() -> argparse.ArgumentParser:
         "command",
         nargs="?",
         default=None,
-        choices=["os", "demo", "repl", "chat", "ui", "finderbay", "complete", "eval"],
-        help="Optional subcommand: os, chat/ui, demo, repl, finderbay/complete, eval",
+        choices=[
+            "os",
+            "demo",
+            "repl",
+            "chat",
+            "ui",
+            "finderbay",
+            "complete",
+            "general",
+            "eval",
+            "bench",
+            "api",
+            "blueprint",
+            "agent",
+            "code",
+            "vision",
+            "complete-ai",
+            "diagnostics",
+            "completeness",
+            "full-test",
+            "full-suite",
+            "assistant",
+            "jarvis",
+            "agi-gap",
+            "proto-agi",
+            "learn",
+            "learning",
+            "mother",
+            "diagnose",
+            "benchmark",
+            "status",
+        ],
+        help="Optional subcommand: mother, diagnose, benchmark, status, jarvis, assistant, complete-ai, agi-gap, learn, diagnostics, completeness, full-test, os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
+    )
+    p.add_argument(
+        "--mode",
+        type=str,
+        default="auto",
+        help="Complete AI route mode: auto|symbolic|llm|finderbay|vision|coding|agent",
+    )
+    p.add_argument(
+        "--image",
+        type=str,
+        default=None,
+        help="Image/video path for vision subcommand",
+    )
+    p.add_argument(
+        "--task",
+        type=str,
+        default="detect_objects",
+        help="Vision task: understand_scene|thermal_analyze|detect_objects|detect_vehicles|count_people|detect_fire|scan_document|vision_status|...",
     )
     p.add_argument(
         "--ask",
@@ -119,6 +173,28 @@ def build_parser() -> argparse.ArgumentParser:
         "--repl",
         action="store_true",
         help="Force interactive REPL",
+    )
+    p.add_argument(
+        "--eval",
+        action="store_true",
+        help="Run JARVIS evaluation suite (with jarvis subcommand)",
+    )
+    p.add_argument(
+        "--daemon",
+        action="store_true",
+        help="Run 24/7 continuous learning daemon (learn subcommand)",
+    )
+    p.add_argument(
+        "--ticks",
+        type=int,
+        default=None,
+        help="Number of learning ticks (learn subcommand; default forever/daemon)",
+    )
+    p.add_argument(
+        "--interval",
+        type=float,
+        default=60.0,
+        help="Seconds between continuous learning ticks (default 60)",
     )
     return p
 
@@ -180,11 +256,27 @@ def run_demo(brain: Optional[Brain] = None) -> int:
     return 0
 
 
-def handle_line(brain: Brain, line: str) -> bool:
-    """Handle one REPL line. Returns False to exit."""
+def handle_line(brain: Brain, line: str, *, mother=None) -> bool:
+    """Handle one REPL line. Returns False to exit.
+
+    Explicit symbolic commands remain available. Everything else is routed
+    through Finderbay Mother AI / natural dialogue — never "Unknown command"
+    for greetings or free-form chat.
+    """
     line = line.strip()
     if not line:
         return True
+
+    # Fast-path natural language before shlex (so "how are you" isn't a command)
+    from .mother.gateway import InputGateway
+
+    gw = InputGateway()
+    first = line.split(None, 1)[0].lower()
+    if first in ("quit", "exit", "q"):
+        return False
+    if not gw.is_explicit_command(line):
+        return _mother_or_dialogue(brain, line, mother=mother)
+
     try:
         parts = shlex.split(line)
     except ValueError as e:
@@ -197,6 +289,18 @@ def handle_line(brain: Brain, line: str) -> bool:
         return False
     if cmd == "help":
         print(HELP)
+        print("\nMother AI also accepts natural language (hi, how are you, inspect …).")
+        return True
+    if cmd == "status" and mother is not None:
+        print(json.dumps(mother.status(), indent=2, default=str))
+        return True
+    if cmd == "diagnose" and mother is not None:
+        print(mother.diagnose()["text"])
+        return True
+    if cmd == "benchmark" and mother is not None:
+        from .mother.benchmark import run_finderbench
+
+        print(json.dumps(run_finderbench(mother), indent=2, default=str))
         return True
     if cmd == "domain":
         if not args:
@@ -263,7 +367,10 @@ def handle_line(brain: Brain, line: str) -> bool:
         return True
     if cmd == "ask":
         q = line[len(parts[0]) :].strip().strip('"').strip("'")
-        print(brain.ask(q))
+        if mother is not None:
+            print(mother.ask(q))
+        else:
+            print(brain.ask(q))
         return True
     if cmd == "why":
         if len(args) < 3:
@@ -322,22 +429,69 @@ def handle_line(brain: Brain, line: str) -> bool:
             print(f"- [{t.kind}] {t.content}")
         return True
 
-    print(f"Unknown command '{cmd}'. Type 'help'.")
-    return True
+    # Unknown symbolic verb → still treat as natural language, never dead-end
+    return _mother_or_dialogue(brain, line, mother=mother)
 
 
-def repl(brain: Brain) -> int:
-    print(f"cognitive_ai {__version__} — symbolic brain REPL (no LLM)")
-    print("Type 'help' for commands, 'demo' via: python -m cognitive_ai --demo")
+def _mother_or_dialogue(brain: Brain, line: str, *, mother=None) -> bool:
+    """Route free-form text to MotherBrain (preferred) or symbolic dialogue."""
+    if mother is not None:
+        out = mother.handle(line)
+        print(out.get("text") or "")
+        return True
+    # Lazy mother for default REPL
+    try:
+        from .mother import MotherBrain
+
+        # Attach ephemeral mother on brain for session continuity
+        if not hasattr(brain, "_mother") or brain._mother is None:  # type: ignore[attr-defined]
+            brain._mother = MotherBrain(seed_demo=True, enable_llm=False)  # type: ignore[attr-defined]
+        out = brain._mother.handle(line)  # type: ignore[attr-defined]
+        print(out.get("text") or "")
+        return True
+    except Exception:
+        print(brain.ask(line))
+        return True
+
+
+def repl(brain: Brain, *, mother=None) -> int:
+    print(f"Finderbay Mother AI / cognitive_ai {__version__} — integrated runtime (no required LLM)")
+    print("Natural language enabled. Type 'help' for symbolic commands. human_level_agi=false")
     if brain.kb.domain and brain.kb.domain != "empty":
         print(f"Domain: {brain.kb.domain} ({len(brain.kb)} facts)")
+    if mother is None:
+        from .mother import MotherBrain
+
+        mother = MotherBrain(seed_demo=True, enable_llm=False)
+        print(mother.greeting().split("\n")[0])
     while True:
         try:
-            line = input("brain> ")
+            line = input("Mother> ")
         except (EOFError, KeyboardInterrupt):
             print()
             break
-        if not handle_line(brain, line):
+        if not handle_line(brain, line, mother=mother):
+            break
+    return 0
+
+
+def mother_repl() -> int:
+    from .mother import MotherBrain
+
+    mother = MotherBrain(seed_demo=True, enable_llm=False)
+    brain = mother.symbolic
+    print("=" * 60)
+    print(f"Finderbay Mother AI v{__version__}")
+    print(mother.greeting())
+    print("=" * 60)
+    print("human_level_agi=false")
+    while True:
+        try:
+            line = input("Mother> ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        if not handle_line(brain, line, mother=mother):
             break
     return 0
 
@@ -360,6 +514,13 @@ def run_finderbay_demo() -> int:
             "Project A and prepare a follow-up. Do not send it."
         ),
         "Dikhao pending deliveries for Project A kal",
+        "Show material stock and inventory",
+        "Reserve 15 bags of cement",
+        "Create task for Project A: Order safety helmets",
+        "List tasks for Project A",
+        "What is the amount due on the invoice scan document?",
+        "Warehouse B is now called Central Store.",
+        "Show overdue invoices for Project A",
         "What are your capabilities?",
     ]
     for q in queries:
@@ -412,6 +573,26 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    # Finderbay Mother AI — integrated cognitive runtime
+    if args.command in ("mother", "diagnose", "benchmark", "status"):
+        from .mother import MotherBrain
+        from .mother.benchmark import run_finderbench
+
+        mother = MotherBrain(seed_demo=True, enable_llm=False)
+        if args.command == "status":
+            print(json.dumps(mother.status(), indent=2, default=str))
+            return 0
+        if args.command == "diagnose":
+            print(mother.diagnose()["text"])
+            return 0
+        if args.command == "benchmark":
+            print(json.dumps(run_finderbench(mother), indent=2, default=str))
+            return 0
+        if args.ask:
+            print(mother.handle(args.ask)["text"])
+            return 0
+        return mother_repl()
+
     # Complete Finderbay system
     if args.command in ("finderbay", "complete"):
         if args.ask:
@@ -425,12 +606,374 @@ def main(argv: Optional[list[str]] = None) -> int:
             return run_finderbay_demo()
         return finderbay_repl()
 
+    if args.command == "general":
+        from .general.agent import GeneralNonLLMAI
+
+        ai = GeneralNonLLMAI(seed_demo=True)
+        if args.ask:
+            print(ai.handle(args.ask)["text"])
+            return 0
+        if args.demo or not sys.stdin.isatty():
+            print("=" * 60)
+            print(f"General Non-LLM AI demo (v{ai.version})")
+            print(json.dumps(ai.status(), indent=2, default=str)[:2000])
+            for q in (
+                "Hello",
+                "Can penguins fly?",
+                "What is a knife used for?",
+                "dog:bark :: cat:?",
+                "Show unpaid invoices above ₹1 lakh for Project A, excluding disputed ones.",
+                "Are you ChatGPT?",
+            ):
+                print("-" * 40)
+                print("USER:", q)
+                print("AI:  ", ai.ask(q))
+            print("Demo complete. No LLM was used.")
+            return 0
+        print(f"GeneralNonLLMAI {ai.version} — Finderbay + open-domain. Type quit to exit.")
+        while True:
+            try:
+                line = input("general> ")
+            except (EOFError, KeyboardInterrupt):
+                print()
+                break
+            if line.strip().lower() in ("quit", "exit", "q"):
+                break
+            if line.strip().lower() == "status":
+                print(json.dumps(ai.status(), indent=2, default=str))
+                continue
+            print(ai.ask(line))
+        return 0
+
     if args.command == "eval":
         from .system import CompleteNonLLMAI
 
         report = CompleteNonLLMAI(seed_demo=True).evaluate()
         print(json.dumps(report.to_dict(), indent=2, default=str))
         return 0 if report.failed == 0 else 1
+
+    if args.command == "bench":
+        from .benchmarks import (
+            run_hard_novel_benchmark,
+            run_scan_benchmark,
+            run_transfer_benchmark,
+        )
+        from .commonsense.eval_suite import run_commonsense_eval
+        from .nlu.pipeline import LanguageUnderstanding
+        from .perception.model_registry import list_models
+
+        payload = {
+            "commonsense": run_commonsense_eval(),
+            "scan": run_scan_benchmark(LanguageUnderstanding().parse),
+            "transfer": run_transfer_benchmark(),
+            "hard_novel": run_hard_novel_benchmark(allow_live_search=False),
+            "speech_models": list_models(),
+            "human_level_agi": False,
+        }
+        print(json.dumps(payload, indent=2, default=str))
+        ok = (
+            payload["commonsense"]["failed"] == 0
+            and payload["transfer"]["passed"]
+            and payload["scan"]["by_split"]["train_like"]["passed"] >= 1
+            and payload["hard_novel"]["passed"] >= 8
+        )
+        return 0 if ok else 1
+
+    if args.command in ("agi-gap", "proto-agi"):
+        from .agi_gap import ProtoAGIStack, run_agi_gap_demo
+        from .agi_gap.eval_suite import run_agi_grade_eval
+
+        stack = ProtoAGIStack()
+        if args.ask:
+            out = stack.handle(args.ask)
+            print(out.get("text") or json.dumps(out, indent=2, default=str))
+            return 0 if out.get("ok", True) or out.get("route") == "abstain" else 1
+        if args.eval:
+            report = run_agi_grade_eval(allow_live_search=False)
+            # Also include stack self-eval summary
+            report["stack_self_eval"] = stack.run_self_eval()
+            print(json.dumps(report, indent=2, default=str))
+            return 0 if report.get("ok") else 1
+        demo = run_agi_gap_demo()
+        print(json.dumps(demo, indent=2, default=str)[:8000])
+        return 0
+
+    if args.command == "api":
+        from .api.server import serve_api
+        from .version import __version__
+
+        host = args.host if args.host != "0.0.0.0" else "127.0.0.1"
+        port = 8787 if args.port == 8765 else args.port
+        # Prefer Complete AI API; allow overrides via --mode / --domain
+        mode = (args.mode or "complete").lower()
+        if mode == "auto":
+            mode = "complete"
+        if (args.domain or "") == "finderbay":
+            mode = "finderbay"
+        elif (args.domain or "") == "general":
+            mode = "general"
+        httpd = serve_api(host, port, mode=mode)
+        print(f"Complete AI API http://{host}:{port}/  (v{__version__}, mode={mode}, human_level_agi=false)")
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            httpd.server_close()
+        return 0
+
+    if args.command == "blueprint":
+        from .blueprint.audit import run_blueprint_audit
+
+        print(json.dumps(run_blueprint_audit(), indent=2, default=str))
+        return 0
+
+    if args.command == "agent":
+        from .agent import FinderbayAgentSystem
+
+        system = FinderbayAgentSystem(seed_demo=True)
+        if args.ask:
+            # Treat --ask as a batch of tasks separated by ' || '
+            tasks = [t.strip() for t in args.ask.split("||") if t.strip()]
+            report = system.auto(tasks)
+            print(json.dumps(report, indent=2, default=str))
+            return 0 if report.get("failed", 0) == 0 else 1
+        if args.demo:
+            report = system.auto(
+                [
+                    "Show unpaid invoices for Project A",
+                    "Show alerts for Project A",
+                    "Show purchase orders for Project A",
+                    "generate function add(a, b)",
+                ]
+            )
+            print(json.dumps({"status": system.status(), "report": report}, indent=2, default=str))
+            return 0
+        print(json.dumps(system.status(), indent=2, default=str))
+        return 0
+
+    if args.command == "code":
+        from .coding import CodingSystem
+
+        coding = CodingSystem()
+        if args.ask:
+            print(json.dumps(coding.handle(args.ask), indent=2, default=str))
+            return 0
+        print(json.dumps(coding.status(), indent=2, default=str))
+        return 0
+
+    if args.command == "vision":
+        from .system import CompleteNonLLMAI
+        from .vision import VisionSystem, list_projects
+
+        if args.task == "vision_status" or (not args.image and not args.ask):
+            vs = VisionSystem()
+            payload = {"status": vs.status(), "projects": list_projects()}
+            print(json.dumps(payload, indent=2, default=str))
+            return 0
+        if args.ask:
+            ai = CompleteNonLLMAI(seed_demo=True)
+            print(json.dumps(ai.handle(args.ask), indent=2, default=str)[:4000])
+            print()
+            print(ai.handle(args.ask)["text"])
+            return 0
+        if not args.image:
+            print("vision: provide --image PATH or --task vision_status", file=sys.stderr)
+            return 2
+        if args.task in ("understand_scene", "understand", "perceive", "see_analyze_understand", "smart_understand"):
+            vs = VisionSystem()
+            out = vs.understand(args.image)
+            print(out.get("text") or "")
+            print(json.dumps(out, indent=2, default=str)[:5000])
+            return 0
+        if args.task in ("thermal_analyze", "thermal", "analyze_thermal"):
+            vs = VisionSystem()
+            out = vs.analyze_thermal(args.image)
+            print(out.get("text") or out.get("summary") or "")
+            print(json.dumps(out, indent=2, default=str)[:5000])
+            return 0
+        if args.task in ("detect_modality", "modality"):
+            from .vision.modalities import detect_modality
+
+            print(json.dumps(detect_modality(args.image), indent=2, default=str))
+            return 0
+        ai = CompleteNonLLMAI(seed_demo=False)
+        ask = f"{args.task.replace('_', ' ')} in image {args.image}"
+        result = ai.handle(ask)
+        print(result["text"])
+        print(json.dumps(result.get("structured") or {}, indent=2, default=str)[:3000])
+        return 0
+
+    if args.command in ("assistant", "jarvis"):
+        from .assistant import FinderbayAssistant
+
+        assist = FinderbayAssistant(seed_demo=True, speak_replies=False)
+        if args.command == "jarvis" and (args.eval or (args.ask and args.ask.strip().lower() == "eval")):
+            print(json.dumps(assist.jarvis_eval(), indent=2, default=str))
+            return 0
+        if args.ask:
+            if args.command == "jarvis":
+                print(assist.jarvis_handle(args.ask)["text"])
+            else:
+                print(assist.ask(args.ask, mode=args.mode or "auto"))
+            return 0
+        if args.demo or not sys.stdin.isatty():
+            print(assist.greeting())
+            print(json.dumps(assist.status(), indent=2, default=str)[:3000])
+            demos = (
+                (
+                    "Prepare tomorrow's material shortage report for the selected site",
+                    "plan reserve 10 bags of cement",
+                    "jarvis eval",
+                    "Show unpaid invoices for Project A",
+                    "remember that my warehouse is Central Store",
+                    "computer status",
+                )
+                if args.command == "jarvis"
+                else (
+                    "Show unpaid invoices for Project A",
+                    "plan reserve 10 bags of cement",
+                    "remember that my warehouse is Central Store",
+                    "recall warehouse",
+                    "Count people in image ./crowd_people.jpg",
+                    "computer status",
+                    "Prepare tomorrow's material shortage report for the selected site",
+                    "Who are you?",
+                )
+            )
+            for q in demos:
+                print("-" * 40)
+                print("USER:", q)
+                print("AI:  ", assist.ask(q))
+            print(f"{'JARVIS' if args.command == 'jarvis' else 'Finderbay Assistant'} demo done.")
+            return 0
+        print(assist.greeting())
+        prompt = "jarvis> " if args.command == "jarvis" else "assistant> "
+        while True:
+            try:
+                line = input(prompt)
+            except (EOFError, KeyboardInterrupt):
+                print()
+                break
+            if line.strip().lower() in ("quit", "exit", "q"):
+                break
+            if line.strip().lower() == "/status":
+                print(json.dumps(assist.status(), indent=2, default=str))
+                continue
+            if line.strip().lower() in ("/eval", "jarvis eval"):
+                print(json.dumps(assist.jarvis_eval(), indent=2, default=str))
+                continue
+            if args.command == "jarvis":
+                print(assist.jarvis_handle(line)["text"])
+            else:
+                print(assist.ask(line))
+        return 0
+
+    if args.command in ("learn", "learning"):
+        from .complete_ai import CompleteAI
+
+        ai = CompleteAI(seed_demo=True, persist_path="data/complete_ai/state.json", enable_llm=False)
+        # Feed a few observations so ticks have work
+        for q in (
+            "Explain gravity",
+            "Show unpaid invoices for Project A",
+            "generate function add(a, b)",
+            "Can penguins fly?",
+        ):
+            ai.handle(q)
+        learner = ai.continuous
+        learner.interval_sec = float(args.interval or 60.0)
+        learner.enable()
+        if args.ask and args.ask.lower() in ("status", "stop"):
+            if args.ask.lower() == "stop":
+                print(json.dumps(ai.stop_learning(), indent=2, default=str))
+                return 0
+            print(json.dumps(ai.learning_status(), indent=2, default=str))
+            return 0
+        if args.daemon:
+            print(json.dumps(ai.start_learning(interval_sec=learner.interval_sec), indent=2, default=str))
+            print("Continuous learning daemon running (Ctrl+C to stop). human_level_agi=false")
+            try:
+                while True:
+                    time.sleep(3600)
+            except KeyboardInterrupt:
+                print(json.dumps(ai.stop_learning(), indent=2, default=str))
+            return 0
+        ticks = args.ticks if args.ticks is not None else 3
+        # Fast ticks for CLI one-shot
+        old = learner.interval_sec
+        learner.interval_sec = 0.01
+        report = learner.run_forever(ticks=ticks)
+        learner.interval_sec = old
+        print(json.dumps({"status": learner.status(), "last_ticks": learner.ticks[-ticks:]}, indent=2, default=str))
+        return 0 if report.get("ok") else 1
+
+    if args.command in ("complete-ai", "diagnostics", "completeness", "full-test", "full-suite"):
+        from .complete_ai import CompleteAI
+
+        ai = CompleteAI(seed_demo=True, persist_path="data/complete_ai/state.json")
+        if args.command == "diagnostics":
+            print(json.dumps(ai.diagnostics(), indent=2, default=str))
+            return 0 if ai.diagnostics()["ok"] else 1
+        if args.command == "completeness":
+            report = ai.completeness()
+            print(json.dumps(report, indent=2, default=str))
+            return 0 if report.get("ok") else 1
+        if args.command in ("full-test", "full-suite"):
+            report = ai.full_test(allow_live_search=False)
+            print(json.dumps(report, indent=2, default=str))
+            return 0 if report.get("ok") else 1
+        if args.ask:
+            out = ai.handle(args.ask, mode=args.mode or "auto")
+            print(out["text"])
+            return 0
+        if args.demo or not sys.stdin.isatty():
+            print(ai.greeting())
+            print(json.dumps(ai.status(), indent=2, default=str)[:2500])
+            print(json.dumps({"diagnostics": ai.diagnostics()}, indent=2, default=str)[:2000])
+            for q in (
+                "Who are you?",
+                "Show unpaid invoices for Project A",
+                "Can penguins fly?",
+                "Explain gravity simply",
+                "Count people in image ./crowd_people.jpg",
+                "generate function add(a, b)",
+            ):
+                print("-" * 40)
+                print("USER:", q)
+                print("AI:  ", ai.ask(q))
+            print("Complete AI demo done.")
+            return 0
+        print(ai.greeting())
+        print("Type quit to exit. Commands: /status /diag /reset /mode <auto|symbolic|llm|...>")
+        mode = args.mode or "auto"
+        while True:
+            try:
+                line = input("complete-ai> ")
+            except (EOFError, KeyboardInterrupt):
+                print()
+                break
+            line = line.strip()
+            if not line:
+                continue
+            if line.lower() in ("quit", "exit", "q"):
+                break
+            if line.lower() == "/status":
+                print(json.dumps(ai.status(), indent=2, default=str))
+                continue
+            if line.lower() in ("/diag", "/diagnostics"):
+                print(json.dumps(ai.diagnostics(), indent=2, default=str))
+                continue
+            if line.lower() == "/reset":
+                ai.reset_session()
+                print("session reset")
+                continue
+            if line.lower().startswith("/mode "):
+                mode = line.split(None, 1)[1].strip()
+                print(f"mode={mode}")
+                continue
+            print(ai.handle(line, mode=mode)["text"])
+        return 0
 
     # Chat UI launcher
     if args.command in ("chat", "ui"):
@@ -439,7 +982,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         serve_chat(
             host=args.host,
             port=args.port,
-            domain=args.domain or "animals",
+            domain=args.domain or "complete",
         )
         return 0
 
@@ -498,13 +1041,20 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(json.dumps(report.to_dict(), indent=2))
         return 0
 
-    # Default: REPL (or demo if stdin is not a TTY and no flags)
+    # Default: Mother AI REPL (natural language + symbolic commands)
     if args.repl or args.command == "repl" or sys.stdin.isatty():
-        return repl(brain)
+        if args.command == "repl":
+            # Explicit classic symbolic REPL still available via: python -m cognitive_ai repl
+            # but NL fallback remains enabled inside handle_line.
+            return repl(brain)
+        return mother_repl()
 
-    # Non-interactive stdin: treat lines as commands
+    # Non-interactive stdin: Mother-backed natural language / commands
+    from .mother import MotherBrain
+
+    mother = MotherBrain(seed_demo=True, enable_llm=False)
     for line in sys.stdin:
-        if not handle_line(brain, line):
+        if not handle_line(brain, line, mother=mother):
             break
     return 0
 

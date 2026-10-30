@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cognitive-ai"
-version = "0.3.0"
-description = "Complete non-LLM AI — Finderbay assistant + symbolic cognitive OS"
+version = "1.28.0"
+description = "Complete AI + Finderbay Assistant: ChatGPT-level chat + proto-AGI gap stack (learning/transfer/horizon/memory)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -14,6 +14,9 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]
+perception = ["vosk>=0.3.45", "pytesseract>=0.3.10", "Pillow>=10.0"]
+vision = ["ultralytics>=8.0", "opencv-python-headless>=4.8", "numpy>=1.24"]
+all = ["cognitive-ai[dev,perception,vision]"]
 
 [project.scripts]
 cognitive-ai = "cognitive_ai.cli:main"

@@ -1,0 +1,12 @@
+{
+  "version_at_baseline": "1.27.0",
+  "pytest_passed": 320,
+  "pytest_failed": 0,
+  "completeness_ok": true,
+  "observed_repl_failure": {
+    "hii": "Unknown command 'hii'",
+    "how are you": "Unknown command 'how'"
+  },
+  "human_level_agi": false,
+  "note": "Frozen baseline before Mother AI upgrade edits."
+}

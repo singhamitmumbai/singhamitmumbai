@@ -1,0 +1,3 @@
+id,project_id,amount_inr,payment_status,dispute_status,due_date,source,status_as_of
+inv_csv_1,project_a,175000,unpaid,not_disputed,2025-01-15,csv_import,2026-03-01T00:00:00+00:00
+inv_csv_2,project_a,220000,unpaid,disputed,2025-02-01,csv_import,2026-03-01T00:00:00+00:00
