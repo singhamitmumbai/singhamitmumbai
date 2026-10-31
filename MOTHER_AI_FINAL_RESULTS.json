@@ -1,23 +1,24 @@
 {
   "product": "Finderbay Mother AI",
-  "version": "1.28.0",
+  "version": "1.29.0",
   "human_level_agi": false,
-  "baseline": {
-    "pytest_passed": 320,
-    "pytest_failed": 0,
-    "completeness_ok": true,
-    "source": "reports/mother_ai/baseline_tests.log"
+  "baseline_v128": {
+    "pytest_passed": 327,
+    "note": "prior Mother integration release"
   },
   "after_upgrade": {
-    "pytest_passed": 327,
+    "pytest_passed": 336,
     "pytest_failed": 0,
-    "new_tests": "tests/test_mother_ai_v128.py"
+    "completeness_ok": true,
+    "complete_code": true,
+    "new_tests": "tests/test_mother_ai_v129.py"
   },
-  "critical_fix_fixed": {
-    "issue": "REPL Unknown command for natural language",
-    "repro_before": ["hii", "how are you"],
-    "after": "routed through MotherBrain dialogue",
-    "verified": true
+  "second_pass": {
+    "world_model": "cognitive_ai/mother/world_model.py",
+    "roles": "cognitive_ai/mother/roles.py",
+    "cognition": "cognitive_ai/mother/cognition.py",
+    "self_mod": "cognitive_ai/mother/self_mod.py",
+    "finderbench": "finderbench_v2 (~30+ cases + soft holdout)"
   },
   "mother_loop_stages": [
     "understand",
@@ -34,16 +35,21 @@
     "mother": "python -m cognitive_ai mother",
     "diagnose": "python -m cognitive_ai diagnose",
     "benchmark": "python -m cognitive_ai benchmark",
+    "cognition": "python -m cognitive_ai cognition",
+    "selfmod": "python -m cognitive_ai selfmod",
     "status": "python -m cognitive_ai status"
   },
   "persistence": {
     "goals": "data/complete_ai/mother/goals.json",
-    "beliefs": "data/complete_ai/mother/beliefs.json"
+    "beliefs": "data/complete_ai/mother/beliefs.json",
+    "self_mod_lab": "data/complete_ai/mother/self_mod_lab/",
+    "cognition": "data/complete_ai/mother/cognition.json"
   },
-  "capability_matrix": "reports/mother_ai/capability_matrix.json",
   "notes": [
-    "Integration upgrade over existing CompleteAI/Brain/dialogue modules",
-    "Proposer/critic/verifier are heuristic coordinators, not AGI subsystems",
-    "FinderBench is smoke-scale, not a full general intelligence proof"
+    "Structured world-model + cue prediction error (still lightweight, not learned AGI dynamics)",
+    "P/C/V are explicit rule libraries, not independently trained models",
+    "Self-mod lab isolates candidates; human reviewer required; no live source auto-patch",
+    "Continuous cognition is hard-budget capped",
+    "human_level_agi=false"
   ]
 }

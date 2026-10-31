@@ -65,6 +65,8 @@ class InputGateway:
         "diagnose",
         "benchmark",
         "mother",
+        "cognition",
+        "selfmod",
     }
 
     def interpret(self, text: str, *, context: Optional[dict[str, Any]] = None) -> InputInterpretation:
@@ -127,6 +129,13 @@ class InputGateway:
 
         if re.search(r"\b(?:how are you|kaise ho|kaisa hai|how r u)\b", lower):
             return "greet", "conversation", 0.92, ["wellbeing"]
+
+        if re.search(
+            r"\b(?:human[- ]level\s+agi|are you (?:an?\s+)?agi|are you (?:conscious|sentient)|"
+            r"what(?:'s| is) your name)\b",
+            lower,
+        ):
+            return "ask", "conversation", 0.9, ["honesty_meta"]
 
         if re.search(
             r"\b(?:inspect|audit|diagnose|why.*(fail|broken|error)|find why|debug|"

@@ -32,23 +32,28 @@ class ProductionSpeech:
             self.model_path = DEFAULT_MODEL
         self.model_name = model_name or "en-small"
         self._model = None
-        self._available = None
+        self._engine_available = None
 
     @property
     def available(self) -> bool:
-        if self._available is None:
+        """Facade is always usable (oracle/text transcript path); Vosk engine optional."""
+        return True
+
+    @property
+    def engine_available(self) -> bool:
+        if self._engine_available is None:
             try:
                 from vosk import Model  # noqa: F401
 
-                self._available = self.model_path.exists()
+                self._engine_available = self.model_path.exists()
             except Exception:
-                self._available = False
-        return bool(self._available)
+                self._engine_available = False
+        return bool(self._engine_available)
 
     def _ensure_model(self):
         if self._model is not None:
             return self._model
-        if not self.available:
+        if not self.engine_available:
             raise RuntimeError(
                 f"Vosk model not available at {self.model_path}. "
                 "Install vosk and download vosk-model-small-en-us-0.15."
@@ -81,7 +86,7 @@ class ProductionSpeech:
                 "engine": "text_passthrough",
             }
 
-        if not self.available:
+        if not self.engine_available:
             return {
                 "transcript": "",
                 "alternatives": [],

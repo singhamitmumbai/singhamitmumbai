@@ -35,7 +35,7 @@ Commands:
   load <path>                  Load knowledge base
   lessons                      Show recent learning lessons
   thoughts                     Show recent thoughts
-  status / diagnose / benchmark Mother AI observability
+  status / diagnose / benchmark / cognition / selfmod  Mother AI observability
   quit / exit                  Leave REPL
 
 Natural language (Mother AI — no more "Unknown command"):
@@ -94,8 +94,10 @@ def build_parser() -> argparse.ArgumentParser:
             "diagnose",
             "benchmark",
             "status",
+            "cognition",
+            "selfmod",
         ],
-        help="Optional subcommand: mother, diagnose, benchmark, status, jarvis, assistant, complete-ai, agi-gap, learn, diagnostics, completeness, full-test, os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
+        help="Optional subcommand: mother, diagnose, benchmark, status, cognition, selfmod, jarvis, assistant, complete-ai, agi-gap, learn, diagnostics, completeness, full-test, os, chat/ui, demo, repl, finderbay/complete, general, eval, bench, api, blueprint, agent, code, vision",
     )
     p.add_argument(
         "--mode",
@@ -301,6 +303,13 @@ def handle_line(brain: Brain, line: str, *, mother=None) -> bool:
         from .mother.benchmark import run_finderbench
 
         print(json.dumps(run_finderbench(mother), indent=2, default=str))
+        return True
+    if cmd == "cognition" and mother is not None:
+        n = int(args[0]) if args else 3
+        print(json.dumps(mother.run_cognition(max_cycles=max(1, min(n, 20))), indent=2, default=str))
+        return True
+    if cmd == "selfmod" and mother is not None:
+        print(json.dumps(mother.self_mod.summary(), indent=2, default=str))
         return True
     if cmd == "domain":
         if not args:
@@ -574,7 +583,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     # Finderbay Mother AI — integrated cognitive runtime
-    if args.command in ("mother", "diagnose", "benchmark", "status"):
+    if args.command in ("mother", "diagnose", "benchmark", "status", "cognition", "selfmod"):
         from .mother import MotherBrain
         from .mother.benchmark import run_finderbench
 
@@ -587,6 +596,12 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 0
         if args.command == "benchmark":
             print(json.dumps(run_finderbench(mother), indent=2, default=str))
+            return 0
+        if args.command == "cognition":
+            print(json.dumps(mother.run_cognition(max_cycles=3), indent=2, default=str))
+            return 0
+        if args.command == "selfmod":
+            print(json.dumps(mother.self_mod.summary(), indent=2, default=str))
             return 0
         if args.ask:
             print(mother.handle(args.ask)["text"])

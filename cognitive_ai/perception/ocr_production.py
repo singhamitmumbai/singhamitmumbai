@@ -14,19 +14,24 @@ class ProductionOCR:
 
     def __init__(self, lang: str = "eng+hin") -> None:
         self.lang = lang
-        self._available = None
+        self._engine_available = None
 
     @property
     def available(self) -> bool:
-        if self._available is None:
+        """Facade is always usable (structured/oracle path); engine may be optional."""
+        return True
+
+    @property
+    def engine_available(self) -> bool:
+        if self._engine_available is None:
             try:
                 import pytesseract  # noqa: F401
                 from PIL import Image  # noqa: F401
 
-                self._available = True
+                self._engine_available = True
             except Exception:
-                self._available = False
-        return bool(self._available)
+                self._engine_available = False
+        return bool(self._engine_available)
 
     def recognize(self, document: Any, context: Optional[dict] = None) -> dict[str, Any]:
         context = context or {}
@@ -82,7 +87,7 @@ class ProductionOCR:
         return self._from_pil(Image.open(path))
 
     def _from_pil(self, image: Any) -> dict[str, Any]:
-        if not self.available:
+        if not self.engine_available:
             return {
                 "text": "",
                 "fields": {},

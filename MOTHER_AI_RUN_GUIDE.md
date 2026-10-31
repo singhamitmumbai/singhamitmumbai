@@ -13,12 +13,16 @@ Mother> Show unpaid invoices for Project A
 Mother> status
 Mother> diagnose
 Mother> benchmark
+Mother> cognition
+Mother> selfmod
 Mother> quit
 
 # One-shots
 python -m cognitive_ai status
 python -m cognitive_ai diagnose
 python -m cognitive_ai benchmark
+python -m cognitive_ai cognition
+python -m cognitive_ai selfmod
 python -m cognitive_ai mother --ask "kaise ho"
 
 # Classic symbolic commands still work inside Mother>

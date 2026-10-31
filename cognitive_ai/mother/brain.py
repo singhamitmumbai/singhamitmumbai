@@ -19,10 +19,14 @@ from ..core.ids import new_id
 from ..core.records import utc_now
 from ..version import __version__
 from .beliefs import BeliefStore
+from .cognition import CognitionBudget, ContinuousCognition
 from .events import EventBus
 from .gateway import InputGateway, InputInterpretation
 from .goals import GoalManager
+from .roles import RoleLibrary
+from .self_mod import SelfModLab
 from .workspace import GlobalWorkspace
+from .world_model import MotherWorldModel
 
 
 FAILURE_TYPES = (
@@ -68,7 +72,7 @@ class CycleTrace:
 class MotherBrain:
     """Integrated Finderbay Mother AI runtime."""
 
-    version = "mother_brain_v1"
+    version = "mother_brain_v2"
 
     def __init__(
         self,
@@ -85,6 +89,10 @@ class MotherBrain:
         self.goals = GoalManager(self.store_dir / "goals.json")
         self.beliefs = BeliefStore(self.store_dir / "beliefs.json")
         self.workspace = GlobalWorkspace()
+        self.world_model = MotherWorldModel()
+        self.roles = RoleLibrary()
+        self.self_mod = SelfModLab(self.store_dir / "self_mod_lab")
+        self.cognition: Optional[ContinuousCognition] = None
         self.symbolic = Brain(name="FinderbayMother")
         try:
             self.symbolic.load_domain("animals")
@@ -126,6 +134,7 @@ class MotherBrain:
         # PERCEIVE / UNDERSTAND
         interp = self.gateway.interpret(raw, context=context)
         trace.interpretation = interp.to_dict()
+        self.world_model.ingest_utterance(raw, intent=interp.intent)
         self._stage(trace, "understand", ok=True, detail=interp.intent)
         self.workspace.set_input(raw)
         self.events.emit("IntentResolved", intent=interp.intent, confidence=interp.confidence)
@@ -165,7 +174,7 @@ class MotherBrain:
             trace.failure_type = "LANGUAGE_UNDERSTANDING"
             return self._finish(trace, t0)
 
-        # GENERATE CANDIDATE PLANS + PROPOSER / CRITIC / VERIFIER
+        # GENERATE CANDIDATE PLANS + PROPOSER / CRITIC / VERIFIER (rule library)
         proposals = self._propose(interp, goal)
         critique = self._critique(proposals, interp)
         chosen = self._verify_select(proposals, critique, interp)
@@ -174,9 +183,11 @@ class MotherBrain:
         self.events.emit("PlanCreated", action=trace.action, steps=trace.plan)
         self._stage(trace, "plan", ok=True, detail=trace.action)
 
-        # PREDICT
+        # PREDICT (structured world model)
+        wm_pred = self.world_model.predict(trace.action, args={"cost": float(chosen.get("cost") or 0.1)})
         predicted = chosen.get("expected") or f"Respond via {trace.action}"
-        self.workspace.push("prediction", predicted, score=0.65, source="world_model")
+        predicted_blob = f"{predicted} cues={'|'.join(wm_pred.get('expected_cues') or [])}"
+        self.workspace.push("prediction", predicted_blob, score=0.65, source="world_model")
 
         # EXECUTE
         result = self._execute(chosen, interp, raw)
@@ -185,14 +196,17 @@ class MotherBrain:
         self.events.emit("ActionExecuted", action=trace.action, ok=bool(result.get("ok", True)))
         self._stage(trace, "execute", ok=bool(result.get("ok", True)), detail=trace.action)
 
-        # COMPARE PREDICTION VS RESULT
-        err = self.workspace.record_prediction(predicted, observation[:240])
-        trace.prediction_error = err
-        self.events.emit("PredictionError", error=err)
-        self._stage(trace, "compare", ok=True, detail=f"err={err}")
+        # COMPARE PREDICTION VS RESULT (structured + lexical)
+        obs_row = self.world_model.observe(trace.action, observation, predicted=wm_pred)
+        lex_err = self.workspace.record_prediction(predicted_blob, observation[:240])
+        err = float(obs_row.get("prediction_error", lex_err))
+        # Blend: prefer structured cue error, keep lexical as secondary signal
+        trace.prediction_error = round(0.7 * err + 0.3 * float(lex_err), 3)
+        self.events.emit("PredictionError", error=trace.prediction_error, cue_score=obs_row.get("cue_score"))
+        self._stage(trace, "compare", ok=True, detail=f"err={trace.prediction_error}")
 
-        # LEARN / UPDATE BELIEFS / MEMORY
-        learned = self._learn(interp, result, err, goal)
+        # LEARN / UPDATE BELIEFS / MEMORY (+ optional isolated self-mod candidate)
+        learned = self._learn(interp, result, trace.prediction_error, goal)
         trace.learned = learned
         self._stage(trace, "learn", ok=True, detail=f"n={len(learned)}")
 
@@ -216,70 +230,13 @@ class MotherBrain:
     # --- roles ----------------------------------------------------------------
 
     def _propose(self, interp: InputInterpretation, goal) -> list[dict[str, Any]]:
-        intent = interp.intent
-        proposals: list[dict[str, Any]] = []
-        if intent in ("conversation", "meta"):
-            proposals.append(
-                {
-                    "action": "dialogue",
-                    "steps": ["greet_or_meta", "use_symbolic_dialogue"],
-                    "expected": "friendly local reply",
-                    "confidence": 0.85,
-                    "cost": 1,
-                }
-            )
-        if intent == "inspect":
-            proposals.append(
-                {
-                    "action": "inspect_repo",
-                    "steps": ["status", "diagnostics", "summarize_gaps"],
-                    "expected": "diagnostic report",
-                    "confidence": 0.8,
-                    "cost": 3,
-                }
-            )
-        if intent == "coding":
-            proposals.append(
-                {
-                    "action": "coding",
-                    "steps": ["route_coding_system", "verify_if_possible"],
-                    "expected": "code result",
-                    "confidence": 0.75,
-                    "cost": 4,
-                }
-            )
-        if intent in ("question", "task", "planning", "tool", "vision", "learning", "memory"):
-            proposals.append(
-                {
-                    "action": "complete_ai",
-                    "steps": ["think_plan", "route_complete_ai", "observe"],
-                    "expected": "task answer via CompleteAI",
-                    "confidence": 0.78,
-                    "cost": 3,
-                }
-            )
-        # Always keep a dialogue fallback
-        proposals.append(
-            {
-                "action": "dialogue",
-                "steps": ["fallback_conversation"],
-                "expected": "safe conversational reply",
-                "confidence": 0.5,
-                "cost": 1,
-            }
-        )
-        self.events.emit("ActionProposed", n=len(proposals), intent=intent)
+        proposals = self.roles.propose(interp, goal=goal, world_summary=self.world_model.summary())
+        self.events.emit("ActionProposed", n=len(proposals), intent=interp.intent)
         return proposals
 
     def _critique(self, proposals: list[dict[str, Any]], interp: InputInterpretation) -> dict[str, Any]:
-        risks = []
-        if interp.confidence < 0.4:
-            risks.append("low_interpretation_confidence")
-        if interp.intent == "inspect":
-            risks.append("diagnostics_may_be_partial")
-        if not proposals:
-            risks.append("no_proposals")
-        return {"risks": risks, "prefer_low_cost_if_uncertain": interp.confidence < 0.5}
+        report = self.roles.critique(proposals, interp, world_summary=self.world_model.summary())
+        return report.to_dict()
 
     def _verify_select(
         self,
@@ -287,24 +244,9 @@ class MotherBrain:
         critique: dict[str, Any],
         interp: InputInterpretation,
     ) -> dict[str, Any]:
-        if not proposals:
-            return {"action": "dialogue", "steps": ["fallback"], "expected": "reply", "confidence": 0.4}
-        ranked = sorted(
-            proposals,
-            key=lambda p: (
-                -float(p.get("confidence") or 0),
-                float(p.get("cost") or 9),
-            ),
+        return self.roles.verify_select(
+            proposals, critique, interp, world_summary=self.world_model.summary()
         )
-        chosen = ranked[0]
-        if critique.get("prefer_low_cost_if_uncertain"):
-            cheap = sorted(proposals, key=lambda p: float(p.get("cost") or 9))[0]
-            if float(cheap.get("confidence") or 0) >= 0.45:
-                chosen = cheap
-        # Verifier: reject inspect if input empty
-        if chosen.get("action") == "inspect_repo" and not interp.normalized:
-            chosen = {"action": "dialogue", "steps": ["clarify"], "expected": "ask clarify", "confidence": 0.4}
-        return chosen
 
     def _execute(self, chosen: dict[str, Any], interp: InputInterpretation, raw: str) -> dict[str, Any]:
         action = chosen.get("action")
@@ -342,6 +284,19 @@ class MotherBrain:
 
     def _exec_dialogue(self, raw: str, interp: InputInterpretation) -> dict[str, Any]:
         lower = raw.lower().strip()
+        if re.search(r"\b(?:human[- ]level\s+agi|are you (?:an?\s+)?agi|are you (?:conscious|sentient))\b", lower):
+            text = (
+                f"No. Finderbay Mother AI v{self.product_version} does not claim AGI or "
+                "human-level intelligence. human_level_agi=false — I am a local integrated "
+                "coordinator over symbolic + tool modules."
+            )
+            return {"ok": True, "text": text, "route": "dialogue", "confidence": 0.95}
+        if re.search(r"\b(?:what(?:'s| is) your name|who are you|what are you)\b", lower):
+            text = (
+                f"I am Finderbay Mother AI v{self.product_version} — a local cognitive "
+                "runtime (not human-level AGI)."
+            )
+            return {"ok": True, "text": text, "route": "dialogue", "confidence": 0.92}
         # Wellbeing / Hinglish greetings beyond symbolic defaults
         if re.search(r"\b(?:how are you|kaise ho|kaisa hai)\b", lower):
             text = (
@@ -487,6 +442,18 @@ class MotherBrain:
                 intent=rec["intent"],
                 error=rec["error"],
             )
+            # Isolated self-mod candidate (never auto-applied to live code)
+            try:
+                action = str(result.get("route") or interp.intent or "unknown")
+                cand = self.self_mod.propose_from_prediction_error(
+                    action=action,
+                    prediction_error=err,
+                    observation_preview=str(result.get("text") or "")[:160],
+                    snapshot_before=self.world_model.snapshot(),
+                )
+                learned.append(f"self_mod_candidate:{cand.candidate_id}")
+            except Exception:  # noqa: BLE001
+                pass
         # Persist compact cycle memory into complete session lightly
         try:
             self.complete.remember("last_mother_intent", interp.intent)
@@ -520,6 +487,10 @@ class MotherBrain:
                 "objective": self.workspace.current_objective,
                 "prediction_error": self.workspace.prediction_error,
             },
+            "world_model": self.world_model.summary(),
+            "roles": self.roles.version,
+            "self_mod": self.self_mod.summary(),
+            "cognition": self.cognition.summary() if self.cognition else None,
             "events": self.events.summary(),
             "cycles": len(self.cycles),
             "learning_records": len(self.learning_log),
@@ -534,10 +505,30 @@ class MotherBrain:
                 "inspect",
                 "metacognition",
                 "event_bus",
+                "world_model",
+                "roles_pcv",
+                "continuous_cognition",
+                "self_mod_lab",
             ],
             "human_level_agi": False,
             "note": "Integrated coordinator over existing modules — not AGI.",
         }
+
+    def run_cognition(
+        self,
+        *,
+        max_cycles: int = 5,
+        max_seconds: float = 15.0,
+        prompts: Optional[list[str]] = None,
+    ) -> dict[str, Any]:
+        """Run budgeted continuous cognition ticks (synchronous)."""
+        budget = CognitionBudget(max_cycles=max_cycles, max_seconds=max_seconds)
+        self.cognition = ContinuousCognition(
+            self,
+            budget=budget,
+            store_path=self.store_dir / "cognition.json",
+        )
+        return self.cognition.run(prompts=prompts)
 
     def diagnose(self) -> dict[str, Any]:
         return self.handle("inspect this project and find what is broken")
